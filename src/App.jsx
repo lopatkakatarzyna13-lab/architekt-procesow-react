@@ -5,6 +5,7 @@ const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
 const ANALYSIS_STORAGE_KEY = 'architekt-procesow:analysis'
+const TO_BE_STORAGE_KEY = 'architekt-procesow:to-be'
 
 const findingCategories = [
   'Wąskie gardło',
@@ -53,6 +54,24 @@ const emptyFinding = {
   processImpact: '',
   impactLevel: 'Średni',
   improvement: '',
+}
+
+const emptyToBeAssumptions = {
+  changeGoal: '',
+  expectedResult: '',
+  constraints: '',
+  successMeasures: '',
+}
+
+const emptyToBeStep = {
+  name: '',
+  description: '',
+  owner: '',
+  system: '',
+  result: '',
+  stepType: 'Nowy',
+  findingId: '',
+  automatable: 'Nie',
 }
 
 function loadSavedScope() {
@@ -109,6 +128,42 @@ function loadSavedAnalysis() {
     }
   } catch {
     return { findings: [], isSaved: false }
+  }
+}
+
+function loadSavedToBe() {
+  try {
+    const savedToBe = JSON.parse(localStorage.getItem(TO_BE_STORAGE_KEY))
+
+    if (!savedToBe || typeof savedToBe !== 'object') {
+      return {
+        assumptions: emptyToBeAssumptions,
+        selectedFindingIds: null,
+        steps: [],
+        copiedFromAsIs: false,
+        isSaved: false,
+      }
+    }
+
+    return {
+      assumptions: { ...emptyToBeAssumptions, ...savedToBe.assumptions },
+      selectedFindingIds: Array.isArray(savedToBe.selectedFindingIds)
+        ? savedToBe.selectedFindingIds
+        : null,
+      steps: Array.isArray(savedToBe.steps)
+        ? savedToBe.steps.map((step) => ({ ...emptyToBeStep, ...step }))
+        : [],
+      copiedFromAsIs: Boolean(savedToBe.copiedFromAsIs),
+      isSaved: Boolean(savedToBe.savedAt),
+    }
+  } catch {
+    return {
+      assumptions: emptyToBeAssumptions,
+      selectedFindingIds: null,
+      steps: [],
+      copiedFromAsIs: false,
+      isSaved: false,
+    }
   }
 }
 
@@ -1210,6 +1265,7 @@ function AnalysisScreen({
   onCancelEdit,
   onBack,
   onSave,
+  onContinue,
 }) {
   return (
     <section className="workspace analysis-workspace" aria-labelledby="analysis-title">
@@ -1290,6 +1346,531 @@ function AnalysisScreen({
           Zapisz analizę
           <span aria-hidden="true">✓</span>
         </button>
+        {saved && findings.length > 0 && (
+          <button className="continue-button" type="button" onClick={onContinue}>
+            Przejdź do TO-BE
+            <span aria-hidden="true">→</span>
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ToBeContext({ scope, startMethod, findings }) {
+  const items = [
+    ['Proces', scope.processName, 'P'],
+    ['Początek', scope.processStart, '↗'],
+    ['Koniec', scope.processEnd, '✓'],
+    [
+      'Opis AS-IS',
+      startMethod === 'steps' ? 'Lista kroków' : 'Opis całego procesu',
+      'A',
+    ],
+    ['Ustalenia', String(findings.length), '#'],
+  ]
+
+  return (
+    <aside className="analysis-context with-steps to-be-context" aria-label="Podsumowanie procesu">
+      {items.map(([label, value, icon]) => (
+        <div className="context-item" key={label}>
+          <span className="summary-icon" aria-hidden="true">{icon}</span>
+          <span>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </span>
+        </div>
+      ))}
+    </aside>
+  )
+}
+
+function ToBeAssumptions({ assumptions, error, onChange }) {
+  return (
+    <section className="to-be-section" aria-labelledby="assumptions-title">
+      <div className="form-section-title">
+        <span>01</span>
+        <div>
+          <h2 id="assumptions-title">Założenia procesu docelowego</h2>
+          <p>Określ kierunek projektowanej zmiany i sposób oceny jej efektów.</p>
+        </div>
+      </div>
+      <div className="form-grid">
+        <FormField
+          id="toBeChangeGoal"
+          label="Cel projektowanej zmiany"
+          value={assumptions.changeGoal}
+          onChange={onChange}
+          error={error}
+          required
+          placeholder="Co przede wszystkim chcesz zmienić?"
+          multiline
+        />
+        <FormField
+          id="toBeExpectedResult"
+          label="Oczekiwany rezultat"
+          value={assumptions.expectedResult}
+          onChange={onChange}
+          placeholder="Jak powinien wyglądać efekt usprawnienia?"
+          multiline
+        />
+        <FormField
+          id="toBeConstraints"
+          label="Najważniejsze ograniczenia lub warunki"
+          value={assumptions.constraints}
+          onChange={onChange}
+          placeholder="Budżet, czas, regulacje, dostępne zasoby..."
+          multiline
+        />
+        <FormField
+          id="toBeSuccessMeasures"
+          label="Mierniki sukcesu procesu"
+          value={assumptions.successMeasures}
+          onChange={onChange}
+          placeholder="Po czym poznasz, że zmiana zadziałała?"
+          multiline
+        />
+      </div>
+    </section>
+  )
+}
+
+function IncludedFindings({
+  findings,
+  selectedIds,
+  steps,
+  startMethod,
+  onToggle,
+}) {
+  const locationLabel = (finding) => {
+    if (!finding.location) return 'Nie wskazano miejsca'
+    if (startMethod !== 'steps') return finding.location
+    const index = steps.findIndex((step) => step.id === finding.location)
+    return index >= 0 ? `${index + 1}. ${steps[index].name}` : 'Krok niedostępny'
+  }
+
+  return (
+    <section className="to-be-section included-findings" aria-labelledby="included-title">
+      <div className="form-section-title">
+        <span>02</span>
+        <div>
+          <h2 id="included-title">Ustalenia do uwzględnienia</h2>
+          <p>Wybierz obserwacje, na które powinien odpowiadać proces docelowy.</p>
+        </div>
+      </div>
+      <div className="to-be-findings-list">
+        {findings.map((finding) => {
+          const checked = selectedIds.includes(finding.id)
+          return (
+            <label className={`to-be-finding ${checked ? 'selected' : ''}`} key={finding.id}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(finding.id)}
+              />
+              <span className="custom-checkbox" aria-hidden="true">✓</span>
+              <span className="to-be-finding-content">
+                <span>
+                  <span className="category-badge">{finding.category}</span>
+                  <span className={`impact-badge impact-${finding.impactLevel.toLowerCase()}`}>
+                    {finding.impactLevel}
+                  </span>
+                </span>
+                <strong>{finding.name}</strong>
+                <small>Gdzie: {locationLabel(finding)}</small>
+                {finding.improvement && <p>Pomysł: {finding.improvement}</p>}
+                <em>Uwzględnij w procesie TO-BE</em>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function ToBeStepEditor({
+  draft,
+  error,
+  findings,
+  editingId,
+  startMethod,
+  hasSteps,
+  copyMessage,
+  copyError,
+  onChange,
+  onAdd,
+  onCancel,
+  onCopy,
+}) {
+  const findingOptions = findings.map((finding) => ({
+    value: finding.id,
+    label: finding.name,
+  }))
+
+  return (
+    <section className="to-be-section to-be-steps-editor" aria-labelledby="to-be-step-title">
+      <div className="to-be-step-heading">
+        <div className="form-section-title">
+          <span>03</span>
+          <div>
+            <h2 id="to-be-step-title">
+              {editingId ? 'Edytuj krok TO-BE' : 'Zaprojektuj kroki procesu TO-BE'}
+            </h2>
+            <p>Proces docelowy zawsze budujemy jako uporządkowaną listę kroków.</p>
+          </div>
+        </div>
+        {startMethod === 'steps' && (
+          <button
+            className="copy-steps-button"
+            type="button"
+            onClick={onCopy}
+            disabled={hasSteps}
+            title={hasSteps ? 'Lista TO-BE zawiera już kroki' : undefined}
+          >
+            <span aria-hidden="true">⧉</span>
+            Skopiuj kroki z AS-IS
+          </button>
+        )}
+      </div>
+
+      {copyMessage && (
+        <div className="inline-message copied-message" role="status">
+          <span aria-hidden="true">✓</span>
+          Kroki AS-IS zostały skopiowane do procesu TO-BE.
+        </div>
+      )}
+      {copyError && (
+        <div className="inline-message copy-error" role="alert">
+          <span aria-hidden="true">!</span>
+          {copyError}
+        </div>
+      )}
+
+      <div className="step-form-panel to-be-step-panel">
+        <div className="form-grid">
+          <FormField
+            id="toBeStepName"
+            label="Nazwa kroku"
+            value={draft.name}
+            onChange={onChange}
+            error={error}
+            required
+            placeholder="np. Automatyczna weryfikacja zamówienia"
+          />
+          <FormField
+            id="toBeStepOwner"
+            label="Osoba lub rola odpowiedzialna"
+            value={draft.owner}
+            onChange={onChange}
+            placeholder="Kto odpowiada za ten krok?"
+          />
+          <FormField
+            id="toBeStepDescription"
+            label="Opis czynności"
+            value={draft.description}
+            onChange={onChange}
+            placeholder="Jak krok powinien przebiegać?"
+            multiline
+          />
+          <div className="step-side-fields">
+            <FormField
+              id="toBeStepSystem"
+              label="Wykorzystywany system lub narzędzie"
+              value={draft.system}
+              onChange={onChange}
+              placeholder="np. CRM, ERP, automatyzacja"
+            />
+            <FormField
+              id="toBeStepResult"
+              label="Rezultat kroku"
+              value={draft.result}
+              onChange={onChange}
+              placeholder="Co powstaje po wykonaniu kroku?"
+            />
+          </div>
+          <SelectField
+            id="toBeStepType"
+            label="Rodzaj kroku"
+            value={draft.stepType}
+            onChange={onChange}
+            options={['Nowy', 'Zmieniony', 'Bez zmian']}
+            placeholder=""
+          />
+          <SelectField
+            id="toBeStepFinding"
+            label="Powiązane usprawnienie"
+            value={draft.findingId}
+            onChange={onChange}
+            options={findingOptions}
+            placeholder="Brak powiązania"
+          />
+          <SelectField
+            id="toBeStepAutomatable"
+            label="Czy krok może zostać zautomatyzowany?"
+            value={draft.automatable}
+            onChange={onChange}
+            options={['Tak', 'Nie']}
+            placeholder=""
+          />
+        </div>
+        <div className="step-form-actions">
+          {editingId && (
+            <button className="cancel-edit-button" type="button" onClick={onCancel}>
+              Anuluj edycję
+            </button>
+          )}
+          <button className="add-step-button" type="button" onClick={onAdd}>
+            <span aria-hidden="true">{editingId ? '✓' : '+'}</span>
+            {editingId ? 'Zapisz zmiany' : 'Dodaj krok'}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ToBeStepsList({
+  steps,
+  findings,
+  editingId,
+  error,
+  onEdit,
+  onDelete,
+  onMove,
+}) {
+  const findingName = (findingId) =>
+    findings.find((finding) => finding.id === findingId)?.name
+
+  return (
+    <section className="to-be-section to-be-list-section" aria-labelledby="to-be-list-title">
+      <div className="steps-list-heading">
+        <div>
+          <h2 id="to-be-list-title">Kroki procesu docelowego</h2>
+          <p>Ułóż działania w kolejności, w której powinny być wykonywane.</p>
+        </div>
+        <span>{steps.length} {steps.length === 1 ? 'krok' : 'kroków'}</span>
+      </div>
+
+      {error && (
+        <div className="inline-message copy-error steps-validation-error" role="alert">
+          <span aria-hidden="true">!</span>
+          {error}
+        </div>
+      )}
+
+      {steps.length === 0 ? (
+        <div className="empty-steps">
+          <span aria-hidden="true">1</span>
+          <strong>Proces TO-BE nie ma jeszcze kroków</strong>
+          <p>Dodaj pierwszy krok lub skopiuj istniejące kroki z AS-IS.</p>
+        </div>
+      ) : (
+        <ol className="to-be-steps-list">
+          {steps.map((step, index) => (
+            <li className={editingId === step.id ? 'is-editing' : ''} key={step.id}>
+              <span className="step-order">{index + 1}</span>
+              <div className="to-be-step-content">
+                <div className="to-be-step-title">
+                  <strong>{step.name}</strong>
+                  <span className={`step-type type-${step.stepType.toLowerCase().replace(' ', '-')}`}>
+                    {step.stepType}
+                  </span>
+                  {step.automatable === 'Tak' && (
+                    <span className="automation-badge">⚙ Możliwa automatyzacja</span>
+                  )}
+                </div>
+                {step.description && <p>{step.description}</p>}
+                <div className="step-meta">
+                  {step.owner && <span>Rola: {step.owner}</span>}
+                  {step.system && <span>Narzędzie: {step.system}</span>}
+                  {step.result && <span>Rezultat: {step.result}</span>}
+                  {step.findingId && findingName(step.findingId) && (
+                    <span>Usprawnienie: {findingName(step.findingId)}</span>
+                  )}
+                </div>
+              </div>
+              <div className="step-actions">
+                <button
+                  type="button"
+                  onClick={() => onMove(index, -1)}
+                  disabled={index === 0}
+                  aria-label="Przesuń krok w górę"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMove(index, 1)}
+                  disabled={index === steps.length - 1}
+                  aria-label="Przesuń krok w dół"
+                >
+                  ↓
+                </button>
+                <button type="button" onClick={() => onEdit(step)} aria-label="Edytuj krok">
+                  ✎
+                </button>
+                <button
+                  className="delete-step"
+                  type="button"
+                  onClick={() => onDelete(step.id)}
+                  aria-label="Usuń krok"
+                >
+                  ×
+                </button>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}
+
+function ToBeSummary({ steps, selectedCount }) {
+  const stats = [
+    ['Wszystkie kroki', steps.length, '∑'],
+    ['Nowe', steps.filter((step) => step.stepType === 'Nowy').length, '+'],
+    ['Zmienione', steps.filter((step) => step.stepType === 'Zmieniony').length, '↻'],
+    ['Bez zmian', steps.filter((step) => step.stepType === 'Bez zmian').length, '='],
+    [
+      'Automatyzacja',
+      steps.filter((step) => step.automatable === 'Tak').length,
+      '⚙',
+    ],
+    ['Ustalenia', selectedCount, '✓'],
+  ]
+
+  return (
+    <section className="analysis-summary to-be-summary" aria-labelledby="to-be-summary-title">
+      <div className="steps-list-heading">
+        <div>
+          <h2 id="to-be-summary-title">Podsumowanie procesu TO-BE</h2>
+          <p>Struktura projektowanego procesu docelowego.</p>
+        </div>
+      </div>
+      <div className="analysis-stats to-be-stats">
+        {stats.map(([label, count, icon]) => (
+          <div className="analysis-stat" key={label}>
+            <span aria-hidden="true">{icon}</span>
+            <strong>{count}</strong>
+            <small>{label}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ToBeScreen({
+  scope,
+  startMethod,
+  asIsSteps,
+  findings,
+  assumptions,
+  assumptionError,
+  selectedFindingIds,
+  steps,
+  stepDraft,
+  stepError,
+  editingStepId,
+  copyMessage,
+  copyError,
+  toBeError,
+  saved,
+  saveError,
+  onAssumptionChange,
+  onToggleFinding,
+  onStepChange,
+  onAddStep,
+  onEditStep,
+  onDeleteStep,
+  onMoveStep,
+  onCancelEdit,
+  onCopySteps,
+  onBack,
+  onSave,
+}) {
+  return (
+    <section className="workspace to-be-workspace" aria-labelledby="to-be-title">
+      <div className="analysis-intro">
+        <span className="eyebrow">
+          <CompassIcon />
+          Etap 4 · Proces TO-BE
+        </span>
+        <h1 id="to-be-title">Zaprojektuj proces po usprawnieniach</h1>
+        <p>
+          Przełóż wnioski z analizy na prostszy, bardziej przewidywalny i skuteczny
+          przebieg procesu docelowego.
+        </p>
+      </div>
+
+      <ToBeContext scope={scope} startMethod={startMethod} findings={findings} />
+      <ToBeAssumptions
+        assumptions={assumptions}
+        error={assumptionError}
+        onChange={onAssumptionChange}
+      />
+      <IncludedFindings
+        findings={findings}
+        selectedIds={selectedFindingIds}
+        steps={asIsSteps}
+        startMethod={startMethod}
+        onToggle={onToggleFinding}
+      />
+      <ToBeStepEditor
+        draft={stepDraft}
+        error={stepError}
+        findings={findings}
+        editingId={editingStepId}
+        startMethod={startMethod}
+        hasSteps={steps.length > 0}
+        copyMessage={copyMessage}
+        copyError={copyError}
+        onChange={onStepChange}
+        onAdd={onAddStep}
+        onCancel={onCancelEdit}
+        onCopy={onCopySteps}
+      />
+      <ToBeStepsList
+        steps={steps}
+        findings={findings}
+        editingId={editingStepId}
+        error={toBeError}
+        onEdit={onEditStep}
+        onDelete={onDeleteStep}
+        onMove={onMoveStep}
+      />
+      <ToBeSummary steps={steps} selectedCount={selectedFindingIds.length} />
+
+      {saved && (
+        <div className="save-message success-message" role="status">
+          <span aria-hidden="true">✓</span>
+          <div>
+            <strong>Proces TO-BE został zapisany</strong>
+            <small>Możesz nadal uzupełniać lub poprawiać projekt procesu.</small>
+          </div>
+        </div>
+      )}
+      {saveError && (
+        <div className="save-message storage-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <div>
+            <strong>Nie udało się zapisać procesu TO-BE</strong>
+            <small>Sprawdź ustawienia przeglądarki i spróbuj ponownie.</small>
+          </div>
+        </div>
+      )}
+
+      <div className="form-actions">
+        <button className="back-button" type="button" onClick={onBack}>
+          <span aria-hidden="true">←</span>
+          Wróć do analizy
+        </button>
+        <button className="save-button" type="button" onClick={onSave}>
+          Zapisz proces TO-BE
+          <span aria-hidden="true">✓</span>
+        </button>
       </div>
     </section>
   )
@@ -1299,6 +1880,7 @@ function App() {
   const [savedScope] = useState(loadSavedScope)
   const [savedAsIs] = useState(loadSavedAsIs)
   const [savedAnalysis] = useState(loadSavedAnalysis)
+  const [savedToBe] = useState(loadSavedToBe)
   const [screen, setScreen] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
   const [formData, setFormData] = useState(savedScope.data)
@@ -1320,6 +1902,26 @@ function App() {
   const [analysisError, setAnalysisError] = useState('')
   const [analysisSaved, setAnalysisSaved] = useState(savedAnalysis.isSaved)
   const [analysisSaveError, setAnalysisSaveError] = useState(false)
+  const [toBeAssumptions, setToBeAssumptions] = useState(savedToBe.assumptions)
+  const [selectedFindingIds, setSelectedFindingIds] = useState(
+    (
+      savedToBe.selectedFindingIds ??
+      savedAnalysis.findings.map((finding) => finding.id)
+    ).filter((id) =>
+      savedAnalysis.findings.some((finding) => finding.id === id),
+    ),
+  )
+  const [toBeSteps, setToBeSteps] = useState(savedToBe.steps)
+  const [toBeStepDraft, setToBeStepDraft] = useState(emptyToBeStep)
+  const [editingToBeStepId, setEditingToBeStepId] = useState(null)
+  const [toBeAssumptionError, setToBeAssumptionError] = useState('')
+  const [toBeStepError, setToBeStepError] = useState('')
+  const [toBeError, setToBeError] = useState('')
+  const [toBeSaved, setToBeSaved] = useState(savedToBe.isSaved)
+  const [toBeSaveError, setToBeSaveError] = useState(false)
+  const [copiedFromAsIs, setCopiedFromAsIs] = useState(savedToBe.copiedFromAsIs)
+  const [copyMessage, setCopyMessage] = useState('')
+  const [copyError, setCopyError] = useState('')
 
   const showStart = () => {
     setScreen('start')
@@ -1601,6 +2203,7 @@ function App() {
         ...currentFindings,
         { ...findingDraft, id },
       ])
+      setSelectedFindingIds((currentIds) => [...currentIds, id])
     }
 
     setFindingDraft(emptyFinding)
@@ -1633,6 +2236,9 @@ function App() {
     if (editingFindingId === findingId) {
       cancelFindingEdit()
     }
+    setSelectedFindingIds((currentIds) =>
+      currentIds.filter((id) => id !== findingId),
+    )
     setAnalysisSaved(false)
     setAnalysisError('')
   }
@@ -1669,7 +2275,223 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const activeStage = screen === 'analysis' ? 2 : screen === 'as-is' ? 1 : 0
+  const continueToToBe = () => {
+    if (!analysisSaved || findings.length === 0) {
+      setAnalysisError('Dodaj i zapisz co najmniej jedno ustalenie analityczne.')
+      return
+    }
+    setScreen('to-be')
+    setToBeError('')
+    setToBeSaveError(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleToBeAssumptionChange = (event) => {
+    const fieldMap = {
+      toBeChangeGoal: 'changeGoal',
+      toBeExpectedResult: 'expectedResult',
+      toBeConstraints: 'constraints',
+      toBeSuccessMeasures: 'successMeasures',
+    }
+    const field = fieldMap[event.target.name]
+    setToBeAssumptions((current) => ({ ...current, [field]: event.target.value }))
+    if (field === 'changeGoal') {
+      setToBeAssumptionError('')
+    }
+    setToBeSaved(false)
+    setToBeSaveError(false)
+  }
+
+  const toggleToBeFinding = (findingId) => {
+    setSelectedFindingIds((currentIds) =>
+      currentIds.includes(findingId)
+        ? currentIds.filter((id) => id !== findingId)
+        : [...currentIds, findingId],
+    )
+    setToBeSaved(false)
+  }
+
+  const handleToBeStepChange = (event) => {
+    const fieldMap = {
+      toBeStepName: 'name',
+      toBeStepDescription: 'description',
+      toBeStepOwner: 'owner',
+      toBeStepSystem: 'system',
+      toBeStepResult: 'result',
+      toBeStepType: 'stepType',
+      toBeStepFinding: 'findingId',
+      toBeStepAutomatable: 'automatable',
+    }
+    const field = fieldMap[event.target.name]
+    setToBeStepDraft((current) => ({ ...current, [field]: event.target.value }))
+    if (field === 'name') {
+      setToBeStepError('')
+    }
+    setToBeSaved(false)
+    setToBeSaveError(false)
+    setCopyMessage('')
+  }
+
+  const cancelToBeStepEdit = () => {
+    setToBeStepDraft(emptyToBeStep)
+    setEditingToBeStepId(null)
+    setToBeStepError('')
+  }
+
+  const addOrUpdateToBeStep = () => {
+    if (!toBeStepDraft.name.trim()) {
+      setToBeStepError('Uzupełnij nazwę kroku.')
+      document.getElementById('toBeStepName')?.focus()
+      return
+    }
+
+    if (editingToBeStepId) {
+      setToBeSteps((currentSteps) =>
+        currentSteps.map((step) =>
+          step.id === editingToBeStepId
+            ? { ...toBeStepDraft, id: editingToBeStepId }
+            : step,
+        ),
+      )
+    } else {
+      const id =
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      setToBeSteps((currentSteps) => [...currentSteps, { ...toBeStepDraft, id }])
+    }
+
+    setToBeStepDraft(emptyToBeStep)
+    setEditingToBeStepId(null)
+    setToBeStepError('')
+    setToBeError('')
+    setToBeSaved(false)
+    setCopyMessage('')
+  }
+
+  const editToBeStep = (step) => {
+    setToBeStepDraft({
+      name: step.name,
+      description: step.description,
+      owner: step.owner,
+      system: step.system,
+      result: step.result,
+      stepType: step.stepType,
+      findingId: step.findingId,
+      automatable: step.automatable,
+    })
+    setEditingToBeStepId(step.id)
+    setToBeStepError('')
+    document.getElementById('toBeStepName')?.focus()
+  }
+
+  const deleteToBeStep = (stepId) => {
+    setToBeSteps((currentSteps) =>
+      currentSteps.filter((step) => step.id !== stepId),
+    )
+    if (editingToBeStepId === stepId) {
+      cancelToBeStepEdit()
+    }
+    setToBeSaved(false)
+    setToBeError('')
+    setCopyMessage('')
+  }
+
+  const moveToBeStep = (index, direction) => {
+    setToBeSteps((currentSteps) => {
+      const targetIndex = index + direction
+      if (targetIndex < 0 || targetIndex >= currentSteps.length) {
+        return currentSteps
+      }
+      const reordered = [...currentSteps]
+      ;[reordered[index], reordered[targetIndex]] = [
+        reordered[targetIndex],
+        reordered[index],
+      ]
+      return reordered
+    })
+    setToBeSaved(false)
+  }
+
+  const copyAsIsSteps = () => {
+    setCopyMessage('')
+    setCopyError('')
+
+    if (toBeSteps.length > 0) {
+      setCopyError(
+        'Lista TO-BE zawiera już kroki. Usuń je, jeśli chcesz rozpocząć od ponownego kopiowania.',
+      )
+      return
+    }
+    if (steps.length === 0) {
+      setCopyError('Brak kroków AS-IS do skopiowania.')
+      return
+    }
+
+    const copiedSteps = steps.map((step, index) => ({
+      ...emptyToBeStep,
+      name: step.name,
+      description: step.description,
+      owner: step.owner,
+      system: step.system,
+      result: step.result,
+      stepType: 'Bez zmian',
+      id: `as-is-copy-${step.id}-${index}`,
+    }))
+    setToBeSteps(copiedSteps)
+    setCopiedFromAsIs(true)
+    setCopyMessage('copied')
+    setToBeError('')
+    setToBeSaved(false)
+  }
+
+  const saveToBe = () => {
+    setToBeSaved(false)
+    setToBeSaveError(false)
+
+    const isGoalMissing = !toBeAssumptions.changeGoal.trim()
+    const areStepsMissing = toBeSteps.length === 0
+
+    setToBeAssumptionError(
+      isGoalMissing ? 'Uzupełnij cel projektowanej zmiany.' : '',
+    )
+    setToBeError(
+      areStepsMissing ? 'Dodaj co najmniej jeden krok procesu TO-BE.' : '',
+    )
+
+    if (isGoalMissing) {
+      document.getElementById('toBeChangeGoal')?.focus()
+    }
+
+    if (isGoalMissing || areStepsMissing) {
+      return
+    }
+
+    try {
+      localStorage.setItem(
+        TO_BE_STORAGE_KEY,
+        JSON.stringify({
+          assumptions: toBeAssumptions,
+          selectedFindingIds,
+          steps: toBeSteps,
+          copiedFromAsIs,
+          savedAt: new Date().toISOString(),
+        }),
+      )
+      setToBeSaved(true)
+    } catch {
+      setToBeSaveError(true)
+    }
+  }
+
+  const showAnalysis = () => {
+    setScreen('analysis')
+    setToBeError('')
+    setToBeSaveError(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const activeStage =
+    screen === 'to-be' ? 3 : screen === 'analysis' ? 2 : screen === 'as-is' ? 1 : 0
 
   return (
     <div className="app-shell">
@@ -1713,7 +2535,7 @@ function App() {
             onSave={saveAsIs}
             onContinue={continueToAnalysis}
           />
-        ) : (
+        ) : screen === 'analysis' ? (
           <AnalysisScreen
             scope={formData}
             startMethod={startMethod}
@@ -1732,6 +2554,37 @@ function App() {
             onCancelEdit={cancelFindingEdit}
             onBack={showAsIs}
             onSave={saveAnalysis}
+            onContinue={continueToToBe}
+          />
+        ) : (
+          <ToBeScreen
+            scope={formData}
+            startMethod={startMethod}
+            asIsSteps={steps}
+            findings={findings}
+            assumptions={toBeAssumptions}
+            assumptionError={toBeAssumptionError}
+            selectedFindingIds={selectedFindingIds}
+            steps={toBeSteps}
+            stepDraft={toBeStepDraft}
+            stepError={toBeStepError}
+            editingStepId={editingToBeStepId}
+            copyMessage={copyMessage}
+            copyError={copyError}
+            toBeError={toBeError}
+            saved={toBeSaved}
+            saveError={toBeSaveError}
+            onAssumptionChange={handleToBeAssumptionChange}
+            onToggleFinding={toggleToBeFinding}
+            onStepChange={handleToBeStepChange}
+            onAddStep={addOrUpdateToBeStep}
+            onEditStep={editToBeStep}
+            onDeleteStep={deleteToBeStep}
+            onMoveStep={moveToBeStep}
+            onCancelEdit={cancelToBeStepEdit}
+            onCopySteps={copyAsIsSteps}
+            onBack={showAnalysis}
+            onSave={saveToBe}
           />
         )}
       </main>
