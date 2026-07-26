@@ -221,6 +221,16 @@ main {
   box-shadow: 0 6px 14px rgba(74, 64, 169, 0.25), 0 0 0 4px #eeedfb;
 }
 
+.progress li.completed {
+  color: #5c548e;
+}
+
+.progress li.completed .stage-number {
+  border-color: #8b7fd1;
+  color: #fff;
+  background: #8376c9;
+}
+
 .workspace {
   padding: 50px 58px 52px;
   border: 1px solid rgba(222, 224, 237, 0.9);
@@ -887,6 +897,378 @@ button {
   box-shadow: 0 11px 24px rgba(67, 57, 148, 0.28);
 }
 
+.as-is-workspace {
+  padding-top: 45px;
+}
+
+.as-is-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 36px;
+}
+
+.as-is-intro > div {
+  max-width: 640px;
+}
+
+.as-is-intro h1 {
+  font-size: clamp(30px, 3.5vw, 40px);
+}
+
+.as-is-intro p {
+  max-width: 620px;
+  margin: 14px 0 0;
+  color: #6e748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.scope-summary {
+  display: grid;
+  margin: 31px 0 34px;
+  padding: 15px;
+  border: 1px solid #e3e3ed;
+  border-radius: 15px;
+  background: #f8f8fb;
+  grid-template-columns: 1.2fr 1fr 1fr;
+}
+
+.summary-item {
+  display: flex;
+  min-width: 0;
+  padding: 5px 15px;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-item + .summary-item {
+  border-left: 1px solid #e2e3eb;
+}
+
+.summary-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 1px solid #dedbea;
+  border-radius: 8px;
+  color: #6659b6;
+  background: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  place-items: center;
+}
+
+.summary-item > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.summary-item small {
+  color: #999cad;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.summary-item strong {
+  overflow: hidden;
+  color: #3a4162;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.as-is-editor {
+  padding: 31px 0 34px;
+  border-top: 1px solid #ececf3;
+  border-bottom: 1px solid #ececf3;
+}
+
+.description-editor .form-field textarea {
+  min-height: 240px;
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.description-editor .field-helper {
+  max-width: 720px;
+  margin-top: 9px;
+  font-size: 10px;
+}
+
+.as-is-tip {
+  display: flex;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #e3e0f1;
+  border-radius: 12px;
+  color: #777b91;
+  background: #f7f5fc;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.as-is-tip > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  color: #fff;
+  background: #7567c6;
+  font-size: 11px;
+  place-items: center;
+}
+
+.as-is-tip p {
+  margin: 1px 0 0;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.as-is-tip strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #514979;
+}
+
+.step-form-panel {
+  padding: 23px;
+  border: 1px solid #e1e1eb;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff, #faf9fd);
+}
+
+.step-form-grid {
+  align-items: start;
+}
+
+.step-side-fields {
+  display: grid;
+  gap: 18px;
+}
+
+.step-form-actions {
+  display: flex;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #ececf3;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.add-step-button,
+.cancel-edit-button {
+  display: inline-flex;
+  min-height: 39px;
+  padding: 0 15px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 730;
+  cursor: pointer;
+  align-items: center;
+  gap: 7px;
+}
+
+.add-step-button {
+  border: 1px solid #5b4db1;
+  color: #fff;
+  background: linear-gradient(135deg, #3c458f, #7564ca);
+  box-shadow: 0 6px 15px rgba(67, 57, 148, 0.17);
+}
+
+.add-step-button > span {
+  font-size: 15px;
+}
+
+.cancel-edit-button {
+  border: 1px solid #dcdee8;
+  color: #777b91;
+  background: #fff;
+}
+
+.steps-list-section {
+  margin-top: 32px;
+}
+
+.steps-list-heading {
+  display: flex;
+  margin-bottom: 15px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.steps-list-heading h2 {
+  font-size: 13px;
+}
+
+.steps-list-heading p {
+  margin: 4px 0 0;
+  color: #999cad;
+  font-size: 9px;
+}
+
+.steps-list-heading > span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #685cba;
+  background: #efedfa;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.empty-steps {
+  display: flex;
+  min-height: 135px;
+  border: 1px dashed #d6d5e2;
+  border-radius: 14px;
+  color: #999cac;
+  background: #fbfbfd;
+  text-align: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-steps > span {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  margin-bottom: 8px;
+  border: 1px solid #dedfea;
+  border-radius: 9px;
+  color: #7669c2;
+  background: #f2f0fa;
+  font-size: 10px;
+  font-weight: 750;
+  place-items: center;
+}
+
+.empty-steps strong {
+  color: #656a82;
+  font-size: 10px;
+}
+
+.empty-steps p {
+  margin: 4px 0 0;
+  font-size: 9px;
+}
+
+.steps-list {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.steps-list > li {
+  display: grid;
+  padding: 15px;
+  border: 1px solid #e2e3eb;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(40, 44, 80, 0.035);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+  align-items: center;
+  gap: 13px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.steps-list > li.is-editing {
+  border-color: #9b90d5;
+  box-shadow: 0 0 0 3px rgba(112, 98, 200, 0.08);
+}
+
+.step-order {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(145deg, #3e478e, #7564c9);
+  font-size: 10px;
+  font-weight: 750;
+  place-items: center;
+}
+
+.step-details {
+  min-width: 0;
+}
+
+.step-details > strong {
+  color: #333a5e;
+  font-size: 11px;
+}
+
+.step-details > p {
+  margin: 4px 0 0;
+  color: #85899c;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.step-meta {
+  display: flex;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.step-meta span {
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: #72778d;
+  background: #f3f4f8;
+  font-size: 8px;
+}
+
+.step-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step-actions button {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  border: 1px solid #e0e1e9;
+  border-radius: 8px;
+  color: #687086;
+  background: #fafafd;
+  font-size: 12px;
+  cursor: pointer;
+  place-items: center;
+}
+
+.step-actions button:hover:not(:disabled) {
+  border-color: #aaa4d3;
+  color: #574aa4;
+  background: #f3f1fb;
+}
+
+.step-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.step-actions button.delete-step:hover {
+  border-color: #dfadb5;
+  color: #ad4050;
+  background: #fff4f5;
+}
+
 button:focus-visible,
 a:focus-visible {
   outline: 3px solid rgba(103, 88, 199, 0.35);
@@ -964,6 +1346,10 @@ footer span:first-child::before {
     padding-top: 31px;
   }
 
+  .as-is-workspace {
+    padding-top: 31px;
+  }
+
   .scope-intro {
     padding-bottom: 27px;
     flex-direction: column;
@@ -972,6 +1358,24 @@ footer span:first-child::before {
 
   .selected-path {
     max-width: 100%;
+  }
+
+  .as-is-intro {
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .scope-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-item {
+    padding: 9px 6px;
+  }
+
+  .summary-item + .summary-item {
+    border-top: 1px solid #e2e3eb;
+    border-left: 0;
   }
 
   h1 {
@@ -1010,6 +1414,19 @@ footer span:first-child::before {
 
   .boundary-card {
     padding: 17px;
+  }
+
+  .step-form-panel {
+    padding: 17px;
+  }
+
+  .steps-list > li {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .step-actions {
+    grid-column: 2;
   }
 
   .mode-button {
@@ -1053,6 +1470,15 @@ footer span:first-child::before {
 
   .form-actions {
     flex-direction: column-reverse;
+  }
+
+  .step-form-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .step-form-actions button {
+    justify-content: center;
   }
 
   .back-button,
