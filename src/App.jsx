@@ -1974,7 +1974,14 @@ function ReportSectionTitle({ number, title, description }) {
   )
 }
 
-function ProcessReportSummary({ scope, startMethod, asIsSteps, findings, toBeSteps }) {
+function ProcessReportSummary({
+  scope,
+  startMethod,
+  asIsSteps,
+  findings,
+  toBeSteps,
+  summaryId = 'report-summary-title',
+}) {
   const items = [
     ['Nazwa procesu', scope.processName],
     ['Cel procesu', scope.processGoal],
@@ -1989,13 +1996,13 @@ function ProcessReportSummary({ scope, startMethod, asIsSteps, findings, toBeSte
   ]
 
   return (
-    <section className="report-section report-overview" aria-labelledby="report-summary-title">
+    <section className="report-section report-overview" aria-labelledby={summaryId}>
       <ReportSectionTitle
         number="01"
         title="Podsumowanie procesu"
         description="Najważniejsze informacje z całego przeprowadzonego procesu."
       />
-      <div className="report-summary-grid" id="report-summary-title">
+      <div className="report-summary-grid" id={summaryId}>
         {items.map(([label, value]) => (
           <div className="report-summary-card" key={label}>
             <small>{label}</small>
@@ -2535,6 +2542,289 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
   )
 }
 
+function getRaciValidationErrors(steps, raci) {
+  return steps.reduce((validationErrors, step) => {
+    const assignments = Object.values(raci[step.id] ?? {})
+    const messages = []
+    const responsibleCount = assignments.filter((value) => value === 'R').length
+    const accountableCount = assignments.filter((value) => value === 'A').length
+
+    if (responsibleCount === 0) {
+      messages.push('Krok musi mieć przynajmniej jedną rolę Responsible (R).')
+    }
+    if (accountableCount === 0) {
+      messages.push('Krok musi mieć dokładnie jedną rolę Accountable (A).')
+    } else if (accountableCount > 1) {
+      messages.push('Krok powinien mieć tylko jedną rolę Accountable (A).')
+    }
+    if (messages.length > 0) {
+      validationErrors[step.id] = messages
+    }
+
+    return validationErrors
+  }, {})
+}
+
+function PrintProcessMap({ title, steps, scope, variant, findings, unavailable }) {
+  if (unavailable) {
+    return (
+      <div className="print-map-block">
+        <h3>{title}</h3>
+        <p className="print-map-message">
+          Mapa AS-IS nie jest dostępna, ponieważ proces został opisany tekstowo.
+          Utworzenie mapy będzie możliwe po przekształceniu opisu w listę kroków.
+        </p>
+      </div>
+    )
+  }
+
+  if (steps.length === 0) {
+    return (
+      <div className="print-map-block">
+        <h3>{title}</h3>
+        <p className="print-map-message">
+          Brak kroków potrzebnych do utworzenia mapy procesu.
+        </p>
+      </div>
+    )
+  }
+
+  const mapItems = [
+    {
+      id: `${variant}-print-start`,
+      kind: 'start',
+      label: 'Początek procesu',
+      name: scope.processStart?.trim() || 'Początek procesu',
+    },
+    ...steps.map((step, index) => {
+      const linkedFindings =
+        variant === 'as-is'
+          ? findings.filter((finding) => finding.location === step.id)
+          : []
+      return {
+        ...step,
+        kind: 'step',
+        label: `Krok ${index + 1}`,
+        name: step.name,
+        automatable:
+          variant === 'to-be'
+            ? step.automatable === 'Tak'
+            : linkedFindings.some(
+                (finding) => finding.category === 'Miejsce do automatyzacji',
+              ),
+        flags:
+          variant === 'as-is'
+            ? [...new Set(linkedFindings.map((finding) => finding.category))]
+            : [],
+      }
+    }),
+    {
+      id: `${variant}-print-end`,
+      kind: 'end',
+      label: 'Koniec procesu',
+      name: scope.processEnd?.trim() || 'Koniec procesu',
+    },
+  ]
+
+  return (
+    <div className="print-map-block">
+      <h3>{title}</h3>
+      {variant === 'to-be' && (
+        <div className="map-legend print-map-legend">
+          <span className="legend-new">Nowy</span>
+          <span className="legend-changed">Zmieniony</span>
+          <span className="legend-unchanged">Bez zmian</span>
+          <span className="legend-auto">⚙ Możliwa automatyzacja</span>
+          <span className="legend-boundary">Początek i koniec procesu</span>
+        </div>
+      )}
+      <div className="print-process-map">
+        {mapItems.map((item, index) => (
+          <Fragment key={item.id}>
+            <article
+              className={[
+                'print-map-node',
+                `print-map-${item.kind}`,
+                variant === 'to-be' && item.stepType
+                  ? `print-map-${item.stepType.toLowerCase().replace(' ', '-')}`
+                  : '',
+                item.automatable ? 'print-map-automatable' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              <div className="print-map-heading">
+                <span>{item.label}</span>
+                {item.automatable && <em>⚙ Automatyzacja</em>}
+              </div>
+              <strong>{item.name}</strong>
+              {item.kind === 'step' && (
+                <div className="print-map-details">
+                  {item.owner && <span><small>Rola</small>{item.owner}</span>}
+                  {item.system && <span><small>Narzędzie</small>{item.system}</span>}
+                  {item.result && <span><small>Rezultat</small>{item.result}</span>}
+                </div>
+              )}
+              {item.flags?.length > 0 && (
+                <div className="map-node-flags">
+                  {item.flags.map((flag) => <span key={flag}>{flag}</span>)}
+                </div>
+              )}
+            </article>
+            {index < mapItems.length - 1 && (
+              <div className="print-map-arrow" aria-hidden="true">↓</div>
+            )}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PrintStakeholders({ stakeholders }) {
+  return (
+    <section className="report-section">
+      <ReportSectionTitle
+        number="07"
+        title="Interesariusze procesu"
+        description="Osoby, role i zespoły uwzględnione w raporcie."
+      />
+      <div className="print-stakeholders">
+        {stakeholders.map((item) => (
+          <article key={item.id}>
+            <span className="category-badge">{item.type}</span>
+            <h3>{item.name}</h3>
+            <p><strong>Wpływ:</strong> {item.influence} · <strong>Zainteresowanie:</strong> {item.interest}</p>
+            {item.expectations && <p><strong>Oczekiwania:</strong> {item.expectations}</p>}
+            {item.engagement && <p><strong>Zaangażowanie:</strong> {item.engagement}</p>}
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function PrintRaci({ steps, stakeholders, raci }) {
+  const assignedNames = (stepId, role) =>
+    stakeholders
+      .filter((item) => raci[stepId]?.[item.id] === role)
+      .map((item) => item.name)
+
+  return (
+    <section className="report-section">
+      <ReportSectionTitle
+        number="08"
+        title="Przypisania RACI"
+        description="Układ według kroków procesu TO-BE, przygotowany do wydruku."
+      />
+      <div className="raci-legend">
+        <span className="raci-r"><strong>R</strong> wykonuje zadanie</span>
+        <span className="raci-a"><strong>A</strong> ostatecznie odpowiada za rezultat</span>
+        <span className="raci-c"><strong>C</strong> udziela konsultacji</span>
+        <span className="raci-i"><strong>I</strong> otrzymuje informację</span>
+      </div>
+      <div className="print-raci-list">
+        {steps.map((step, index) => {
+          const assignments = ['R', 'A', 'C', 'I']
+            .map((role) => [role, assignedNames(step.id, role)])
+            .filter(([role, names]) => role === 'R' || role === 'A' || names.length > 0)
+
+          return (
+            <article key={step.id}>
+              <h3><span>{index + 1}</span>{step.name}</h3>
+              <dl>
+                {assignments.map(([role, names]) => (
+                  <div className={`print-raci-${role.toLowerCase()}`} key={role}>
+                    <dt>{role}</dt>
+                    <dd>{names.join(', ')}</dd>
+                  </div>
+                ))}
+              </dl>
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function PrintReport({
+  scope,
+  startMethod,
+  asIsDescription,
+  asIsSteps,
+  findings,
+  toBeAssumptions,
+  selectedFindingIds,
+  toBeSteps,
+  stakeholders,
+  raci,
+  generatedAt,
+}) {
+  const formattedDate = new Intl.DateTimeFormat('pl-PL', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(generatedAt ?? new Date())
+
+  return (
+    <div className="print-report">
+      <header className="print-report-header">
+        <span>Architekt Procesów</span>
+        <h1>Raport procesu</h1>
+        <p>{scope.processName}</p>
+        <time dateTime={(generatedAt ?? new Date()).toISOString()}>
+          Data wygenerowania: {formattedDate}
+        </time>
+      </header>
+      <ProcessReportSummary
+        scope={scope}
+        startMethod={startMethod}
+        asIsSteps={asIsSteps}
+        findings={findings}
+        toBeSteps={toBeSteps}
+        summaryId="print-report-summary-title"
+      />
+      <AsIsReport startMethod={startMethod} description={asIsDescription} steps={asIsSteps} />
+      <AnalysisReport findings={findings} asIsSteps={asIsSteps} startMethod={startMethod} />
+      <ToBeReport assumptions={toBeAssumptions} steps={toBeSteps} findings={findings} />
+      <ProcessComparison
+        startMethod={startMethod}
+        asIsSteps={asIsSteps}
+        toBeSteps={toBeSteps}
+        selectedCount={selectedFindingIds.length}
+      />
+      <section className="report-section print-maps-section">
+        <ReportSectionTitle
+          number="06"
+          title="Mapy procesu"
+          description="Statyczny przebieg procesów AS-IS i TO-BE."
+        />
+        <PrintProcessMap
+          title="Mapa AS-IS"
+          steps={asIsSteps}
+          scope={scope}
+          variant="as-is"
+          findings={findings}
+          unavailable={startMethod !== 'steps'}
+        />
+        <PrintProcessMap
+          title="Mapa TO-BE"
+          steps={toBeSteps}
+          scope={scope}
+          variant="to-be"
+          findings={findings}
+        />
+      </section>
+      <PrintStakeholders stakeholders={stakeholders} />
+      <PrintRaci steps={toBeSteps} stakeholders={stakeholders} raci={raci} />
+      <Recommendations
+        findings={findings}
+        toBeSteps={toBeSteps}
+        selectedFindingIds={selectedFindingIds}
+      />
+    </div>
+  )
+}
+
 function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
   const groups = [
     ['Kroki możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').map((step) => step.name), 'Nie wskazano kroków możliwych do automatyzacji'],
@@ -2586,6 +2876,8 @@ function ReportScreen({
   onRaciChange,
   onBack,
   onSave,
+  onExport,
+  printGeneratedAt,
 }) {
   return (
     <section className="workspace report-workspace" aria-labelledby="report-title">
@@ -2622,10 +2914,30 @@ function ReportScreen({
       {reportError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>{reportError}</strong><small>Uzupełnij wymagane dane raportu.</small></div></div>}
       {saved && <div className="save-message success-message" role="status"><span aria-hidden="true">✓</span><div><strong>Raport procesu został zapisany</strong><small>Interesariusze i macierz RACI są zapisane lokalnie.</small></div></div>}
       {saveError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>Nie udało się zapisać raportu</strong><small>Sprawdź ustawienia przeglądarki i spróbuj ponownie.</small></div></div>}
+      <p className="export-guidance">
+        W oknie drukowania wybierz drukarkę „Zapisz jako PDF”.
+      </p>
       <div className="form-actions">
         <button className="back-button" type="button" onClick={onBack}><span aria-hidden="true">←</span>Wróć do TO-BE</button>
         <button className="save-button" type="button" onClick={onSave}>Zapisz raport<span aria-hidden="true">✓</span></button>
+        <button className="export-button" type="button" onClick={onExport}>
+          Eksportuj do PDF
+          <span aria-hidden="true">↗</span>
+        </button>
       </div>
+      <PrintReport
+        scope={scope}
+        startMethod={startMethod}
+        asIsDescription={asIsDescription}
+        asIsSteps={asIsSteps}
+        findings={findings}
+        toBeAssumptions={toBeAssumptions}
+        selectedFindingIds={selectedFindingIds}
+        toBeSteps={toBeSteps}
+        stakeholders={stakeholders}
+        raci={raci}
+        generatedAt={printGeneratedAt}
+      />
     </section>
   )
 }
@@ -2695,6 +3007,7 @@ function App() {
   const [reportError, setReportError] = useState('')
   const [reportSaved, setReportSaved] = useState(savedReport.isSaved)
   const [reportSaveError, setReportSaveError] = useState(false)
+  const [printGeneratedAt, setPrintGeneratedAt] = useState(null)
 
   const showStart = () => {
     setScreen('start')
@@ -3404,22 +3717,7 @@ function App() {
       return
     }
 
-    const validationErrors = {}
-    toBeSteps.forEach((step) => {
-      const assignments = Object.values(raci[step.id] ?? {})
-      const messages = []
-      const responsibleCount = assignments.filter((value) => value === 'R').length
-      const accountableCount = assignments.filter((value) => value === 'A').length
-      if (responsibleCount === 0) {
-        messages.push('Krok musi mieć przynajmniej jedną rolę Responsible (R).')
-      }
-      if (accountableCount === 0) {
-        messages.push('Krok musi mieć dokładnie jedną rolę Accountable (A).')
-      } else if (accountableCount > 1) {
-        messages.push('Krok powinien mieć tylko jedną rolę Accountable (A).')
-      }
-      if (messages.length) validationErrors[step.id] = messages
-    })
+    const validationErrors = getRaciValidationErrors(toBeSteps, raci)
     setRaciErrors(validationErrors)
 
     if (Object.keys(validationErrors).length > 0) {
@@ -3441,6 +3739,55 @@ function App() {
     } catch {
       setReportSaveError(true)
     }
+  }
+
+  const exportReport = () => {
+    const validationErrors = getRaciValidationErrors(toBeSteps, raci)
+    setRaciErrors(validationErrors)
+    setReportSaveError(false)
+
+    if (
+      stakeholders.length === 0 ||
+      Object.keys(validationErrors).length > 0
+    ) {
+      setReportError(
+        'Przed eksportem uzupełnij interesariuszy i poprawnie przypisz role w macierzy RACI.',
+      )
+      return
+    }
+
+    setReportError('')
+    setPrintGeneratedAt(new Date())
+
+    const previousTitle = document.title
+    const safeProcessName = (formData.processName || 'Proces')
+      .replace(/[<>:"/\\|?*]/g, ' ')
+      .split('')
+      .filter((character) => character.charCodeAt(0) >= 32)
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80) || 'Proces'
+    document.title = `Raport procesu - ${safeProcessName}`
+
+    let titleRestored = false
+    const restoreTitle = () => {
+      if (titleRestored) return
+      titleRestored = true
+      document.title = previousTitle
+      window.removeEventListener('afterprint', restoreTitle)
+    }
+
+    window.addEventListener('afterprint', restoreTitle, { once: true })
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        try {
+          window.print()
+        } finally {
+          window.setTimeout(restoreTitle, 500)
+        }
+      })
+    })
   }
 
   const showToBe = () => {
@@ -3582,6 +3929,8 @@ function App() {
             onRaciChange={handleRaciChange}
             onBack={showToBe}
             onSave={saveReport}
+            onExport={exportReport}
+            printGeneratedAt={printGeneratedAt}
           />
         )}
       </main>
