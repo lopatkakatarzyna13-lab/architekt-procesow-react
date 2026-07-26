@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import './App.css'
 
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -6,6 +6,7 @@ const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
 const ANALYSIS_STORAGE_KEY = 'architekt-procesow:analysis'
 const TO_BE_STORAGE_KEY = 'architekt-procesow:to-be'
+const REPORT_STORAGE_KEY = 'architekt-procesow:report'
 
 const findingCategories = [
   'Wąskie gardło',
@@ -18,6 +19,14 @@ const findingCategories = [
 ]
 
 const impactLevels = ['Niski', 'Średni', 'Wysoki']
+const stakeholderTypes = [
+  'Właściciel procesu',
+  'Rola realizująca',
+  'Odbiorca rezultatu',
+  'Zespół wspierający',
+  'Osoba decyzyjna',
+  'Inny',
+]
 
 const emptyScope = {
   processName: '',
@@ -72,6 +81,15 @@ const emptyToBeStep = {
   stepType: 'Nowy',
   findingId: '',
   automatable: 'Nie',
+}
+
+const emptyStakeholder = {
+  name: '',
+  type: 'Rola realizująca',
+  influence: 'Średni',
+  interest: 'Średnie',
+  expectations: '',
+  engagement: '',
 }
 
 function loadSavedScope() {
@@ -165,6 +183,56 @@ function loadSavedToBe() {
       isSaved: false,
     }
   }
+}
+
+function loadSavedReport() {
+  try {
+    const savedReport = JSON.parse(localStorage.getItem(REPORT_STORAGE_KEY))
+    if (!savedReport || typeof savedReport !== 'object') {
+      return { stakeholders: [], raci: {}, initialized: false, isSaved: false }
+    }
+    return {
+      stakeholders: Array.isArray(savedReport.stakeholders)
+        ? savedReport.stakeholders.map((item) => ({
+            ...emptyStakeholder,
+            ...item,
+          }))
+        : [],
+      raci:
+        savedReport.raci && typeof savedReport.raci === 'object'
+          ? savedReport.raci
+          : {},
+      initialized: Boolean(savedReport.initialized),
+      isSaved: Boolean(savedReport.savedAt),
+    }
+  } catch {
+    return { stakeholders: [], raci: {}, initialized: false, isSaved: false }
+  }
+}
+
+function buildSuggestedStakeholders(scope, asIsSteps, toBeSteps) {
+  const candidates = [
+    { name: scope.processOwner, type: 'Właściciel procesu' },
+    ...asIsSteps.map((step) => ({ name: step.owner, type: 'Rola realizująca' })),
+    ...toBeSteps.map((step) => ({ name: step.owner, type: 'Rola realizująca' })),
+  ]
+  const unique = new Map()
+
+  candidates.forEach(({ name, type }) => {
+    const cleanName = name?.trim()
+    if (!cleanName) return
+    const key = cleanName.toLocaleLowerCase('pl')
+    if (!unique.has(key)) {
+      unique.set(key, {
+        ...emptyStakeholder,
+        id: `suggested-${key.replace(/[^a-ząćęłńóśźż0-9]+/gi, '-')}`,
+        name: cleanName,
+        type,
+      })
+    }
+  })
+
+  return [...unique.values()]
 }
 
 function CompassIcon() {
@@ -1790,6 +1858,7 @@ function ToBeScreen({
   onCopySteps,
   onBack,
   onSave,
+  onContinue,
 }) {
   return (
     <section className="workspace to-be-workspace" aria-labelledby="to-be-title">
@@ -1871,6 +1940,453 @@ function ToBeScreen({
           Zapisz proces TO-BE
           <span aria-hidden="true">✓</span>
         </button>
+        {saved && assumptions.changeGoal.trim() && steps.length > 0 && (
+          <button className="continue-button" type="button" onClick={onContinue}>
+            Przejdź do raportu
+            <span aria-hidden="true">→</span>
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ReportSectionTitle({ number, title, description }) {
+  return (
+    <div className="form-section-title report-section-title">
+      <span>{number}</span>
+      <div>
+        <h2>{title}</h2>
+        {description && <p>{description}</p>}
+      </div>
+    </div>
+  )
+}
+
+function ProcessReportSummary({ scope, startMethod, asIsSteps, findings, toBeSteps }) {
+  const items = [
+    ['Nazwa procesu', scope.processName],
+    ['Cel procesu', scope.processGoal],
+    ['Właściciel procesu', scope.processOwner || 'Nie określono'],
+    ['Początek procesu', scope.processStart],
+    ['Koniec procesu', scope.processEnd],
+    ['Odbiorca rezultatu', scope.customer || 'Nie określono'],
+    ['Sposób opisu AS-IS', startMethod === 'steps' ? 'Lista kroków' : 'Opis tekstowy'],
+    ...(startMethod === 'steps' ? [['Liczba kroków AS-IS', String(asIsSteps.length)]] : []),
+    ['Ustalenia analityczne', String(findings.length)],
+    ['Kroki TO-BE', String(toBeSteps.length)],
+  ]
+
+  return (
+    <section className="report-section report-overview" aria-labelledby="report-summary-title">
+      <ReportSectionTitle
+        number="01"
+        title="Podsumowanie procesu"
+        description="Najważniejsze informacje z całego przeprowadzonego procesu."
+      />
+      <div className="report-summary-grid" id="report-summary-title">
+        {items.map(([label, value]) => (
+          <div className="report-summary-card" key={label}>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ReadOnlyStepList({ steps, findings = [], toBe = false }) {
+  const findingName = (id) => findings.find((item) => item.id === id)?.name
+
+  return (
+    <ol className="report-steps">
+      {steps.map((step, index) => (
+        <li key={step.id}>
+          <span className="step-order">{index + 1}</span>
+          <div>
+            <div className="to-be-step-title">
+              <strong>{step.name}</strong>
+              {toBe && (
+                <span className={`step-type type-${step.stepType.toLowerCase().replace(' ', '-')}`}>
+                  {step.stepType}
+                </span>
+              )}
+              {toBe && step.automatable === 'Tak' && (
+                <span className="automation-badge">⚙ Możliwa automatyzacja</span>
+              )}
+            </div>
+            {step.description && <p>{step.description}</p>}
+            <div className="report-step-details">
+              {step.owner && <span><small>Rola</small>{step.owner}</span>}
+              {step.system && <span><small>Narzędzie</small>{step.system}</span>}
+              {step.result && <span><small>Rezultat</small>{step.result}</span>}
+              {toBe && step.findingId && findingName(step.findingId) && (
+                <span><small>Powiązane usprawnienie</small>{findingName(step.findingId)}</span>
+              )}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function AsIsReport({ startMethod, description, steps }) {
+  return (
+    <section className="report-section">
+      <ReportSectionTitle
+        number="02"
+        title="Proces AS-IS"
+        description="Obecny przebieg procesu przed zaprojektowaniem usprawnień."
+      />
+      {startMethod === 'steps' ? (
+        <ReadOnlyStepList steps={steps} />
+      ) : (
+        <div className="report-description">
+          <small>Pełny opis procesu</small>
+          <p>{description}</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function AnalysisReport({ findings, asIsSteps, startMethod }) {
+  const location = (finding) => {
+    if (!finding.location) return 'Nie wskazano'
+    if (startMethod !== 'steps') return finding.location
+    const index = asIsSteps.findIndex((step) => step.id === finding.location)
+    return index >= 0 ? `${index + 1}. ${asIsSteps[index].name}` : 'Krok niedostępny'
+  }
+
+  return (
+    <section className="report-section">
+      <ReportSectionTitle
+        number="03"
+        title="Najważniejsze ustalenia z analizy"
+        description="Problemy, ryzyka i możliwości zidentyfikowane w procesie AS-IS."
+      />
+      <div className="report-findings">
+        {findings.map((finding, index) => (
+          <article
+            className={[
+              'report-finding',
+              finding.impactLevel === 'Wysoki' ? 'high-impact' : '',
+              finding.category === 'Miejsce do automatyzacji' ? 'automation-finding' : '',
+            ].filter(Boolean).join(' ')}
+            key={finding.id}
+          >
+            <div className="finding-card-header">
+              <span className="finding-number">{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <span className="category-badge">{finding.category}</span>
+                <h3>{finding.name}</h3>
+              </div>
+              <span className={`impact-badge impact-${finding.impactLevel.toLowerCase()}`}>
+                {finding.impactLevel} wpływ
+              </span>
+            </div>
+            <div className="finding-location"><strong>Gdzie:</strong> {location(finding)}</div>
+            <div className="finding-details">
+              {[
+                ['Opis', finding.situation],
+                ['Możliwa przyczyna', finding.cause],
+                ['Wpływ na proces', finding.processImpact],
+                ['Pomysł usprawnienia', finding.improvement],
+              ].filter(([, value]) => value).map(([label, value]) => (
+                <div key={label}><small>{label}</small><p>{value}</p></div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ToBeReport({ assumptions, steps, findings }) {
+  const assumptionItems = [
+    ['Cel projektowanej zmiany', assumptions.changeGoal],
+    ['Oczekiwany rezultat', assumptions.expectedResult],
+    ['Ograniczenia lub warunki', assumptions.constraints],
+    ['Mierniki sukcesu', assumptions.successMeasures],
+  ]
+
+  return (
+    <section className="report-section">
+      <ReportSectionTitle
+        number="04"
+        title="Proces TO-BE"
+        description="Docelowy przebieg procesu wraz z przyjętymi założeniami."
+      />
+      <div className="report-assumptions">
+        {assumptionItems.map(([label, value]) => (
+          <div key={label}>
+            <small>{label}</small>
+            <p>{value || 'Nie określono'}</p>
+          </div>
+        ))}
+      </div>
+      <ReadOnlyStepList steps={steps} findings={findings} toBe />
+    </section>
+  )
+}
+
+function ProcessComparison({ startMethod, asIsSteps, toBeSteps, selectedCount }) {
+  const items = [
+    [
+      'Kroki AS-IS',
+      startMethod === 'steps'
+        ? asIsSteps.length
+        : 'Nie dotyczy — proces AS-IS opisano tekstowo',
+    ],
+    ['Kroki TO-BE', toBeSteps.length],
+    ['Nowe kroki', toBeSteps.filter((step) => step.stepType === 'Nowy').length],
+    ['Zmienione kroki', toBeSteps.filter((step) => step.stepType === 'Zmieniony').length],
+    ['Bez zmian', toBeSteps.filter((step) => step.stepType === 'Bez zmian').length],
+    ['Możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').length],
+    ['Uwzględnione ustalenia', selectedCount],
+  ]
+
+  return (
+    <section className="report-section">
+      <ReportSectionTitle
+        number="05"
+        title="Porównanie AS-IS i TO-BE"
+        description="Automatyczne zestawienie struktury procesu przed i po zmianie."
+      />
+      <div className="comparison-grid">
+        {items.map(([label, value]) => (
+          <div key={label}><strong>{value}</strong><small>{label}</small></div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function StakeholdersSection({
+  stakeholders,
+  draft,
+  error,
+  editingId,
+  onChange,
+  onAdd,
+  onEdit,
+  onDelete,
+  onCancel,
+}) {
+  return (
+    <section className="report-section stakeholder-section">
+      <ReportSectionTitle
+        number="06"
+        title="Interesariusze procesu"
+        description="Osoby, role i zespoły zaangażowane w realizację oraz wynik procesu."
+      />
+      <div className="finding-form-panel stakeholder-form">
+        <div className="form-grid">
+          <FormField
+            id="stakeholderName"
+            label="Nazwa osoby, roli lub zespołu"
+            value={draft.name}
+            onChange={onChange}
+            error={error}
+            required
+            placeholder="np. Kierownik sprzedaży"
+          />
+          <SelectField id="stakeholderType" label="Typ" value={draft.type} onChange={onChange} options={stakeholderTypes} placeholder="" />
+          <SelectField id="stakeholderInfluence" label="Wpływ na proces" value={draft.influence} onChange={onChange} options={impactLevels} placeholder="" />
+          <SelectField id="stakeholderInterest" label="Zainteresowanie procesem" value={draft.interest} onChange={onChange} options={['Niskie', 'Średnie', 'Wysokie']} placeholder="" />
+          <FormField id="stakeholderExpectations" label="Oczekiwania lub potrzeby" value={draft.expectations} onChange={onChange} placeholder="Czego potrzebuje ten interesariusz?" multiline />
+          <FormField id="stakeholderEngagement" label="Sposób zaangażowania lub komunikacji" value={draft.engagement} onChange={onChange} placeholder="Jak i kiedy należy go angażować?" multiline />
+        </div>
+        <div className="step-form-actions">
+          {editingId && <button className="cancel-edit-button" type="button" onClick={onCancel}>Anuluj edycję</button>}
+          <button className="add-step-button" type="button" onClick={onAdd}>
+            <span aria-hidden="true">{editingId ? '✓' : '+'}</span>
+            {editingId ? 'Zapisz zmiany' : 'Dodaj interesariusza'}
+          </button>
+        </div>
+      </div>
+      <div className="stakeholder-list">
+        {stakeholders.map((item) => (
+          <article key={item.id}>
+            <span className="stakeholder-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>
+            <div>
+              <span className="category-badge">{item.type}</span>
+              <h3>{item.name}</h3>
+              <div className="stakeholder-levels">
+                <span>Wpływ: {item.influence}</span>
+                <span>Zainteresowanie: {item.interest}</span>
+              </div>
+              {item.expectations && <p><strong>Oczekiwania:</strong> {item.expectations}</p>}
+              {item.engagement && <p><strong>Zaangażowanie:</strong> {item.engagement}</p>}
+            </div>
+            <div className="finding-actions">
+              <button type="button" onClick={() => onEdit(item)}>✎ Edytuj</button>
+              <button className="delete-finding" type="button" onClick={() => onDelete(item.id)}>× Usuń</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
+  const options = [
+    ['', '—'],
+    ['R', 'R'],
+    ['A', 'A'],
+    ['C', 'C'],
+    ['I', 'I'],
+  ]
+
+  return (
+    <section className="report-section raci-section">
+      <ReportSectionTitle
+        number="07"
+        title="Macierz RACI dla procesu TO-BE"
+        description="Przypisz odpowiedzialność dla każdego kroku procesu docelowego."
+      />
+      <div className="raci-legend">
+        <span className="raci-r"><strong>R</strong> wykonuje zadanie</span>
+        <span className="raci-a"><strong>A</strong> ostatecznie odpowiada za rezultat</span>
+        <span className="raci-c"><strong>C</strong> udziela konsultacji</span>
+        <span className="raci-i"><strong>I</strong> otrzymuje informację</span>
+      </div>
+      {stakeholders.length === 0 ? (
+        <div className="empty-steps"><strong>Dodaj interesariusza, aby uzupełnić macierz RACI.</strong></div>
+      ) : (
+        <div className="raci-scroll">
+          <table className="raci-table">
+            <thead>
+              <tr>
+                <th>Krok TO-BE</th>
+                {stakeholders.map((item) => <th key={item.id}>{item.name}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {steps.map((step, index) => (
+                <Fragment key={step.id}>
+                  <tr>
+                    <th><span>{index + 1}</span>{step.name}</th>
+                    {stakeholders.map((item) => {
+                      const value = raci[step.id]?.[item.id] ?? ''
+                      return (
+                        <td key={item.id}>
+                          <select
+                            className={`raci-select raci-${value.toLowerCase()}`}
+                            value={value}
+                            onChange={(event) => onChange(step.id, item.id, event.target.value)}
+                            aria-label={`${step.name}: ${item.name}`}
+                          >
+                            {options.map(([optionValue, label]) => <option value={optionValue} key={optionValue || 'none'}>{label}</option>)}
+                          </select>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                  {errors[step.id]?.length > 0 && (
+                    <tr className="raci-error-row">
+                      <td colSpan={stakeholders.length + 1}>
+                        {errors[step.id].map((message) => <span key={message}>! {message}</span>)}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
+  const groups = [
+    ['Kroki możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').map((step) => step.name), 'Nie wskazano kroków możliwych do automatyzacji'],
+    ['Ustalenia o wysokim wpływie', findings.filter((item) => item.impactLevel === 'Wysoki').map((item) => item.name), 'Nie zidentyfikowano ustaleń o wysokim wpływie'],
+    ['Wąskie gardła', findings.filter((item) => item.category === 'Wąskie gardło').map((item) => item.name), 'Nie zidentyfikowano wąskich gardeł'],
+    ['Ryzyka', findings.filter((item) => item.category === 'Ryzyko lub możliwość błędu').map((item) => item.name), 'Nie zidentyfikowano ryzyk'],
+    ['Niejasne odpowiedzialności', findings.filter((item) => item.category === 'Niejasna odpowiedzialność').map((item) => item.name), 'Nie zidentyfikowano niejasnych odpowiedzialności'],
+    ['Ustalenia nieuwzględnione w TO-BE', findings.filter((item) => !selectedFindingIds.includes(item.id)).map((item) => item.name), 'Wszystkie ustalenia uwzględniono w TO-BE'],
+  ]
+
+  return (
+    <section className="report-section recommendations">
+      <ReportSectionTitle number="08" title="Rekomendacje" description="Automatyczne zestawienie wynikające z zapisanych danych procesu." />
+      <div className="recommendation-grid">
+        {groups.map(([title, items, empty]) => (
+          <article key={title}>
+            <h3>{title}</h3>
+            {items.length ? <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul> : <p>{empty}</p>}
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ReportScreen({
+  scope,
+  startMethod,
+  asIsDescription,
+  asIsSteps,
+  findings,
+  toBeAssumptions,
+  selectedFindingIds,
+  toBeSteps,
+  stakeholders,
+  stakeholderDraft,
+  stakeholderError,
+  editingStakeholderId,
+  raci,
+  raciErrors,
+  reportError,
+  saved,
+  saveError,
+  onStakeholderChange,
+  onAddStakeholder,
+  onEditStakeholder,
+  onDeleteStakeholder,
+  onCancelStakeholder,
+  onRaciChange,
+  onBack,
+  onSave,
+}) {
+  return (
+    <section className="workspace report-workspace" aria-labelledby="report-title">
+      <div className="analysis-intro">
+        <span className="eyebrow"><CompassIcon />Etap 5 · Raport procesu</span>
+        <h1 id="report-title">Podsumuj proces i odpowiedzialności</h1>
+        <p>Przejrzyj pełny wynik pracy, uzupełnij interesariuszy i przypisz role RACI dla procesu docelowego.</p>
+      </div>
+      <ProcessReportSummary scope={scope} startMethod={startMethod} asIsSteps={asIsSteps} findings={findings} toBeSteps={toBeSteps} />
+      <AsIsReport startMethod={startMethod} description={asIsDescription} steps={asIsSteps} />
+      <AnalysisReport findings={findings} asIsSteps={asIsSteps} startMethod={startMethod} />
+      <ToBeReport assumptions={toBeAssumptions} steps={toBeSteps} findings={findings} />
+      <ProcessComparison startMethod={startMethod} asIsSteps={asIsSteps} toBeSteps={toBeSteps} selectedCount={selectedFindingIds.length} />
+      <StakeholdersSection
+        stakeholders={stakeholders}
+        draft={stakeholderDraft}
+        error={stakeholderError}
+        editingId={editingStakeholderId}
+        onChange={onStakeholderChange}
+        onAdd={onAddStakeholder}
+        onEdit={onEditStakeholder}
+        onDelete={onDeleteStakeholder}
+        onCancel={onCancelStakeholder}
+      />
+      <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} onChange={onRaciChange} />
+      <Recommendations findings={findings} toBeSteps={toBeSteps} selectedFindingIds={selectedFindingIds} />
+      {reportError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>{reportError}</strong><small>Uzupełnij wymagane dane raportu.</small></div></div>}
+      {saved && <div className="save-message success-message" role="status"><span aria-hidden="true">✓</span><div><strong>Raport procesu został zapisany</strong><small>Interesariusze i macierz RACI są zapisane lokalnie.</small></div></div>}
+      {saveError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>Nie udało się zapisać raportu</strong><small>Sprawdź ustawienia przeglądarki i spróbuj ponownie.</small></div></div>}
+      <div className="form-actions">
+        <button className="back-button" type="button" onClick={onBack}><span aria-hidden="true">←</span>Wróć do TO-BE</button>
+        <button className="save-button" type="button" onClick={onSave}>Zapisz raport<span aria-hidden="true">✓</span></button>
       </div>
     </section>
   )
@@ -1881,6 +2397,7 @@ function App() {
   const [savedAsIs] = useState(loadSavedAsIs)
   const [savedAnalysis] = useState(loadSavedAnalysis)
   const [savedToBe] = useState(loadSavedToBe)
+  const [savedReport] = useState(loadSavedReport)
   const [screen, setScreen] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
   const [formData, setFormData] = useState(savedScope.data)
@@ -1922,6 +2439,24 @@ function App() {
   const [copiedFromAsIs, setCopiedFromAsIs] = useState(savedToBe.copiedFromAsIs)
   const [copyMessage, setCopyMessage] = useState('')
   const [copyError, setCopyError] = useState('')
+  const suggestedStakeholders = buildSuggestedStakeholders(
+    savedScope.data,
+    savedAsIs.steps,
+    savedToBe.steps,
+  )
+  const [stakeholders, setStakeholders] = useState(
+    savedReport.initialized || savedReport.stakeholders.length > 0
+      ? savedReport.stakeholders
+      : suggestedStakeholders,
+  )
+  const [stakeholderDraft, setStakeholderDraft] = useState(emptyStakeholder)
+  const [editingStakeholderId, setEditingStakeholderId] = useState(null)
+  const [stakeholderError, setStakeholderError] = useState('')
+  const [raci, setRaci] = useState(savedReport.raci)
+  const [raciErrors, setRaciErrors] = useState({})
+  const [reportError, setReportError] = useState('')
+  const [reportSaved, setReportSaved] = useState(savedReport.isSaved)
+  const [reportSaveError, setReportSaveError] = useState(false)
 
   const showStart = () => {
     setScreen('start')
@@ -2490,8 +3025,203 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const continueToReport = () => {
+    if (
+      !toBeSaved ||
+      !toBeAssumptions.changeGoal.trim() ||
+      toBeSteps.length === 0
+    ) {
+      setToBeError('Zapisz poprawnie uzupełniony proces TO-BE.')
+      return
+    }
+    if (!savedReport.initialized && stakeholders.length === 0) {
+      setStakeholders(buildSuggestedStakeholders(formData, steps, toBeSteps))
+    }
+    setScreen('report')
+    setReportError('')
+    setReportSaveError(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleStakeholderChange = (event) => {
+    const fieldMap = {
+      stakeholderName: 'name',
+      stakeholderType: 'type',
+      stakeholderInfluence: 'influence',
+      stakeholderInterest: 'interest',
+      stakeholderExpectations: 'expectations',
+      stakeholderEngagement: 'engagement',
+    }
+    const field = fieldMap[event.target.name]
+    setStakeholderDraft((current) => ({
+      ...current,
+      [field]: event.target.value,
+    }))
+    if (field === 'name') setStakeholderError('')
+    setReportSaved(false)
+    setReportSaveError(false)
+  }
+
+  const cancelStakeholderEdit = () => {
+    setStakeholderDraft(emptyStakeholder)
+    setEditingStakeholderId(null)
+    setStakeholderError('')
+  }
+
+  const addOrUpdateStakeholder = () => {
+    const cleanName = stakeholderDraft.name.trim()
+    if (!cleanName) {
+      setStakeholderError('Uzupełnij nazwę interesariusza.')
+      document.getElementById('stakeholderName')?.focus()
+      return
+    }
+    const duplicate = stakeholders.some(
+      (item) =>
+        item.id !== editingStakeholderId &&
+        item.name.trim().toLocaleLowerCase('pl') ===
+          cleanName.toLocaleLowerCase('pl'),
+    )
+    if (duplicate) {
+      setStakeholderError('Taki interesariusz już istnieje.')
+      document.getElementById('stakeholderName')?.focus()
+      return
+    }
+
+    if (editingStakeholderId) {
+      setStakeholders((current) =>
+        current.map((item) =>
+          item.id === editingStakeholderId
+            ? { ...stakeholderDraft, name: cleanName, id: editingStakeholderId }
+            : item,
+        ),
+      )
+    } else {
+      const id =
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      setStakeholders((current) => [
+        ...current,
+        { ...stakeholderDraft, name: cleanName, id },
+      ])
+    }
+    setStakeholderDraft(emptyStakeholder)
+    setEditingStakeholderId(null)
+    setStakeholderError('')
+    setReportError('')
+    setReportSaved(false)
+  }
+
+  const editStakeholder = (item) => {
+    setStakeholderDraft({
+      name: item.name,
+      type: item.type,
+      influence: item.influence,
+      interest: item.interest,
+      expectations: item.expectations,
+      engagement: item.engagement,
+    })
+    setEditingStakeholderId(item.id)
+    setStakeholderError('')
+    document.getElementById('stakeholderName')?.focus()
+  }
+
+  const deleteStakeholder = (stakeholderId) => {
+    setStakeholders((current) =>
+      current.filter((item) => item.id !== stakeholderId),
+    )
+    setRaci((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([stepId, assignments]) => {
+          const nextAssignments = { ...assignments }
+          delete nextAssignments[stakeholderId]
+          return [stepId, nextAssignments]
+        }),
+      ),
+    )
+    if (editingStakeholderId === stakeholderId) cancelStakeholderEdit()
+    setReportSaved(false)
+    setReportError('')
+  }
+
+  const handleRaciChange = (stepId, stakeholderId, value) => {
+    setRaci((current) => ({
+      ...current,
+      [stepId]: {
+        ...(current[stepId] ?? {}),
+        [stakeholderId]: value,
+      },
+    }))
+    setRaciErrors((current) => ({ ...current, [stepId]: undefined }))
+    setReportSaved(false)
+    setReportSaveError(false)
+  }
+
+  const saveReport = () => {
+    setReportError('')
+    setReportSaved(false)
+    setReportSaveError(false)
+
+    if (stakeholders.length === 0) {
+      setReportError('Dodaj co najmniej jednego interesariusza.')
+      return
+    }
+
+    const validationErrors = {}
+    toBeSteps.forEach((step) => {
+      const assignments = Object.values(raci[step.id] ?? {})
+      const messages = []
+      const responsibleCount = assignments.filter((value) => value === 'R').length
+      const accountableCount = assignments.filter((value) => value === 'A').length
+      if (responsibleCount === 0) {
+        messages.push('Krok musi mieć przynajmniej jedną rolę Responsible (R).')
+      }
+      if (accountableCount === 0) {
+        messages.push('Krok musi mieć dokładnie jedną rolę Accountable (A).')
+      } else if (accountableCount > 1) {
+        messages.push('Krok powinien mieć tylko jedną rolę Accountable (A).')
+      }
+      if (messages.length) validationErrors[step.id] = messages
+    })
+    setRaciErrors(validationErrors)
+
+    if (Object.keys(validationErrors).length > 0) {
+      setReportError('Uzupełnij poprawnie macierz RACI dla wszystkich kroków.')
+      return
+    }
+
+    try {
+      localStorage.setItem(
+        REPORT_STORAGE_KEY,
+        JSON.stringify({
+          stakeholders,
+          raci,
+          initialized: true,
+          savedAt: new Date().toISOString(),
+        }),
+      )
+      setReportSaved(true)
+    } catch {
+      setReportSaveError(true)
+    }
+  }
+
+  const showToBe = () => {
+    setScreen('to-be')
+    setReportError('')
+    setReportSaveError(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const activeStage =
-    screen === 'to-be' ? 3 : screen === 'analysis' ? 2 : screen === 'as-is' ? 1 : 0
+    screen === 'report'
+      ? 4
+      : screen === 'to-be'
+        ? 3
+        : screen === 'analysis'
+          ? 2
+          : screen === 'as-is'
+            ? 1
+            : 0
 
   return (
     <div className="app-shell">
@@ -2556,7 +3286,7 @@ function App() {
             onSave={saveAnalysis}
             onContinue={continueToToBe}
           />
-        ) : (
+        ) : screen === 'to-be' ? (
           <ToBeScreen
             scope={formData}
             startMethod={startMethod}
@@ -2585,6 +3315,35 @@ function App() {
             onCopySteps={copyAsIsSteps}
             onBack={showAnalysis}
             onSave={saveToBe}
+            onContinue={continueToReport}
+          />
+        ) : (
+          <ReportScreen
+            scope={formData}
+            startMethod={startMethod}
+            asIsDescription={asIsDescription}
+            asIsSteps={steps}
+            findings={findings}
+            toBeAssumptions={toBeAssumptions}
+            selectedFindingIds={selectedFindingIds}
+            toBeSteps={toBeSteps}
+            stakeholders={stakeholders}
+            stakeholderDraft={stakeholderDraft}
+            stakeholderError={stakeholderError}
+            editingStakeholderId={editingStakeholderId}
+            raci={raci}
+            raciErrors={raciErrors}
+            reportError={reportError}
+            saved={reportSaved}
+            saveError={reportSaveError}
+            onStakeholderChange={handleStakeholderChange}
+            onAddStakeholder={addOrUpdateStakeholder}
+            onEditStakeholder={editStakeholder}
+            onDeleteStakeholder={deleteStakeholder}
+            onCancelStakeholder={cancelStakeholderEdit}
+            onRaciChange={handleRaciChange}
+            onBack={showToBe}
+            onSave={saveReport}
           />
         )}
       </main>
