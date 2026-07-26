@@ -1,4 +1,15 @@
 import { Fragment, useState } from 'react'
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  MarkerType,
+  Position,
+  ReactFlow,
+  useNodesState,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
 import './App.css'
 
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -2165,6 +2176,226 @@ function ProcessComparison({ startMethod, asIsSteps, toBeSteps, selectedCount })
   )
 }
 
+function ProcessMapNode({ data }) {
+  const isBoundary = data.kind === 'start' || data.kind === 'end'
+  return (
+    <div
+      className={[
+        'process-map-node',
+        `map-node-${data.kind}`,
+        data.stepType
+          ? `map-type-${data.stepType.toLowerCase().replace(' ', '-')}`
+          : '',
+        data.automatable ? 'map-automatable' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      {data.kind !== 'start' && (
+        <Handle type="target" position={Position.Left} isConnectable={false} />
+      )}
+      <div className="map-node-heading">
+        <span>{isBoundary ? (data.kind === 'start' ? 'Start' : 'Koniec') : `Krok ${data.number}`}</span>
+        {data.automatable && <em>⚙ Automatyzacja</em>}
+      </div>
+      <strong>{data.title}</strong>
+      {!isBoundary && (
+        <div className="map-node-details">
+          {data.owner && <span><small>Rola</small>{data.owner}</span>}
+          {data.system && <span><small>Narzędzie</small>{data.system}</span>}
+          {data.result && <span><small>Rezultat</small>{data.result}</span>}
+        </div>
+      )}
+      {data.flags?.length > 0 && (
+        <div className="map-node-flags">
+          {data.flags.map((flag) => <span key={flag}>{flag}</span>)}
+        </div>
+      )}
+      {data.kind !== 'end' && (
+        <Handle type="source" position={Position.Right} isConnectable={false} />
+      )}
+    </div>
+  )
+}
+
+const processMapNodeTypes = { processNode: ProcessMapNode }
+
+function createProcessFlow(steps, scope, variant, findings) {
+  const nodeGap = 280
+  const startId = `${variant}-start`
+  const endId = `${variant}-end`
+  const startTitle = scope.processStart?.trim() || 'Początek procesu'
+  const endTitle = scope.processEnd?.trim() || 'Koniec procesu'
+  const nodes = [
+    {
+      id: startId,
+      type: 'processNode',
+      position: { x: 0, y: 120 },
+      data: { kind: 'start', title: startTitle },
+      connectable: false,
+      deletable: false,
+    },
+    ...steps.map((step, index) => {
+      const linkedFindings =
+        variant === 'as-is'
+          ? findings.filter((finding) => finding.location === step.id)
+          : []
+      return {
+        id: `${variant}-step-${step.id}`,
+        type: 'processNode',
+        position: { x: (index + 1) * nodeGap, y: 92 },
+        data: {
+          kind: 'step',
+          number: index + 1,
+          title: step.name,
+          owner: step.owner,
+          system: step.system,
+          result: step.result,
+          stepType: variant === 'to-be' ? step.stepType : null,
+          automatable:
+            variant === 'to-be'
+              ? step.automatable === 'Tak'
+              : linkedFindings.some(
+                  (finding) => finding.category === 'Miejsce do automatyzacji',
+                ),
+          flags:
+            variant === 'as-is'
+              ? [...new Set(linkedFindings.map((finding) => finding.category))]
+              : [],
+        },
+        connectable: false,
+        deletable: false,
+      }
+    }),
+    {
+      id: endId,
+      type: 'processNode',
+      position: { x: (steps.length + 1) * nodeGap, y: 120 },
+      data: { kind: 'end', title: endTitle },
+      connectable: false,
+      deletable: false,
+    },
+  ]
+  const orderedIds = [startId, ...steps.map((step) => `${variant}-step-${step.id}`), endId]
+  const edges = orderedIds.slice(0, -1).map((source, index) => ({
+    id: `${variant}-edge-${index}`,
+    source,
+    target: orderedIds[index + 1],
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#7164bd' },
+    style: { stroke: '#8f86c8', strokeWidth: 1.6 },
+    selectable: false,
+    focusable: false,
+    deletable: false,
+  }))
+  return { nodes, edges }
+}
+
+function ProcessFlowCanvas({ steps, scope, variant, findings }) {
+  const flow = createProcessFlow(steps, scope, variant, findings)
+  const [nodes, , onNodesChange] = useNodesState(flow.nodes)
+
+  return (
+    <div className="process-flow-canvas" aria-label={`Interaktywna mapa ${variant === 'to-be' ? 'TO-BE' : 'AS-IS'}`}>
+      <ReactFlow
+        nodes={nodes}
+        edges={flow.edges}
+        nodeTypes={processMapNodeTypes}
+        onNodesChange={onNodesChange}
+        nodesConnectable={false}
+        nodesDraggable
+        edgesFocusable={false}
+        edgesReconnectable={false}
+        connectOnClick={false}
+        deleteKeyCode={null}
+        fitView
+        fitViewOptions={{ padding: 0.18, maxZoom: 1.05 }}
+        minZoom={0.25}
+        maxZoom={1.6}
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={18}
+          size={1.2}
+          color="#d3d0e5"
+          bgColor="#fafafe"
+        />
+        <Controls
+          showInteractive={false}
+          fitViewOptions={{ padding: 0.18, maxZoom: 1.05 }}
+          aria-label="Kontrolki mapy procesu"
+        />
+      </ReactFlow>
+    </div>
+  )
+}
+
+function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings }) {
+  const [mapVariant, setMapVariant] = useState('to-be')
+  const selectedSteps = mapVariant === 'to-be' ? toBeSteps : asIsSteps
+  const isTextAsIs = mapVariant === 'as-is' && startMethod !== 'steps'
+  const mapKey = `${mapVariant}-${selectedSteps.map((step) => step.id).join('-')}`
+
+  return (
+    <section className="report-section process-map-section">
+      <ReportSectionTitle
+        number="06"
+        title="Interaktywna mapa procesu"
+        description="Przesuwaj węzły, przybliżaj, oddalaj i dopasuj cały proces do widoku."
+      />
+      <div className="map-switch" role="group" aria-label="Wybierz mapę procesu">
+        <button
+          type="button"
+          className={mapVariant === 'as-is' ? 'active' : ''}
+          onClick={() => setMapVariant('as-is')}
+          aria-pressed={mapVariant === 'as-is'}
+        >
+          Mapa AS-IS
+        </button>
+        <button
+          type="button"
+          className={mapVariant === 'to-be' ? 'active' : ''}
+          onClick={() => setMapVariant('to-be')}
+          aria-pressed={mapVariant === 'to-be'}
+        >
+          Mapa TO-BE
+        </button>
+      </div>
+
+      {isTextAsIs ? (
+        <div className="map-empty-message">
+          <span aria-hidden="true">i</span>
+          <p>
+            Mapa AS-IS nie jest dostępna, ponieważ proces został opisany tekstowo.
+            Utworzenie mapy będzie możliwe po przekształceniu opisu w listę kroków.
+          </p>
+        </div>
+      ) : selectedSteps.length === 0 ? (
+        <div className="map-empty-message">
+          <span aria-hidden="true">!</span>
+          <p>Brak kroków potrzebnych do utworzenia wybranej mapy procesu.</p>
+        </div>
+      ) : (
+        <>
+          {mapVariant === 'to-be' && (
+            <div className="map-legend" aria-label="Legenda mapy TO-BE">
+              <span className="legend-new">Nowy</span>
+              <span className="legend-changed">Zmieniony</span>
+              <span className="legend-unchanged">Bez zmian</span>
+              <span className="legend-auto">⚙ Możliwa automatyzacja</span>
+              <span className="legend-boundary">Początek i koniec procesu</span>
+            </div>
+          )}
+          <ProcessFlowCanvas
+            key={mapKey}
+            steps={selectedSteps}
+            scope={scope}
+            variant={mapVariant}
+            findings={findings}
+          />
+        </>
+      )}
+    </section>
+  )
+}
+
 function StakeholdersSection({
   stakeholders,
   draft,
@@ -2179,7 +2410,7 @@ function StakeholdersSection({
   return (
     <section className="report-section stakeholder-section">
       <ReportSectionTitle
-        number="06"
+        number="07"
         title="Interesariusze procesu"
         description="Osoby, role i zespoły zaangażowane w realizację oraz wynik procesu."
       />
@@ -2245,7 +2476,7 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
   return (
     <section className="report-section raci-section">
       <ReportSectionTitle
-        number="07"
+        number="08"
         title="Macierz RACI dla procesu TO-BE"
         description="Przypisz odpowiedzialność dla każdego kroku procesu docelowego."
       />
@@ -2316,7 +2547,7 @@ function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
 
   return (
     <section className="report-section recommendations">
-      <ReportSectionTitle number="08" title="Rekomendacje" description="Automatyczne zestawienie wynikające z zapisanych danych procesu." />
+      <ReportSectionTitle number="09" title="Rekomendacje" description="Automatyczne zestawienie wynikające z zapisanych danych procesu." />
       <div className="recommendation-grid">
         {groups.map(([title, items, empty]) => (
           <article key={title}>
@@ -2368,6 +2599,13 @@ function ReportScreen({
       <AnalysisReport findings={findings} asIsSteps={asIsSteps} startMethod={startMethod} />
       <ToBeReport assumptions={toBeAssumptions} steps={toBeSteps} findings={findings} />
       <ProcessComparison startMethod={startMethod} asIsSteps={asIsSteps} toBeSteps={toBeSteps} selectedCount={selectedFindingIds.length} />
+      <ProcessMapSection
+        scope={scope}
+        startMethod={startMethod}
+        asIsSteps={asIsSteps}
+        toBeSteps={toBeSteps}
+        findings={findings}
+      />
       <StakeholdersSection
         stakeholders={stakeholders}
         draft={stakeholderDraft}
