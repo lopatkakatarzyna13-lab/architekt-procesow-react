@@ -276,10 +276,14 @@ function AppHeader({ onHome }) {
           <span>Zaprojektuj, przeanalizuj i usprawnij swój proces krok po kroku</span>
         </span>
       </a>
-      <span className="status-badge">
-        <span aria-hidden="true">●</span>
-        Nowy proces
-      </span>
+      <button
+  type="button"
+  className="status-badge"
+  onClick={onHome}
+>
+  <span aria-hidden="true">●</span>
+  Nowy proces
+</button>
     </header>
   )
 }
@@ -3010,10 +3014,20 @@ function App() {
   const [printGeneratedAt, setPrintGeneratedAt] = useState(null)
 
   const showStart = () => {
-    setScreen('start')
-    setScopeSaveError(false)
-    setAsIsSaveError(false)
-  }
+  const confirmed = window.confirm(
+    'Czy rozpocząć nowy proces? Dane obecnego procesu zostaną usunięte.'
+  )
+
+  if (!confirmed) return
+
+  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(AS_IS_STORAGE_KEY)
+  localStorage.removeItem(ANALYSIS_STORAGE_KEY)
+  localStorage.removeItem(TO_BE_STORAGE_KEY)
+  localStorage.removeItem(REPORT_STORAGE_KEY)
+
+  window.location.reload()
+}
 
   const startScope = (method) => {
     if (method !== startMethod) {
