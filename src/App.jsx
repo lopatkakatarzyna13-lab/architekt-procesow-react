@@ -11,14 +11,14 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './App.css'
-
+import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
 const ANALYSIS_STORAGE_KEY = 'architekt-procesow:analysis'
 const TO_BE_STORAGE_KEY = 'architekt-procesow:to-be'
 const REPORT_STORAGE_KEY = 'architekt-procesow:report'
-const DEFAULT_WORK_MODE = 'guided'
+
 
 const findingCategories = [
   'Wąskie gardło',
@@ -104,9 +104,7 @@ const emptyStakeholder = {
   engagement: '',
 }
 
-function normalizeWorkMode(workMode) {
-  return workMode === 'expert' ? 'expert' : DEFAULT_WORK_MODE
-}
+
 
 function loadSavedScope() {
   try {
