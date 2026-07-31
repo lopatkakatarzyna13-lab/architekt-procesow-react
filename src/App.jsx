@@ -18,6 +18,7 @@ const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
 const ANALYSIS_STORAGE_KEY = 'architekt-procesow:analysis'
 const TO_BE_STORAGE_KEY = 'architekt-procesow:to-be'
 const REPORT_STORAGE_KEY = 'architekt-procesow:report'
+const DEFAULT_WORK_MODE = 'guided'
 
 const findingCategories = [
   'Wąskie gardło',
@@ -103,20 +104,25 @@ const emptyStakeholder = {
   engagement: '',
 }
 
+function normalizeWorkMode(workMode) {
+  return workMode === 'expert' ? 'expert' : DEFAULT_WORK_MODE
+}
+
 function loadSavedScope() {
   try {
     const savedScope = JSON.parse(localStorage.getItem(STORAGE_KEY))
 
     if (!savedScope || typeof savedScope !== 'object') {
-      return { data: emptyScope, startMethod: null }
+      return { data: emptyScope, startMethod: null, workMode: DEFAULT_WORK_MODE }
     }
 
     return {
       data: { ...emptyScope, ...savedScope.data },
       startMethod: savedScope.startMethod ?? null,
+      workMode: normalizeWorkMode(savedScope.workMode),
     }
   } catch {
-    return { data: emptyScope, startMethod: null }
+    return { data: emptyScope, startMethod: null, workMode: DEFAULT_WORK_MODE }
   }
 }
 
@@ -2954,6 +2960,7 @@ function App() {
   const [savedReport] = useState(loadSavedReport)
   const [screen, setScreen] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
+  const [workMode] = useState(savedScope.workMode)
   const [formData, setFormData] = useState(savedScope.data)
   const [errors, setErrors] = useState({})
   const [scopeSaveError, setScopeSaveError] = useState(false)
@@ -3075,6 +3082,7 @@ function App() {
         JSON.stringify({
           data: formData,
           startMethod,
+          workMode,
           savedAt: new Date().toISOString(),
         }),
       )
