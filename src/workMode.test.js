@@ -14,6 +14,10 @@ describe("normalizeWorkMode", () => {
     expect(normalizeWorkMode("invalid")).toBe(DEFAULT_WORK_MODE);
   });
 
+  it("zamienia pusty tekst na guided", () => {
+  expect(normalizeWorkMode("")).toBe(DEFAULT_WORK_MODE);
+});
+
   it("ustawia guided, gdy wartości brakuje", () => {
     expect(normalizeWorkMode(undefined)).toBe(DEFAULT_WORK_MODE);
   });
