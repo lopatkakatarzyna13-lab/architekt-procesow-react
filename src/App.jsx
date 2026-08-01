@@ -314,7 +314,7 @@ function ProcessProgress({ activeStage = 0 }) {
   )
 }
 
-function StartScreen({ onStart }) {
+function StartScreen({ onStart, workMode, onWorkModeChange }) {
   return (
     <section className="workspace" aria-labelledby="page-title">
       <div className="intro">
@@ -339,20 +339,35 @@ function StartScreen({ onStart }) {
         </div>
 
         <div className="mode-switch" role="group" aria-label="Tryb pracy">
-          <button className="mode-button selected" type="button" aria-pressed="true">
+          <button
+  className={workMode === "guided" ? "mode-button selected" : "mode-button"}
+  type="button"
+  aria-pressed={workMode === "guided"}
+  onClick={() => onWorkModeChange("guided")}
+>
             <span className="mode-icon" aria-hidden="true">✦</span>
             <span>
               <strong>Tryb z przewodnikiem</strong>
               <small>Dla osób bez doświadczenia</small>
             </span>
-            <span className="check" aria-hidden="true">✓</span>
+            <span className="check" aria-hidden="true">
+  {workMode === "guided" ? "✓" : ""}
+</span>
           </button>
-          <button className="mode-button" type="button" aria-pressed="false">
+          <button
+  className={workMode === "expert" ? "mode-button selected" : "mode-button"}
+  type="button"
+  aria-pressed={workMode === "expert"}
+  onClick={() => onWorkModeChange("expert")}
+>
             <span className="mode-icon expert" aria-hidden="true">⌁</span>
             <span>
               <strong>Tryb ekspercki</strong>
               <small>Dla osób znających analizę procesów</small>
             </span>
+            <span className="check" aria-hidden="true">
+  {workMode === "expert" ? "✓" : ""}
+</span>
           </button>
         </div>
       </div>
@@ -2958,7 +2973,7 @@ function App() {
   const [savedReport] = useState(loadSavedReport)
   const [screen, setScreen] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
-  const [workMode] = useState(savedScope.workMode)
+  const [workMode, setWorkMode] = useState(savedScope.workMode)
   const [formData, setFormData] = useState(savedScope.data)
   const [errors, setErrors] = useState({})
   const [scopeSaveError, setScopeSaveError] = useState(false)
@@ -3834,7 +3849,7 @@ function App() {
       <main>
         <ProcessProgress activeStage={activeStage} />
         {screen === 'start' ? (
-          <StartScreen onStart={startScope} />
+          <StartScreen onStart={startScope} workMode={workMode} onWorkModeChange={setWorkMode} />
         ) : screen === 'scope' ? (
           <ScopeForm
             formData={formData}
