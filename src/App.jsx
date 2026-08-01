@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -2974,6 +2974,17 @@ function App() {
   const [screen, setScreen] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
   const [workMode, setWorkMode] = useState(savedScope.workMode)
+    useEffect(() => {
+    const currentScope = loadSavedScope()
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...currentScope,
+        workMode,
+      }),
+    )
+  }, [workMode])
   const [formData, setFormData] = useState(savedScope.data)
   const [errors, setErrors] = useState({})
   const [scopeSaveError, setScopeSaveError] = useState(false)
