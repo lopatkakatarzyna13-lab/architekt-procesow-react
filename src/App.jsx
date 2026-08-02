@@ -12,6 +12,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import './App.css'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
+import { supabase } from './supabaseClient'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
@@ -258,7 +259,18 @@ function CompassIcon() {
   )
 }
 
-function AppHeader({ onHome, onProcesses }) {
+function AppHeader({ onHome, onProcesses, onTestSupabase, supabaseTest }) {
+  const testLabel =
+    supabaseTest.status === 'loading'
+      ? 'Supabase: sprawdzanie...'
+      : supabaseTest.status === 'success'
+        ? `Supabase: ${supabaseTest.count} rekordów`
+        : supabaseTest.status === 'configuration-error'
+          ? 'Supabase: brak konfiguracji'
+          : supabaseTest.status === 'request-error'
+            ? 'Supabase: błąd odczytu'
+            : 'Test odczytu Supabase'
+
   return (
     <header className="topbar">
       <a
@@ -281,6 +293,16 @@ function AppHeader({ onHome, onProcesses }) {
         </span>
       </a>
      <div className="header-actions">
+  <button
+    type="button"
+    className="status-badge"
+    onClick={onTestSupabase}
+    disabled={supabaseTest.status === 'loading'}
+    aria-live="polite"
+  >
+    {testLabel}
+  </button>
+
   <button
     type="button"
     className="status-badge"
@@ -3038,6 +3060,10 @@ function loadSavedProcesses() {
 
 function App() {
   const [savedProcesses, setSavedProcesses] = useState(loadSavedProcesses)
+  const [supabaseTest, setSupabaseTest] = useState({
+    status: 'idle',
+    count: null,
+  })
   const [savedScope] = useState(loadSavedScope)
   const [savedAsIs] = useState(loadSavedAsIs)
   const [savedAnalysis] = useState(loadSavedAnalysis)
@@ -3125,6 +3151,31 @@ function App() {
   const [reportSaved, setReportSaved] = useState(savedReport.isSaved)
   const [reportSaveError, setReportSaveError] = useState(false)
   const [printGeneratedAt, setPrintGeneratedAt] = useState(null)
+
+  const testSupabaseRead = async () => {
+    if (!supabase) {
+      setSupabaseTest({ status: 'configuration-error', count: null })
+      return
+    }
+
+    setSupabaseTest({ status: 'loading', count: null })
+
+    try {
+      const { data, error } = await supabase
+        .schema('public')
+        .from('synthetic_processes')
+        .select('id')
+
+      if (error) {
+        setSupabaseTest({ status: 'request-error', count: null })
+        return
+      }
+
+      setSupabaseTest({ status: 'success', count: data?.length ?? 0 })
+    } catch {
+      setSupabaseTest({ status: 'request-error', count: null })
+    }
+  }
 
   const showStart = () => {
   const confirmed = window.confirm(
@@ -4056,7 +4107,9 @@ localStorage.setItem(
     <div className="app-shell">
       <AppHeader
   onHome={startNewProcess}
- onProcesses={() => {
+  onTestSupabase={testSupabaseRead}
+  supabaseTest={supabaseTest}
+  onProcesses={() => {
   setScreenBeforeProcesses(screen)
   setScreen('processes')
 }}
