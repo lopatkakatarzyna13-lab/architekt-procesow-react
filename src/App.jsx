@@ -18,7 +18,7 @@ const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
 const ANALYSIS_STORAGE_KEY = 'architekt-procesow:analysis'
 const TO_BE_STORAGE_KEY = 'architekt-procesow:to-be'
 const REPORT_STORAGE_KEY = 'architekt-procesow:report'
-
+const PROCESSES_STORAGE_KEY = 'architekt-procesow:processes'
 
 const findingCategories = [
   'Wąskie gardło',
@@ -258,7 +258,7 @@ function CompassIcon() {
   )
 }
 
-function AppHeader({ onHome }) {
+function AppHeader({ onHome, onProcesses }) {
   return (
     <header className="topbar">
       <a
@@ -280,14 +280,24 @@ function AppHeader({ onHome }) {
           <span>Zaprojektuj, przeanalizuj i usprawnij swój proces krok po kroku</span>
         </span>
       </a>
-      <button
-  type="button"
-  className="status-badge"
-  onClick={onHome}
->
-  <span aria-hidden="true">●</span>
-  Nowy proces
-</button>
+     <div className="header-actions">
+  <button
+    type="button"
+    className="status-badge"
+    onClick={onProcesses}
+  >
+    Moje procesy
+  </button>
+
+  <button
+    type="button"
+    className="status-badge"
+    onClick={onHome}
+  >
+    <span aria-hidden="true">●</span>
+    Nowy proces
+  </button>
+</div>
     </header>
   )
 }
@@ -2964,15 +2974,87 @@ function ReportScreen({
     </section>
   )
 }
+function ProcessesScreen({ processes, onOpen, onBack }) {
+  return (
+    <section className="processes-screen">
+      <div className="processes-header">
+        <div>
+          <p className="eyebrow">Biblioteka procesów</p>
+          <h2>Moje procesy</h2>
+          <p>Zapisane procesy możesz ponownie otworzyć i kontynuować.</p>
+        </div>
+
+        <button type="button" className="status-badge" onClick={onBack}>
+          Wróć do procesu
+        </button>
+      </div>
+
+      {processes.length === 0 ? (
+        <div className="processes-empty">
+          <h3>Nie masz jeszcze zapisanych procesów</h3>
+          <p>
+            Pierwszy proces pojawi się tutaj po wybraniu opcji „Nowy proces”.
+          </p>
+        </div>
+      ) : (
+        <div className="processes-list">
+          {processes.map((process) => (
+            <article className="process-card" key={process.id}>
+              <div>
+                <h3>{process.name}</h3>
+                <p>
+                  Zapisano:{' '}
+                  {new Date(process.savedAt).toLocaleString('pl-PL')}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => onOpen(process)}
+              >
+                Otwórz proces
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function loadSavedProcesses() {
+  try {
+    const savedProcesses = JSON.parse(
+      localStorage.getItem(PROCESSES_STORAGE_KEY) || '[]'
+    )
+
+    return Array.isArray(savedProcesses) ? savedProcesses : []
+  } catch {
+    return []
+  }
+}
+
 
 function App() {
+  const [savedProcesses, setSavedProcesses] = useState(loadSavedProcesses)
   const [savedScope] = useState(loadSavedScope)
   const [savedAsIs] = useState(loadSavedAsIs)
   const [savedAnalysis] = useState(loadSavedAnalysis)
   const [savedToBe] = useState(loadSavedToBe)
   const [savedReport] = useState(loadSavedReport)
-  const [screen, setScreen] = useState('start')
+  const [screen, setScreen] = useState(
+  () =>
+    sessionStorage.getItem('architekt-procesow-screen-to-open') || 'start'
+)
+  const [screenBeforeProcesses, setScreenBeforeProcesses] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
+  useEffect(() => {
+  localStorage.setItem(
+    PROCESSES_STORAGE_KEY,
+    JSON.stringify(savedProcesses)
+  )
+}, [savedProcesses])
   const [workMode, setWorkMode] = useState(savedScope.workMode)
     useEffect(() => {
     const currentScope = loadSavedScope()
@@ -3059,7 +3141,108 @@ function App() {
 
   window.location.reload()
 }
+const startNewProcess = () => {
+   const hasStartedProcess = Boolean(formData.processName?.trim())
 
+  if (!hasStartedProcess) {
+    sessionStorage.removeItem('architekt-procesow-screen-to-open')
+    window.location.reload()
+    return
+  }
+  const accepted = window.confirm(
+    'Czy rozpocząć nowy proces? Bieżący proces zostanie zapisany w „Moich procesach”.'
+  )
+
+  if (!accepted) return
+
+  const processSnapshot = {
+    id: crypto.randomUUID(),
+    name: formData.processName?.trim() || 'Proces bez nazwy',
+    savedAt: new Date().toISOString(),
+    lastScreen: screen,
+    sections: {
+      scope: localStorage.getItem(STORAGE_KEY),
+      asIs: localStorage.getItem(AS_IS_STORAGE_KEY),
+      analysis: localStorage.getItem(ANALYSIS_STORAGE_KEY),
+      toBe: localStorage.getItem(TO_BE_STORAGE_KEY),
+      report: localStorage.getItem(REPORT_STORAGE_KEY),
+    },
+  }
+
+  const updatedProcesses = [...savedProcesses, processSnapshot]
+
+  localStorage.setItem(
+    PROCESSES_STORAGE_KEY,
+    JSON.stringify(updatedProcesses)
+  )
+  setSavedProcesses(updatedProcesses)
+
+  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(AS_IS_STORAGE_KEY)
+  localStorage.removeItem(ANALYSIS_STORAGE_KEY)
+  localStorage.removeItem(TO_BE_STORAGE_KEY)
+  localStorage.removeItem(REPORT_STORAGE_KEY)
+sessionStorage.removeItem('architekt-procesow-screen-to-open')
+  window.location.reload()
+}
+
+const openSavedProcess = (process) => {
+  const sections = [
+    [STORAGE_KEY, process.sections?.scope],
+    [AS_IS_STORAGE_KEY, process.sections?.asIs],
+    [ANALYSIS_STORAGE_KEY, process.sections?.analysis],
+    [TO_BE_STORAGE_KEY, process.sections?.toBe],
+    [REPORT_STORAGE_KEY, process.sections?.report],
+  ]
+
+  sections.forEach(([storageKey, sectionData]) => {
+    if (sectionData) {
+      localStorage.setItem(storageKey, sectionData)
+    } else {
+      localStorage.removeItem(storageKey)
+    }
+  })
+
+  const nextScope = loadSavedScope()
+  const nextAsIs = loadSavedAsIs()
+  const nextAnalysis = loadSavedAnalysis()
+  const nextToBe = loadSavedToBe()
+  const nextReport = loadSavedReport()
+  const editableScreens = ['scope', 'as-is', 'analysis', 'to-be', 'report']
+  const nextScreen = editableScreens.includes(process.lastScreen)
+    ? process.lastScreen
+    : 'scope'
+
+  setStartMethod(nextScope.startMethod)
+  setWorkMode(nextScope.workMode)
+  setFormData(nextScope.data)
+  setAsIsDescription(nextAsIs.description)
+  setSteps(nextAsIs.steps)
+  setAsIsSaved(nextAsIs.isSaved)
+  setFindings(nextAnalysis.findings)
+  setAnalysisSaved(nextAnalysis.isSaved)
+  setToBeAssumptions(nextToBe.assumptions)
+  setSelectedFindingIds(
+    (nextToBe.selectedFindingIds ?? nextAnalysis.findings.map(({ id }) => id)).filter(
+      (id) => nextAnalysis.findings.some((finding) => finding.id === id),
+    ),
+  )
+  setToBeSteps(nextToBe.steps)
+  setToBeSaved(nextToBe.isSaved)
+  setCopiedFromAsIs(nextToBe.copiedFromAsIs)
+  setStakeholders(
+    nextReport.initialized || nextReport.stakeholders.length > 0
+      ? nextReport.stakeholders
+      : buildSuggestedStakeholders(nextScope.data, nextAsIs.steps, nextToBe.steps),
+  )
+  setRaci(nextReport.raci)
+  setReportSaved(nextReport.isSaved)
+sessionStorage.setItem(
+  'architekt-procesow-screen-to-open',
+  nextScreen
+)
+  setScreen(nextScreen)
+}
   const startScope = (method) => {
     if (method !== startMethod) {
       setAsIsSaved(false)
@@ -3157,18 +3340,33 @@ function App() {
       return
     }
 
-    if (editingStepId) {
-      setSteps((currentSteps) =>
-        currentSteps.map((step) =>
-          step.id === editingStepId ? { ...stepDraft, id: editingStepId } : step,
-        ),
-      )
-    } else {
-      const id =
-        globalThis.crypto?.randomUUID?.() ??
-        `${Date.now()}-${Math.random().toString(16).slice(2)}`
-      setSteps((currentSteps) => [...currentSteps, { ...stepDraft, id }])
-    }
+    const nextSteps = editingStepId
+  ? steps.map((step) =>
+      step.id === editingStepId
+        ? { ...stepDraft, id: editingStepId }
+        : step,
+    )
+  : [
+      ...steps,
+      {
+        ...stepDraft,
+        id:
+          globalThis.crypto?.randomUUID?.() ??
+          `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      },
+    ]
+
+setSteps(nextSteps)
+localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ steps: nextSteps }))
+localStorage.setItem(
+  AS_IS_STORAGE_KEY,
+  JSON.stringify({
+    description: asIsDescription,
+    steps: nextSteps,
+    startMethod,
+    savedAt: new Date().toISOString(),
+  }),
+)
 
     setStepDraft(emptyStep)
     setEditingStepId(null)
@@ -3856,11 +4054,27 @@ function App() {
 
   return (
     <div className="app-shell">
-      <AppHeader onHome={showStart} />
+      <AppHeader
+  onHome={startNewProcess}
+ onProcesses={() => {
+  setScreenBeforeProcesses(screen)
+  setScreen('processes')
+}}
+/>
       <main>
-        <ProcessProgress activeStage={activeStage} />
-        {screen === 'start' ? (
-          <StartScreen onStart={startScope} workMode={workMode} onWorkModeChange={setWorkMode} />
+       {screen !== 'processes' && (
+  <ProcessProgress activeStage={activeStage} />
+)}
+
+{screen === 'processes' ? (
+  <ProcessesScreen
+
+    processes={savedProcesses}
+    onOpen={openSavedProcess}
+    onBack={() => setScreen(screenBeforeProcesses)}
+  />
+) : screen === 'start' ? (
+  <StartScreen onStart={startScope} workMode={workMode} onWorkModeChange={setWorkMode} />
         ) : screen === 'scope' ? (
           <ScopeForm
             formData={formData}
