@@ -11,6 +11,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './App.css'
+import { getRaciValidationErrors } from './raci'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -2531,6 +2532,7 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
     ['', '—'],
     ['R', 'R'],
     ['A', 'A'],
+    ['RA', 'R/A'],
     ['C', 'C'],
     ['I', 'I'],
   ]
@@ -2545,6 +2547,7 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
       <div className="raci-legend">
         <span className="raci-r"><strong>R</strong> wykonuje zadanie</span>
         <span className="raci-a"><strong>A</strong> ostatecznie odpowiada za rezultat</span>
+        <span className="raci-ra"><strong>R/A</strong> wykonuje zadanie i odpowiada za rezultat</span>
         <span className="raci-c"><strong>C</strong> udziela konsultacji</span>
         <span className="raci-i"><strong>I</strong> otrzymuje informację</span>
       </div>
@@ -2595,29 +2598,6 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
       )}
     </section>
   )
-}
-
-function getRaciValidationErrors(steps, raci) {
-  return steps.reduce((validationErrors, step) => {
-    const assignments = Object.values(raci[step.id] ?? {})
-    const messages = []
-    const responsibleCount = assignments.filter((value) => value === 'R').length
-    const accountableCount = assignments.filter((value) => value === 'A').length
-
-    if (responsibleCount === 0) {
-      messages.push('Krok musi mieć przynajmniej jedną rolę Responsible (R).')
-    }
-    if (accountableCount === 0) {
-      messages.push('Krok musi mieć dokładnie jedną rolę Accountable (A).')
-    } else if (accountableCount > 1) {
-      messages.push('Krok powinien mieć tylko jedną rolę Accountable (A).')
-    }
-    if (messages.length > 0) {
-      validationErrors[step.id] = messages
-    }
-
-    return validationErrors
-  }, {})
 }
 
 function PrintProcessMap({ title, steps, scope, variant, findings, unavailable }) {
@@ -2773,12 +2753,13 @@ function PrintRaci({ steps, stakeholders, raci }) {
       <div className="raci-legend">
         <span className="raci-r"><strong>R</strong> wykonuje zadanie</span>
         <span className="raci-a"><strong>A</strong> ostatecznie odpowiada za rezultat</span>
+        <span className="raci-ra"><strong>R/A</strong> wykonuje zadanie i odpowiada za rezultat</span>
         <span className="raci-c"><strong>C</strong> udziela konsultacji</span>
         <span className="raci-i"><strong>I</strong> otrzymuje informację</span>
       </div>
       <div className="print-raci-list">
         {steps.map((step, index) => {
-          const assignments = ['R', 'A', 'C', 'I']
+          const assignments = ['RA', 'R', 'A', 'C', 'I']
             .map((role) => [role, assignedNames(step.id, role)])
             .filter(([role, names]) => role === 'R' || role === 'A' || names.length > 0)
 
@@ -2788,7 +2769,7 @@ function PrintRaci({ steps, stakeholders, raci }) {
               <dl>
                 {assignments.map(([role, names]) => (
                   <div className={`print-raci-${role.toLowerCase()}`} key={role}>
-                    <dt>{role}</dt>
+                    <dt>{role === 'RA' ? 'R/A' : role}</dt>
                     <dd>{names.join(', ')}</dd>
                   </div>
                 ))}

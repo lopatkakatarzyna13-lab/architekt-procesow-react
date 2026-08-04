@@ -2215,6 +2215,7 @@ button {
 
 .raci-r { border-color: #b8d9ce !important; color: #35745f; background: #eef8f4; }
 .raci-a { border-color: #e8b9c0 !important; color: #a34251; background: #fff3f5; }
+.raci-ra { border-color: #d7b7cf !important; color: #7d456f; background: #fbf0f8; }
 .raci-c { border-color: #c8b8e4 !important; color: #7150a2; background: #f6f0fc; }
 .raci-i { border-color: #b9cee8 !important; color: #416b9c; background: #eff6fd; }
 
@@ -2299,6 +2300,7 @@ button {
 
 .raci-select.raci-r { color: #28725a; background: #e9f7f2; }
 .raci-select.raci-a { color: #a0394a; background: #ffedf0; }
+.raci-select.raci-ra { color: #7d456f; background: #fbf0f8; }
 .raci-select.raci-c { color: #6f46a4; background: #f2eafb; }
 .raci-select.raci-i { color: #346b9f; background: #eaf4fd; }
 
@@ -3543,6 +3545,7 @@ footer span:first-child::before {
 
   .print-raci-r { border-color: #b8d9ce !important; background: #eef8f4; }
   .print-raci-a { border-color: #e8b9c0 !important; background: #fff3f5; }
+  .print-raci-ra { border-color: #d7b7cf !important; background: #fbf0f8; }
   .print-raci-c { border-color: #c8b8e4 !important; background: #f6f0fc; }
   .print-raci-i { border-color: #b9cee8 !important; background: #eff6fd; }
 
