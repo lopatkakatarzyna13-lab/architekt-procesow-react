@@ -11,7 +11,17 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './App.css'
+import {
+  activateProcessId,
+  createProcessId,
+  isValidProcessId,
+  loadCurrentProcessId,
+  removeCurrentProcessId,
+  saveCurrentProcessId,
+} from './processIdentity'
+import { buildProcessSnapshot } from './processSnapshot'
 import { getRaciValidationErrors } from './raci'
+import { upsertSavedProcess } from './savedProcesses'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -21,6 +31,13 @@ const ANALYSIS_STORAGE_KEY = 'architekt-procesow:analysis'
 const TO_BE_STORAGE_KEY = 'architekt-procesow:to-be'
 const REPORT_STORAGE_KEY = 'architekt-procesow:report'
 const PROCESSES_STORAGE_KEY = 'architekt-procesow:processes'
+const PROCESS_SECTION_STORAGE_KEYS = [
+  STORAGE_KEY,
+  AS_IS_STORAGE_KEY,
+  ANALYSIS_STORAGE_KEY,
+  TO_BE_STORAGE_KEY,
+  REPORT_STORAGE_KEY,
+]
 
 const findingCategories = [
   'Wąskie gardło',
@@ -3038,9 +3055,47 @@ function loadSavedProcesses() {
   }
 }
 
+function createStorageBackup(storage, keys) {
+  return keys.map((key) => {
+    const value = storage.getItem(key)
+    return { key, existed: value !== null, value }
+  })
+}
+
+function restoreStorageBackup(storage, backup) {
+  let rollbackFailed = false
+
+  backup.forEach(({ key, existed, value }) => {
+    try {
+      if (existed) {
+        storage.setItem(key, value)
+      } else {
+        storage.removeItem(key)
+      }
+    } catch {
+      rollbackFailed = true
+    }
+  })
+
+  return !rollbackFailed
+}
+
 
 function App() {
   const [savedProcesses, setSavedProcesses] = useState(loadSavedProcesses)
+  const [processIdentityState, setProcessIdentityState] = useState(() => {
+    try {
+      return {
+        id: loadCurrentProcessId(localStorage),
+        error: '',
+      }
+    } catch {
+      return {
+        id: null,
+        error: 'Nie udało się odczytać identyfikatora procesu.',
+      }
+    }
+  })
   const [supabaseTest, setSupabaseTest] = useState({
     status: 'idle',
     count: null,
@@ -3165,19 +3220,84 @@ function App() {
 
   if (!confirmed) return
 
-  localStorage.removeItem(STORAGE_KEY)
-  localStorage.removeItem(AS_IS_STORAGE_KEY)
-  localStorage.removeItem(ANALYSIS_STORAGE_KEY)
-  localStorage.removeItem(TO_BE_STORAGE_KEY)
-  localStorage.removeItem(REPORT_STORAGE_KEY)
+  let sectionBackup
 
+  try {
+    sectionBackup = createStorageBackup(
+      localStorage,
+      PROCESS_SECTION_STORAGE_KEYS,
+    )
+  } catch {
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: 'Nie udało się przygotować bezpiecznego resetu procesu.',
+    }))
+    return
+  }
+
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(AS_IS_STORAGE_KEY)
+    localStorage.removeItem(ANALYSIS_STORAGE_KEY)
+    localStorage.removeItem(TO_BE_STORAGE_KEY)
+    localStorage.removeItem(REPORT_STORAGE_KEY)
+    removeCurrentProcessId(localStorage)
+  } catch {
+    const rollbackSucceeded = restoreStorageBackup(
+      localStorage,
+      sectionBackup,
+    )
+
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: rollbackSucceeded
+        ? 'Nie udało się zresetować procesu. Poprzednie dane zostały przywrócone.'
+        : 'Błąd krytyczny: nie udało się w pełni przywrócić danych procesu. Nie kontynuuj edycji.',
+    }))
+    return
+  }
+
+  setProcessIdentityState({ id: null, error: '' })
   window.location.reload()
 }
 const startNewProcess = () => {
    const hasStartedProcess = Boolean(formData.processName?.trim())
 
   if (!hasStartedProcess) {
-    sessionStorage.removeItem('architekt-procesow-screen-to-open')
+    let screenBackup
+
+    try {
+      screenBackup = createStorageBackup(
+        sessionStorage,
+        ['architekt-procesow-screen-to-open'],
+      )
+    } catch {
+      setProcessIdentityState((current) => ({
+        ...current,
+        error: 'Nie udało się przygotować bezpiecznego rozpoczęcia nowego procesu.',
+      }))
+      return
+    }
+
+    try {
+      sessionStorage.removeItem('architekt-procesow-screen-to-open')
+      removeCurrentProcessId(localStorage)
+    } catch {
+      const rollbackSucceeded = restoreStorageBackup(
+        sessionStorage,
+        screenBackup,
+      )
+
+      setProcessIdentityState((current) => ({
+        ...current,
+        error: rollbackSucceeded
+          ? 'Nie udało się rozpocząć nowego procesu. Poprzedni ekran został przywrócony.'
+          : 'Błąd krytyczny: nie udało się przywrócić poprzedniego ekranu. Nie kontynuuj edycji.',
+      }))
+      return
+    }
+
+    setProcessIdentityState({ id: null, error: '' })
     window.location.reload()
     return
   }
@@ -3187,38 +3307,120 @@ const startNewProcess = () => {
 
   if (!accepted) return
 
-  const processSnapshot = {
-    id: crypto.randomUUID(),
-    name: formData.processName?.trim() || 'Proces bez nazwy',
-    savedAt: new Date().toISOString(),
-    lastScreen: screen,
-    sections: {
-      scope: localStorage.getItem(STORAGE_KEY),
-      asIs: localStorage.getItem(AS_IS_STORAGE_KEY),
-      analysis: localStorage.getItem(ANALYSIS_STORAGE_KEY),
-      toBe: localStorage.getItem(TO_BE_STORAGE_KEY),
-      report: localStorage.getItem(REPORT_STORAGE_KEY),
-    },
+  try {
+    const processId =
+      processIdentityState.id ?? createProcessId(globalThis.crypto)
+    const existingProcess = savedProcesses.find(
+      (process) =>
+        isValidProcessId(process?.id) &&
+        process.id.toLowerCase() === processId.toLowerCase(),
+    )
+    const processSnapshot = buildProcessSnapshot({
+      existingProcess,
+      id: processId,
+      name: formData.processName?.trim() || 'Proces bez nazwy',
+      savedAt: new Date().toISOString(),
+      lastScreen: screen,
+      sections: {
+        scope: localStorage.getItem(STORAGE_KEY),
+        asIs: localStorage.getItem(AS_IS_STORAGE_KEY),
+        analysis: localStorage.getItem(ANALYSIS_STORAGE_KEY),
+        toBe: localStorage.getItem(TO_BE_STORAGE_KEY),
+        report: localStorage.getItem(REPORT_STORAGE_KEY),
+      },
+    })
+
+    const updatedProcesses = upsertSavedProcess(savedProcesses, processSnapshot)
+
+    localStorage.setItem(
+      PROCESSES_STORAGE_KEY,
+      JSON.stringify(updatedProcesses)
+    )
+    setSavedProcesses(updatedProcesses)
+  } catch {
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: 'Nie udało się zapisać procesu w bibliotece. Dane i tożsamość procesu zostały zachowane.',
+    }))
+    return
   }
 
-  const updatedProcesses = [...savedProcesses, processSnapshot]
+  let sectionBackup
+  let screenBackup
 
-  localStorage.setItem(
-    PROCESSES_STORAGE_KEY,
-    JSON.stringify(updatedProcesses)
-  )
-  setSavedProcesses(updatedProcesses)
+  try {
+    sectionBackup = createStorageBackup(
+      localStorage,
+      PROCESS_SECTION_STORAGE_KEYS,
+    )
+    screenBackup = createStorageBackup(
+      sessionStorage,
+      ['architekt-procesow-screen-to-open'],
+    )
+  } catch {
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: 'Proces został zapisany, ale nie udało się przygotować bezpiecznego resetu.',
+    }))
+    return
+  }
 
-  localStorage.removeItem(STORAGE_KEY)
-  localStorage.removeItem(AS_IS_STORAGE_KEY)
-  localStorage.removeItem(ANALYSIS_STORAGE_KEY)
-  localStorage.removeItem(TO_BE_STORAGE_KEY)
-  localStorage.removeItem(REPORT_STORAGE_KEY)
-sessionStorage.removeItem('architekt-procesow-screen-to-open')
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(AS_IS_STORAGE_KEY)
+    localStorage.removeItem(ANALYSIS_STORAGE_KEY)
+    localStorage.removeItem(TO_BE_STORAGE_KEY)
+    localStorage.removeItem(REPORT_STORAGE_KEY)
+    sessionStorage.removeItem('architekt-procesow-screen-to-open')
+    removeCurrentProcessId(localStorage)
+  } catch {
+    const sectionsRestored = restoreStorageBackup(
+      localStorage,
+      sectionBackup,
+    )
+    const screenRestored = restoreStorageBackup(
+      sessionStorage,
+      screenBackup,
+    )
+    const rollbackSucceeded = sectionsRestored && screenRestored
+
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: rollbackSucceeded
+        ? 'Proces został zapisany, ale reset nie powiódł się. Poprzedni workspace został przywrócony.'
+        : 'Błąd krytyczny: proces został zapisany, ale nie udało się w pełni przywrócić workspace’u. Nie kontynuuj edycji.',
+    }))
+    return
+  }
+
+  setProcessIdentityState({ id: null, error: '' })
   window.location.reload()
 }
 
 const openSavedProcess = (process) => {
+  if (!isValidProcessId(process?.id)) {
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: 'Nie można otworzyć procesu, ponieważ jego identyfikator jest nieprawidłowy.',
+    }))
+    return
+  }
+
+  const normalizedProcessId = process.id.toLowerCase()
+  const matchingProcessCount = savedProcesses.filter(
+    (savedProcess) =>
+      isValidProcessId(savedProcess?.id) &&
+      savedProcess.id.toLowerCase() === normalizedProcessId,
+  ).length
+
+  if (matchingProcessCount > 1) {
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: 'Nie można otworzyć procesu, ponieważ biblioteka zawiera powielony identyfikator.',
+    }))
+    return
+  }
+
   const sections = [
     [STORAGE_KEY, process.sections?.scope],
     [AS_IS_STORAGE_KEY, process.sections?.asIs],
@@ -3226,25 +3428,91 @@ const openSavedProcess = (process) => {
     [TO_BE_STORAGE_KEY, process.sections?.toBe],
     [REPORT_STORAGE_KEY, process.sections?.report],
   ]
+  const editableScreens = ['scope', 'as-is', 'analysis', 'to-be', 'report']
+  const nextScreen = editableScreens.includes(process.lastScreen)
+    ? process.lastScreen
+    : 'scope'
+  let sectionBackups
+  let screenBackup
 
-  sections.forEach(([storageKey, sectionData]) => {
-    if (sectionData) {
-      localStorage.setItem(storageKey, sectionData)
-    } else {
-      localStorage.removeItem(storageKey)
+  try {
+    sectionBackups = sections.map(([storageKey]) => {
+      const value = localStorage.getItem(storageKey)
+      return { storageKey, existed: value !== null, value }
+    })
+    const screenValue = sessionStorage.getItem(
+      'architekt-procesow-screen-to-open',
+    )
+    screenBackup = {
+      existed: screenValue !== null,
+      value: screenValue,
     }
-  })
+  } catch {
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: 'Nie udało się przygotować bezpiecznego otwarcia procesu.',
+    }))
+    return
+  }
+
+  try {
+    sections.forEach(([storageKey, sectionData]) => {
+      if (sectionData) {
+        localStorage.setItem(storageKey, sectionData)
+      } else {
+        localStorage.removeItem(storageKey)
+      }
+    })
+
+    sessionStorage.setItem(
+      'architekt-procesow-screen-to-open',
+      nextScreen
+    )
+    activateProcessId(localStorage, process.id)
+  } catch {
+    let rollbackFailed = false
+
+    sectionBackups.forEach(({ storageKey, existed, value }) => {
+      try {
+        if (existed) {
+          localStorage.setItem(storageKey, value)
+        } else {
+          localStorage.removeItem(storageKey)
+        }
+      } catch {
+        rollbackFailed = true
+      }
+    })
+
+    try {
+      if (screenBackup.existed) {
+        sessionStorage.setItem(
+          'architekt-procesow-screen-to-open',
+          screenBackup.value,
+        )
+      } else {
+        sessionStorage.removeItem('architekt-procesow-screen-to-open')
+      }
+    } catch {
+      rollbackFailed = true
+    }
+
+    setProcessIdentityState((current) => ({
+      ...current,
+      error: rollbackFailed
+        ? 'Błąd krytyczny: nie udało się przywrócić poprzednich danych procesu. Nie kontynuuj edycji.'
+        : 'Nie udało się otworzyć procesu. Poprzednie dane zostały przywrócone.',
+    }))
+    return
+  }
 
   const nextScope = loadSavedScope()
   const nextAsIs = loadSavedAsIs()
   const nextAnalysis = loadSavedAnalysis()
   const nextToBe = loadSavedToBe()
   const nextReport = loadSavedReport()
-  const editableScreens = ['scope', 'as-is', 'analysis', 'to-be', 'report']
-  const nextScreen = editableScreens.includes(process.lastScreen)
-    ? process.lastScreen
-    : 'scope'
 
+  setProcessIdentityState({ id: process.id, error: '' })
   setStartMethod(nextScope.startMethod)
   setWorkMode(nextScope.workMode)
   setFormData(nextScope.data)
@@ -3269,10 +3537,6 @@ const openSavedProcess = (process) => {
   )
   setRaci(nextReport.raci)
   setReportSaved(nextReport.isSaved)
-sessionStorage.setItem(
-  'architekt-procesow-screen-to-open',
-  nextScreen
-)
   setScreen(nextScreen)
 }
   const startScope = (method) => {
@@ -3315,7 +3579,16 @@ sessionStorage.setItem(
       return
     }
 
+    let processId = processIdentityState.id
+    let identitySaved = false
+    let scopeSaved = false
+
     try {
+      processId ??= createProcessId(globalThis.crypto)
+      saveCurrentProcessId(localStorage, processId)
+      identitySaved = true
+      setProcessIdentityState({ id: processId, error: '' })
+
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
@@ -3325,10 +3598,23 @@ sessionStorage.setItem(
           savedAt: new Date().toISOString(),
         }),
       )
+      scopeSaved = true
+      sessionStorage.setItem(
+        'architekt-procesow-screen-to-open',
+        'as-is',
+      )
       setScreen('as-is')
       setAsIsSaveError(false)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch {
+      setProcessIdentityState((current) => ({
+        id: identitySaved ? processId : current.id,
+        error: scopeSaved
+          ? 'Zakres został zapisany, ale nie udało się zapamiętać ekranu AS-IS. Spróbuj ponownie.'
+          : identitySaved
+            ? 'Nie udało się zapisać Zakresu. Identyfikator procesu został zachowany do ponownej próby.'
+            : 'Nie udało się utworzyć lub potwierdzić identyfikatora procesu. Zakres nie został zapisany.',
+      }))
       setScopeSaveError(true)
     }
   }
@@ -4095,6 +4381,15 @@ localStorage.setItem(
   setScreen('processes')
 }}
 />
+      {processIdentityState.error && (
+        <div className="save-message storage-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <div>
+            <strong>Nie udało się wykonać operacji na procesie</strong>
+            <small>{processIdentityState.error}</small>
+          </div>
+        </div>
+      )}
       <main>
        {screen !== 'processes' && (
   <ProcessProgress activeStage={activeStage} />
