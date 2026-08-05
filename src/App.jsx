@@ -19,7 +19,9 @@ import {
   removeCurrentProcessId,
   saveCurrentProcessId,
 } from './processIdentity'
+import { buildProcessSnapshot } from './processSnapshot'
 import { getRaciValidationErrors } from './raci'
+import { upsertSavedProcess } from './savedProcesses'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -3306,8 +3308,16 @@ const startNewProcess = () => {
   if (!accepted) return
 
   try {
-    const processSnapshot = {
-      id: crypto.randomUUID(),
+    const processId =
+      processIdentityState.id ?? createProcessId(globalThis.crypto)
+    const existingProcess = savedProcesses.find(
+      (process) =>
+        isValidProcessId(process?.id) &&
+        process.id.toLowerCase() === processId.toLowerCase(),
+    )
+    const processSnapshot = buildProcessSnapshot({
+      existingProcess,
+      id: processId,
       name: formData.processName?.trim() || 'Proces bez nazwy',
       savedAt: new Date().toISOString(),
       lastScreen: screen,
@@ -3318,9 +3328,9 @@ const startNewProcess = () => {
         toBe: localStorage.getItem(TO_BE_STORAGE_KEY),
         report: localStorage.getItem(REPORT_STORAGE_KEY),
       },
-    }
+    })
 
-    const updatedProcesses = [...savedProcesses, processSnapshot]
+    const updatedProcesses = upsertSavedProcess(savedProcesses, processSnapshot)
 
     localStorage.setItem(
       PROCESSES_STORAGE_KEY,

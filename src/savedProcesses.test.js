@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildProcessSnapshot } from './processSnapshot'
 import { upsertSavedProcess } from './savedProcesses'
 
 const processId = '123e4567-e89b-42d3-a456-426614174000'
@@ -216,6 +217,49 @@ describe('upsertSavedProcess', () => {
   })
 
   describe('aktualizacja', () => {
+    it('aktualizuje ponownie zapisany otwarty proces bez tworzenia duplikatu', () => {
+      const originalSections = Object.freeze(
+        createSections({
+          scope: JSON.stringify({ data: { processName: 'Proces przed zmianą' } }),
+        }),
+      )
+      const metadata = Object.freeze({ source: 'legacy', version: 1 })
+      const existingProcess = Object.freeze(
+        createSnapshot({
+          savedAt: '2026-08-05T05:51:02.000Z',
+          sections: originalSections,
+          metadata,
+        }),
+      )
+      const processes = Object.freeze([existingProcess])
+      const updatedSections = createSections({
+        scope: JSON.stringify({ data: { processName: 'Proces po zmianie' } }),
+        report: JSON.stringify({ stakeholders: [{ id: 'stakeholder-1' }] }),
+      })
+
+      const reopenedProcessSnapshot = buildProcessSnapshot({
+        existingProcess,
+        id: existingProcess.id,
+        name: existingProcess.name,
+        savedAt: '2026-08-05T05:53:12.000Z',
+        lastScreen: 'report',
+        sections: updatedSections,
+      })
+      const result = upsertSavedProcess(processes, reopenedProcessSnapshot)
+
+      expect(result).toHaveLength(1)
+      expect(result[0].id).toBe(existingProcess.id)
+      expect(result[0].savedAt).toBe('2026-08-05T05:53:12.000Z')
+      expect(result[0].sections.scope).toBe(updatedSections.scope)
+      expect(result[0].sections.report).toBe(updatedSections.report)
+      expect(result[0].metadata).toBe(metadata)
+      expect(result).not.toBe(processes)
+      expect(processes).toEqual([existingProcess])
+      expect(processes[0]).toBe(existingProcess)
+      expect(existingProcess.savedAt).toBe('2026-08-05T05:51:02.000Z')
+      expect(existingProcess.sections).toBe(originalSections)
+    })
+
     it('zastępuje pojedynczy rekord z tym samym UUID', () => {
       const existingProcess = createSnapshot({ name: 'Stara nazwa' })
       const snapshot = createSnapshot({ name: 'Nowa nazwa' })
