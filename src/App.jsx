@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -24,6 +24,7 @@ import { getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
+import WorkshopPanel from './WorkshopPanel'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
@@ -971,6 +972,8 @@ function StepsAsIs({
 }
 
 function AsIsScreen({
+  processId,
+  workshopDirtyRef,
   scope,
   startMethod,
   description,
@@ -1019,6 +1022,8 @@ function AsIsScreen({
       </div>
 
       <ScopeSummary scope={scope} />
+
+      {processId && <WorkshopPanel key={processId} processId={processId} dirtyRef={workshopDirtyRef} />}
 
       {isStepsVariant ? (
         <StepsAsIs
@@ -3082,6 +3087,8 @@ function restoreStorageBackup(storage, backup) {
 
 
 function App() {
+  const workshopDirtyRef = useRef(false)
+  const canLeaveWorkshop = () => !workshopDirtyRef.current || window.confirm('Transkrypcja warsztatu ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')
   const [savedProcesses, setSavedProcesses] = useState(loadSavedProcesses)
   const [processIdentityState, setProcessIdentityState] = useState(() => {
     try {
@@ -4373,10 +4380,11 @@ localStorage.setItem(
   return (
     <div className="app-shell">
       <AppHeader
-  onHome={startNewProcess}
+  onHome={() => { if (canLeaveWorkshop()) startNewProcess() }}
   onTestSupabase={testSupabaseRead}
   supabaseTest={supabaseTest}
   onProcesses={() => {
+  if (!canLeaveWorkshop()) return
   setScreenBeforeProcesses(screen)
   setScreen('processes')
 }}
@@ -4417,6 +4425,8 @@ localStorage.setItem(
           />
         ) : screen === 'as-is' ? (
           <AsIsScreen
+            processId={processIdentityState.id}
+            workshopDirtyRef={workshopDirtyRef}
             scope={formData}
             startMethod={startMethod}
             description={asIsDescription}
@@ -4435,9 +4445,9 @@ localStorage.setItem(
             onDeleteStep={deleteStep}
             onMoveStep={moveStep}
             onCancelEdit={cancelStepEdit}
-            onBack={showScope}
+            onBack={() => { if (canLeaveWorkshop()) showScope() }}
             onSave={saveAsIs}
-            onContinue={continueToAnalysis}
+            onContinue={() => { if (canLeaveWorkshop()) continueToAnalysis() }}
           />
         ) : screen === 'analysis' ? (
           <AnalysisScreen

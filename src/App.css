@@ -4,6 +4,20 @@
   overflow: hidden;
 }
 
+.workshop-panel {
+  margin: 24px 0;
+  padding: 24px;
+  border: 1px solid #dcdaf0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.workshop-panel h2 { margin: 0 0 10px; }
+.workshop-panel p { line-height: 1.5; }
+.workshop-panel label { display: block; font-weight: 700; margin: 16px 0 8px; }
+.workshop-panel textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #b9b7d0; border-radius: 8px; font: inherit; resize: vertical; }
+.workshop-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+
 .app-shell::before,
 .app-shell::after {
   position: fixed;
