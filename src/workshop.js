@@ -1,4 +1,4 @@
-import { isValidProcessId } from './processIdentity'
+import { isValidProcessId } from './processIdentity.js'
 
 const KEY_PREFIX = 'architekt-procesow:workshop:'
 export const MAX_TRANSCRIPT_LENGTH = 100_000
