@@ -1,0 +1,76 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import WorkshopPanel from './WorkshopPanel'
+
+const PROCESS_A = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+const PROCESS_B = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+beforeEach(() => { localStorage.clear(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+
+describe('workshop review screen', () => {
+  it('saves and reopens a transcript and manually prepared proposal for the correct process', async () => {
+    const user = userEvent.setup()
+    const dirtyRef = { current: false }
+    const first = render(<WorkshopPanel processId={PROCESS_A} dirtyRef={dirtyRef} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'HR sprawdza dane.')
+    expect(dirtyRef.current).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+    await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+    for (const [category, text] of [['kroki', 'Sprawdzenie danych'], ['role', 'HR'], ['decyzje', 'Czy dane są kompletne?'], ['pytania', 'Kto zatwierdza?']]) {
+      await user.click(screen.getByRole('button', { name: `Dodaj: ${category}` }))
+      const title = category[0].toUpperCase() + category.slice(1)
+      await user.type(screen.getByLabelText(`${title} — pozycja 1`), text)
+    }
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    expect(screen.getByText('Propozycja zapisana na tym urządzeniu.')).toBeTruthy()
+    expect(dirtyRef.current).toBe(false)
+    first.unmount()
+    const second = render(<WorkshopPanel processId={PROCESS_A} dirtyRef={dirtyRef} />)
+    expect(screen.getByLabelText('Tekst rozmowy').value).toBe('HR sprawdza dane.')
+    expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Sprawdzenie danych')
+    expect(screen.getByLabelText('Pytania — pozycja 1').value).toBe('Kto zatwierdza?')
+    second.unmount()
+    render(<WorkshopPanel processId={PROCESS_B} dirtyRef={dirtyRef} />)
+    expect(screen.getByLabelText('Tekst rozmowy').value).toBe('')
+    expect(screen.queryByText('Propozycja do sprawdzenia')).toBeNull()
+  })
+
+  it('keeps unsaved review if the user cancels changing the transcript', async () => {
+    const user = userEvent.setup()
+    const dirtyRef = { current: false }
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={dirtyRef} />)
+    const input = screen.getByLabelText('Tekst rozmowy')
+    await user.type(input, 'Test')
+    await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+    await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+    await user.click(screen.getByRole('button', { name: 'Dodaj: kroki' }))
+    await user.type(screen.getByLabelText('Kroki — pozycja 1'), 'Krok roboczy')
+    await user.click(input)
+    await user.keyboard('a')
+    expect(window.confirm).toHaveBeenCalled()
+    expect(input.value).toBe('Test')
+    expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Krok roboczy')
+    expect(dirtyRef.current).toBe(true)
+  })
+
+  it('marks an edited AI suggestion for review without presenting it as supported', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ proposal: {
+      steps: [{ text: 'Sprawdzenie danych', status: 'supported', evidence: 'HR sprawdza dane.' }], roles: [], decisions: [], questions: [],
+    } }) })))
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'HR sprawdza dane.')
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    const field = await screen.findByLabelText('Kroki — pozycja 1')
+    const row = field.closest('li')
+    expect(within(row).getByText('Propozycja z cytatem do sprawdzenia')).toBeTruthy()
+    await user.type(field, ' ręcznie')
+    expect(within(row).getByText('Do sprawdzenia')).toBeTruthy()
+    expect(within(row).getByText('Fragment rozmowy: HR sprawdza dane.')).toBeTruthy()
+  })
+})
