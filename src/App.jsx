@@ -3088,7 +3088,7 @@ function restoreStorageBackup(storage, backup) {
 
 function App() {
   const workshopDirtyRef = useRef(false)
-  const canLeaveWorkshop = () => !workshopDirtyRef.current || window.confirm('Transkrypcja warsztatu ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')
+  const canLeaveWorkshop = () => !workshopDirtyRef.current || window.confirm('Transkrypcja lub propozycja warsztatu ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')
   const [savedProcesses, setSavedProcesses] = useState(loadSavedProcesses)
   const [processIdentityState, setProcessIdentityState] = useState(() => {
     try {

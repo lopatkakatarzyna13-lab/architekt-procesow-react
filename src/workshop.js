@@ -27,6 +27,31 @@ export function saveWorkshop(storage, processId, transcript, date = new Date()) 
   return { transcript, savedAt }
 }
 
+function reviewKey(processId) {
+  return `${keyFor(processId)}:review`
+}
+
+export function loadWorkshopReview(storage, processId, transcript) {
+  const value = storage.getItem(reviewKey(processId))
+  if (value === null) return { review: null, stale: false }
+  let data
+  try { data = JSON.parse(value) } catch { throw new Error('Nie można odczytać zapisanej propozycji.') }
+  if (!data || data.version !== 1 || typeof data.sourceTranscript !== 'string' || !data.sourceTranscript.trim() || data.sourceTranscript.length > MAX_TRANSCRIPT_LENGTH || validateWorkshopProposal(data.review, data.sourceTranscript).length) {
+    throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
+  }
+  return data.sourceTranscript === transcript
+    ? { review: data.review, stale: false }
+    : { review: null, stale: true }
+}
+
+export function saveWorkshopReview(storage, processId, transcript, review, { replaceStale = false } = {}) {
+  const key = reviewKey(processId)
+  if (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_LENGTH || validateWorkshopProposal(review, transcript).length) throw new Error('Nieprawidłowa propozycja.')
+  const current = loadWorkshopReview(storage, processId, transcript)
+  if (current.stale && !replaceStale) throw new Error('Istnieje propozycja dla innej wersji transkrypcji.')
+  storage.setItem(key, JSON.stringify({ version: 1, sourceTranscript: transcript, review }))
+}
+
 // A proposal is never applied to a process automatically. Evidence must be
 // an exact quote so a reviewer can find it in the transcript.
 export function validateWorkshopProposal(proposal, transcript) {
