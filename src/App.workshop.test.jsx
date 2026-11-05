@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
@@ -26,4 +26,47 @@ it('starts a process and prevents leaving AS-IS with an unsaved workshop review'
   await user.click(screen.getByRole('button', { name: /Wróć do zakresu/ }))
   expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('niezapisane zmiany'))
   expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Sprawdzenie danych')
+})
+
+it('transfers only selected saved workshop steps, avoids duplicates and restores the draft', async () => {
+  const user = userEvent.setup()
+  const view = render(<App />)
+  await user.click(screen.getByRole('button', { name: /Dodaj kroki samodzielnie/ }))
+  await user.type(screen.getByLabelText(/Nazwa procesu/), 'Proces testowy')
+  await user.type(screen.getByLabelText(/Cel procesu/), 'Przygotowanie danych')
+  await user.type(screen.getByLabelText(/Co rozpoczyna proces/), 'Zgłoszenie')
+  await user.type(screen.getByLabelText(/Co kończy proces/), 'Przekazanie')
+  await user.click(screen.getByRole('button', { name: /Zapisz zakres i przejdź dalej/ }))
+  await user.type(await screen.findByLabelText('Tekst rozmowy'), 'HR sprawdza i przekazuje dane.')
+  await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+  await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+  await user.click(screen.getByRole('button', { name: 'Dodaj: kroki' }))
+  await user.type(screen.getByLabelText('Kroki — pozycja 1'), 'Sprawdzenie danych')
+  await user.click(screen.getByRole('button', { name: 'Dodaj: kroki' }))
+  await user.type(screen.getByLabelText('Kroki — pozycja 2'), 'Przekazanie danych')
+  await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+  await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }))
+  await user.click(screen.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }))
+  let list = screen.getByRole('heading', { name: 'Kroki procesu' }).closest('.steps-list-section')
+  expect(within(list).getByText('Sprawdzenie danych')).toBeTruthy()
+  expect(within(list).queryByText('Przekazanie danych')).toBeNull()
+  await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }))
+  await user.click(screen.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }))
+  expect(screen.getByText(/Pominięto istniejących lub powtórzonych: 1/)).toBeTruthy()
+  expect(within(list).getAllByText('Sprawdzenie danych')).toHaveLength(1)
+  await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 2 do przeniesienia' }))
+  const originalSetItem = Storage.prototype.setItem
+  const storageFailure = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+    if (key === 'architekt-procesow:as-is') throw new Error('quota')
+    return originalSetItem.call(this, key, value)
+  })
+  await user.click(screen.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }))
+  expect(screen.getByText(/Nie udało się przenieść kroków/)).toBeTruthy()
+  expect(within(list).queryByText('Przekazanie danych')).toBeNull()
+  storageFailure.mockRestore()
+  view.unmount()
+  render(<App />)
+  list = screen.getByRole('heading', { name: 'Kroki procesu' }).closest('.steps-list-section')
+  expect(within(list).getByText('Sprawdzenie danych')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /Przejdź do analizy/ })).toBeNull()
 })

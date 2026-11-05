@@ -52,6 +52,25 @@ export function saveWorkshopReview(storage, processId, transcript, review, { rep
   storage.setItem(key, JSON.stringify({ version: 1, sourceTranscript: transcript, review }))
 }
 
+export function appendWorkshopSteps(existingSteps, names, createId) {
+  if (!Array.isArray(existingSteps) || !Array.isArray(names) || typeof createId !== 'function') throw new TypeError('Nieprawidłowe dane kroków.')
+  const normalize = (value) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pl')
+  const seen = new Set(existingSteps.map((step) => typeof step?.name === 'string' ? normalize(step.name) : '').filter(Boolean))
+  const added = []
+  const skipped = []
+  for (const name of names) {
+    if (typeof name !== 'string' || !name.trim()) throw new TypeError('Nazwa kroku nie może być pusta.')
+    const cleaned = name.trim()
+    const normalized = normalize(cleaned)
+    if (seen.has(normalized)) { skipped.push(cleaned); continue }
+    const id = createId()
+    if (typeof id !== 'string' || !id.trim() || existingSteps.some((step) => step?.id === id) || added.some((step) => step.id === id)) throw new Error('Nie udało się utworzyć identyfikatora kroku.')
+    added.push({ id, name: cleaned, description: '', owner: '', system: '', result: '' })
+    seen.add(normalized)
+  }
+  return { steps: [...existingSteps, ...added], added, skipped }
+}
+
 // A proposal is never applied to a process automatically. Evidence must be
 // an exact quote so a reviewer can find it in the transcript.
 export function validateWorkshopProposal(proposal, transcript) {

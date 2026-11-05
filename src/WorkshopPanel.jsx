@@ -6,8 +6,9 @@ import {
 
 const categories = { steps: 'Kroki', roles: 'Role', decisions: 'Decyzje', questions: 'Pytania' }
 const emptyReview = () => ({ steps: [], roles: [], decisions: [], questions: [] })
+const analysisAvailable = import.meta.env.DEV || import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true'
 
-export default function WorkshopPanel({ processId, dirtyRef }) {
+export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = false, onTransferSteps }) {
   const [initial] = useState(() => {
     let data
     try { data = loadWorkshop(localStorage, processId) }
@@ -23,6 +24,7 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
   const [reviewDirty, setReviewDirty] = useState(false)
   const [analysisMessage, setAnalysisMessage] = useState(initial.reviewError)
   const [analyzing, setAnalyzing] = useState(false)
+  const [selectedSteps, setSelectedSteps] = useState([])
   const revision = useRef(0)
   const dirty = transcript !== savedTranscript
 
@@ -50,6 +52,7 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
     setReviewDirty(false)
     dirtyRef.current = value !== savedTranscript
     revision.current += 1
+    setSelectedSteps([])
     setAnalysis(null)
     setAnalysisMessage('')
     setMessage('')
@@ -60,6 +63,7 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
     if (!transcript.trim()) { setAnalysisMessage('Najpierw wklej transkrypcję.'); return }
     if (!replaceReview()) return
     setAnalysis(emptyReview())
+    setSelectedSteps([])
     setReviewDirty(true)
     dirtyRef.current = true
     setAnalysisMessage('Dodaj ustalenia ręcznie. Zapisz propozycję przed opuszczeniem ekranu.')
@@ -83,7 +87,7 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
       }
       if (revision.current !== currentRevision) setAnalysisMessage('Transkrypcja lub propozycja zmieniła się podczas analizy. Uruchom analizę ponownie.')
       else if (validateWorkshopProposal(result.proposal, transcript).length) setAnalysisMessage('Odpowiedź nie przeszła kontroli źródeł. Spróbuj ponownie.')
-      else { setAnalysis(result.proposal); setReviewDirty(true); dirtyRef.current = true }
+      else { setAnalysis(result.proposal); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
     } catch (error) {
       setAnalysisMessage(error.message.includes('JSON') || error instanceof TypeError ? 'Serwer analizy jest niedostępny. Sprawdź konfigurację.' : error.message)
     } finally { setAnalyzing(false) }
@@ -91,6 +95,7 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
 
   const editItem = (category, index, value) => {
     revision.current += 1
+    if (category === 'steps') setSelectedSteps([])
     setAnalysis((current) => ({ ...current, [category]: current[category].map((item, i) => i === index ? { ...item, text: value, status: item.status === 'supported' ? 'assumption' : item.status } : item) }))
     setReviewDirty(true)
     dirtyRef.current = true
@@ -98,12 +103,14 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
   }
   const addItem = (category) => {
     revision.current += 1
+    if (category === 'steps') setSelectedSteps([])
     setAnalysis((current) => ({ ...current, [category]: [...current[category], { text: '', status: category === 'questions' ? 'question' : 'assumption', evidence: '' }] }))
     setReviewDirty(true)
     dirtyRef.current = true
   }
   const removeItem = (category, index) => {
     revision.current += 1
+    if (category === 'steps') setSelectedSteps([])
     setAnalysis((current) => ({ ...current, [category]: current[category].filter((_, i) => i !== index) }))
     setReviewDirty(true)
     dirtyRef.current = true
@@ -121,19 +128,28 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
     } catch { setAnalysisMessage('Nie udało się zapisać propozycji. Istniejące dane nie zostały nadpisane.') }
   }
 
+  const transferSteps = () => {
+    if (!analysis || reviewDirty || dirty || !selectedSteps.length || !canTransferSteps || !onTransferSteps) return
+    const result = onTransferSteps(analysis.steps.filter((_, index) => selectedSteps.includes(index)).map((item) => item.text))
+    if (result.error) { setAnalysisMessage(result.error); return }
+    setSelectedSteps([])
+    setAnalysisMessage(`Dodano kroków: ${result.added}. Pominięto istniejących lub powtórzonych: ${result.skipped}. Sprawdź listę kroków poniżej i zapisz proces AS-IS.`)
+  }
+
   return (
     <section className="workshop-panel" aria-labelledby="workshop-title">
       <h2 id="workshop-title">Transkrypcja warsztatu</h2>
       <p>Wklej rozmowę dotyczącą tego procesu. Tekst zapisuje się wyłącznie w tej przeglądarce po kliknięciu „Zapisz transkrypcję”. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
-      <p>Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI. Wynik wymaga Twojej weryfikacji i nie zmienia automatycznie procesu. Mapa BPMN powstanie w kolejnym etapie.</p>
+      <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} Wynik wymaga Twojej weryfikacji i nie zmienia automatycznie procesu. Mapa BPMN powstanie w kolejnym etapie.</p>
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
       <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(initial.error)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
       <div className="workshop-actions">
         <button type="button" className="save-button" disabled={Boolean(initial.error) || !dirty} onClick={save}>Zapisz transkrypcję</button>
-        <button type="button" className="save-button" disabled={Boolean(initial.error) || analyzing} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
+        <button type="button" className="save-button" disabled={Boolean(initial.error) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
         <button type="button" className="back-button" disabled={Boolean(initial.error) || analyzing} onClick={startManual}>Opracuj ręcznie</button>
         <span>{transcript.length} / {MAX_TRANSCRIPT_LENGTH} znaków</span>
       </div>
+      {!analysisAvailable && <p>Analiza AI nie jest jeszcze dostępna w tym podglądzie. Możesz opracować ustalenia ręcznie.</p>}
       {dirty && <p role="status">Masz niezapisane zmiany w transkrypcji.</p>}
       {message && <p role="status">{message}</p>}
       {!dirty && savedAt && !message && <p>Transkrypcja została wcześniej zapisana na tym urządzeniu.</p>}
@@ -146,6 +162,7 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
         {Object.entries(categories).map(([key, title]) => <div key={key}>
           <h4>{title}</h4>
           {analysis[key].length ? <ul>{analysis[key].map((item, index) => <li key={`${key}-${index}`}>
+            {key === 'steps' && canTransferSteps && <label><input type="checkbox" checked={selectedSteps.includes(index)} onChange={(event) => setSelectedSteps((current) => event.target.checked ? [...current, index] : current.filter((itemIndex) => itemIndex !== index))} /> Wybierz krok {index + 1} do przeniesienia</label>}
             <label htmlFor={`review-${key}-${index}`}>{title} — pozycja {index + 1}</label>
             <textarea id={`review-${key}-${index}`} rows="2" value={item.text} onChange={(event) => editItem(key, index, event.target.value)} />
             <small>{item.status === 'supported' ? 'Propozycja z cytatem do sprawdzenia' : item.status === 'assumption' ? 'Do sprawdzenia' : 'Pytanie'}</small>
@@ -156,6 +173,10 @@ export default function WorkshopPanel({ processId, dirtyRef }) {
         </div>)}
         <div className="workshop-actions"><button type="button" className="save-button" disabled={!reviewDirty || Boolean(initial.reviewError)} onClick={saveReview}>Zapisz propozycję</button></div>
         {reviewDirty && <p role="status">Masz niezapisaną propozycję.</p>}
+        {canTransferSteps ? <div className="workshop-actions">
+          <button type="button" className="save-button" disabled={!selectedSteps.length || reviewDirty || dirty} onClick={transferSteps}>Przenieś wybrane kroki do AS-IS</button>
+          <span>Najpierw zapisz propozycję. Role i pozostałe pola uzupełnij przy krokach.</span>
+        </div> : <p>Przenoszenie kroków jest dostępne w trybie „Dodaj kroki samodzielnie”.</p>}
       </div>}
     </section>
   )

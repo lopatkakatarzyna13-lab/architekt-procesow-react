@@ -25,6 +25,7 @@ import { upsertSavedProcess } from './savedProcesses'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
+import { appendWorkshopSteps } from './workshop'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
@@ -974,6 +975,7 @@ function StepsAsIs({
 function AsIsScreen({
   processId,
   workshopDirtyRef,
+  onTransferWorkshopSteps,
   scope,
   startMethod,
   description,
@@ -1023,7 +1025,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} dirtyRef={workshopDirtyRef} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} />}
 
       {isStepsVariant ? (
         <StepsAsIs
@@ -3658,6 +3660,23 @@ const openSavedProcess = (process) => {
     setStepError('')
   }
 
+  const transferWorkshopSteps = (names) => {
+    if (startMethod !== 'steps') return { error: 'Przenoszenie jest dostępne w trybie dodawania kroków.' }
+    try {
+      const result = appendWorkshopSteps(steps, names, () => globalThis.crypto.randomUUID())
+      if (result.added.length) {
+        localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: result.steps, startMethod, savedAt: null }))
+        setSteps(result.steps)
+        setAsIsSaved(false)
+        setAsIsSaveError(false)
+        setAsIsError('')
+      }
+      return { added: result.added.length, skipped: result.skipped.length }
+    } catch {
+      return { error: 'Nie udało się przenieść kroków. Istniejąca lista nie została zmieniona.' }
+    }
+  }
+
   const addOrUpdateStep = () => {
     if (!stepDraft.name.trim()) {
       setStepError('Uzupełnij nazwę kroku.')
@@ -4427,6 +4446,7 @@ localStorage.setItem(
           <AsIsScreen
             processId={processIdentityState.id}
             workshopDirtyRef={workshopDirtyRef}
+            onTransferWorkshopSteps={transferWorkshopSteps}
             scope={formData}
             startMethod={startMethod}
             description={asIsDescription}

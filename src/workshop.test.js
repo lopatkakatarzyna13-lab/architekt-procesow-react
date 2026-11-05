@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH, saveWorkshop, saveWorkshopReview, validateWorkshopProposal } from './workshop'
+import { appendWorkshopSteps, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH, saveWorkshop, saveWorkshopReview, validateWorkshopProposal } from './workshop'
 
 const A = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const B = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
@@ -80,5 +80,24 @@ describe('review persistence', () => {
     const failing = { ...s, setItem: () => { throw new Error('quota') } }
     expect(() => saveWorkshopReview(failing, A, transcript, review())).toThrow('quota')
     expect(loadWorkshopReview(s, A, transcript).review).toEqual(review())
+  })
+})
+
+describe('transfer of selected steps', () => {
+  it('appends distinct names in selection order and leaves roles unassigned', () => {
+    const old = [{ id: 'old', name: 'Weryfikacja danych', owner: 'HR' }]
+    let id = 0
+    const result = appendWorkshopSteps(old, ['Weryfikacja  danych', ' Przygotowanie dokumentów ', 'przygotowanie dokumentów', 'Przekazanie danych'], () => `new-${++id}`)
+    expect(result.added.map((step) => step.name)).toEqual(['Przygotowanie dokumentów', 'Przekazanie danych'])
+    expect(result.skipped).toEqual(['Weryfikacja  danych', 'przygotowanie dokumentów'])
+    expect(result.steps[0]).toEqual(old[0])
+    expect(result.added[0].owner).toBe('')
+    expect(old).toHaveLength(1)
+  })
+  it('rejects empty names and ID collisions without changing existing steps', () => {
+    const old = [{ id: 'same', name: 'Krok' }]
+    expect(() => appendWorkshopSteps(old, [' '], () => 'new')).toThrow()
+    expect(() => appendWorkshopSteps(old, ['Inny'], () => 'same')).toThrow()
+    expect(old).toEqual([{ id: 'same', name: 'Krok' }])
   })
 })

@@ -2,6 +2,8 @@
 
 Ta wersja jest przeznaczona wyłącznie do testów lokalnych i nie jest gotowa do publicznego wdrożenia. Dostawca AI: OpenAI Responses API; domyślny model `gpt-4.1-mini`. Można go zmienić zmienną `OPENAI_MODEL`. Korzystanie z API może wymagać osobnej konfiguracji rozliczeń i wiązać się z kosztami. Konto ChatGPT nie jest automatycznie konfiguracją klucza API.
 
+W kompilacji podglądu przycisk analizy jest domyślnie wyłączony; lokalny serwer deweloperski go udostępnia. Ustawienie `VITE_WORKSHOP_AI_ENABLED=true` jest przeznaczone dopiero dla wersji z osobno zabezpieczonym backendem. Samo ustawienie tej flagi nie wdraża backendu ani nie zapewnia bezpieczeństwa.
+
 1. Zainstaluj zależności: `npm ci`.
 2. Utwórz lokalny plik `.env` na podstawie `.env.example` i uzupełnij `OPENAI_API_KEY` po stronie serwera. Nigdy nie używaj prefiksu `VITE_` dla tego klucza i nie dodawaj pliku `.env` do repozytorium.
 3. Uruchom w jednym terminalu `npm run workshop:server`, a w drugim `npm run dev`. Otwórz lokalny adres Vite na porcie 5173.
