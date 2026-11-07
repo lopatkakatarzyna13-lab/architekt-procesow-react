@@ -70,7 +70,7 @@ export function loadWorkshopReview(storage, processId, transcript) {
   }
 
   if (data?.version !== 2 || typeof data.sourceMarker !== 'string' ||
-    !/^\\d+:[0-9a-f]{16}$/.test(data.sourceMarker) || !data.review ||
+    !/^\d+:[0-9a-f]{16}$/.test(data.sourceMarker) || !data.review ||
     typeof data.review !== 'object') {
     throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
   }
