@@ -16,6 +16,9 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     try { return { ...data, error: '', reviewError: '', ...loadWorkshopReview(localStorage, processId, data.transcript) } }
     catch { return { ...data, error: '', review: null, reviewError: 'Nie można odczytać zapisanej propozycji. Zapis nowej propozycji jest zablokowany.' } }
   })
+  const [readError, setReadError] = useState(initial.error)
+  const [reviewLoadError, setReviewLoadError] = useState(initial.reviewError)
+  const [staleReview, setStaleReview] = useState(Boolean(initial.stale))
   const [transcript, setTranscript] = useState(initial.transcript)
   const [savedTranscript, setSavedTranscript] = useState(initial.transcript)
   const [message, setMessage] = useState(initial.error)
@@ -55,6 +58,9 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       setTranscript('')
       setSavedTranscript('')
       setSavedAt(null)
+      setReadError('')
+      setReviewLoadError('')
+      setStaleReview(false)
       setAnalysis(null)
       setReviewDirty(false)
       setSelectedSteps([])
@@ -162,11 +168,11 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       <p>Wklej rozmowę dotyczącą tego procesu. Tekst zapisuje się wyłącznie w tej przeglądarce po kliknięciu „Zapisz transkrypcję”. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
       <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} Wynik wymaga Twojej weryfikacji i nie zmienia automatycznie procesu. Mapa BPMN powstanie w kolejnym etapie.</p>
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
-      <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(initial.error)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
+      <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(readError)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
       <div className="workshop-actions">
-        <button type="button" className="save-button" disabled={Boolean(initial.error) || !dirty} onClick={save}>Zapisz transkrypcję</button>
-        <button type="button" className="save-button" disabled={Boolean(initial.error) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
-        <button type="button" className="back-button" disabled={Boolean(initial.error) || analyzing} onClick={startManual}>Opracuj ręcznie</button>
+        <button type="button" className="save-button" disabled={Boolean(readError) || !dirty} onClick={save}>Zapisz transkrypcję</button>
+        <button type="button" className="save-button" disabled={Boolean(readError) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
+        <button type="button" className="back-button" disabled={Boolean(readError) || analyzing} onClick={startManual}>Opracuj ręcznie</button>
         <button type="button" className="back-button" disabled={analyzing} onClick={clearWorkshop}>Usuń dane warsztatu</button>
         <span>{transcript.length} / {MAX_TRANSCRIPT_LENGTH} znaków</span>
       </div>
@@ -174,8 +180,8 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       {dirty && <p role="status">Masz niezapisane zmiany w transkrypcji.</p>}
       {message && <p role="status">{message}</p>}
       {!dirty && savedAt && !message && <p>Transkrypcja została wcześniej zapisana na tym urządzeniu.</p>}
-      {initial.stale && !analysis && <p>Istnieje propozycja dla wcześniejszej wersji transkrypcji.</p>}
-      {initial.reviewError && <p role="alert">{initial.reviewError}</p>}
+      {staleReview && !analysis && <p>Istnieje propozycja dla wcześniejszej wersji transkrypcji.</p>}
+      {reviewLoadError && <p role="alert">{reviewLoadError}</p>}
       {analysisMessage && <p role="status">{analysisMessage}</p>}
       {analysis && <div className="workshop-results">
         <h3>Propozycja do sprawdzenia</h3>
@@ -192,7 +198,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
           </li>)}</ul> : <p>Brak propozycji.</p>}
           <button type="button" className="back-button" onClick={() => addItem(key)}>Dodaj: {title.toLowerCase()}</button>
         </div>)}
-        <div className="workshop-actions"><button type="button" className="save-button" disabled={!reviewDirty || Boolean(initial.reviewError)} onClick={saveReview}>Zapisz propozycję</button></div>
+        <div className="workshop-actions"><button type="button" className="save-button" disabled={!reviewDirty || Boolean(reviewLoadError)} onClick={saveReview}>Zapisz propozycję</button></div>
         {reviewDirty && <p role="status">Masz niezapisaną propozycję.</p>}
         {canTransferSteps ? <div className="workshop-actions">
           <button type="button" className="save-button" disabled={!selectedSteps.length || reviewDirty || dirty} onClick={transferSteps}>Przenieś wybrane kroki do AS-IS</button>
