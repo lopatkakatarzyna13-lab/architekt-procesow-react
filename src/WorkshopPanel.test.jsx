@@ -96,6 +96,20 @@ describe('workshop review screen', () => {
     expect(localStorage.getItem('architekt-procesow:as-is')).toContain('Weryfikacja')
   })
 
+  it('lets the user clear an unreadable local workshop and start again', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    localStorage.setItem(`architekt-procesow:workshop:${PROCESS_A}`, '{broken')
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    expect(screen.getByLabelText('Tekst rozmowy').disabled).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Usuń dane warsztatu' }))
+    expect(localStorage.getItem(`architekt-procesow:workshop:${PROCESS_A}`)).toBeNull()
+    expect(screen.getByLabelText('Tekst rozmowy').disabled).toBe(false)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Nowe dane testowe')
+    await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+    expect(screen.getByText('Transkrypcja zapisana na tym urządzeniu.')).toBeTruthy()
+  })
+
   it('does not delete workshops without explicit consent', async () => {
     const user = userEvent.setup()
     const refuse = vi.spyOn(window, 'confirm').mockReturnValue(false)
