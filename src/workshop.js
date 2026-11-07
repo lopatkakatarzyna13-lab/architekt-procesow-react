@@ -31,17 +31,54 @@ function reviewKey(processId) {
   return `${keyFor(processId)}:review`
 }
 
+// A version marker for stale-draft detection, NOT a cryptographic signature.
+// The complete source transcript is stored only in the workshop record.
+function transcriptMarker(transcript) {
+  let hash = 0xcbf29ce484222325n
+  for (let index = 0; index < transcript.length; index += 1) {
+    hash ^= BigInt(transcript.charCodeAt(index))
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n)
+  }
+  return `${transcript.length}:${hash.toString(16).padStart(16, '0')}`
+}
+
 export function loadWorkshopReview(storage, processId, transcript) {
-  const value = storage.getItem(reviewKey(processId))
+  const key = reviewKey(processId)
+  const value = storage.getItem(key)
   if (value === null) return { review: null, stale: false }
   let data
   try { data = JSON.parse(value) } catch { throw new Error('Nie można odczytać zapisanej propozycji.') }
-  if (!data || data.version !== 1 || typeof data.sourceTranscript !== 'string' || !data.sourceTranscript.trim() || data.sourceTranscript.length > MAX_TRANSCRIPT_LENGTH || validateWorkshopProposal(data.review, data.sourceTranscript).length) {
+
+  if (data?.version === 1) {
+    // Legacy records contain an extra full copy of the transcript.
+    if (typeof data.sourceTranscript !== 'string' || !data.sourceTranscript.trim() ||
+      data.sourceTranscript.length > MAX_TRANSCRIPT_LENGTH ||
+      validateWorkshopProposal(data.review, data.sourceTranscript).length) {
+      throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
+    }
+    const stale = data.sourceTranscript !== transcript
+    // Migrate on read only when the source still exists and matches. If the
+    // source changed, do not erase the old draft or rewrite its provenance.
+    if (!stale) {
+      storage.setItem(key, JSON.stringify({
+        version: 2,
+        sourceMarker: transcriptMarker(transcript),
+        review: data.review,
+      }))
+    }
+    return stale ? { review: null, stale: true } : { review: data.review, stale: false }
+  }
+
+  if (data?.version !== 2 || typeof data.sourceMarker !== 'string' ||
+    !/^\\d+:[0-9a-f]{16}$/.test(data.sourceMarker) || !data.review ||
+    typeof data.review !== 'object') {
     throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
   }
-  return data.sourceTranscript === transcript
-    ? { review: data.review, stale: false }
-    : { review: null, stale: true }
+  if (data.sourceMarker !== transcriptMarker(transcript)) return { review: null, stale: true }
+  if (validateWorkshopProposal(data.review, transcript).length) {
+    throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
+  }
+  return { review: data.review, stale: false }
 }
 
 export function saveWorkshopReview(storage, processId, transcript, review, { replaceStale = false } = {}) {
@@ -49,7 +86,28 @@ export function saveWorkshopReview(storage, processId, transcript, review, { rep
   if (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_LENGTH || validateWorkshopProposal(review, transcript).length) throw new Error('Nieprawidłowa propozycja.')
   const current = loadWorkshopReview(storage, processId, transcript)
   if (current.stale && !replaceStale) throw new Error('Istnieje propozycja dla innej wersji transkrypcji.')
-  storage.setItem(key, JSON.stringify({ version: 1, sourceTranscript: transcript, review }))
+  storage.setItem(key, JSON.stringify({ version: 2, sourceMarker: transcriptMarker(transcript), review }))
+}
+
+// Delete only the selected process's workshop and its review. Never touch
+// section snapshots or the process library. Roll back partial failures.
+export function deleteWorkshop(storage, processId) {
+  const keys = [keyFor(processId), reviewKey(processId)]
+  const backup = keys.map((key) => ({ key, value: storage.getItem(key) }))
+  try {
+    for (const { key } of backup) storage.removeItem(key)
+  } catch {
+    let restored = true
+    for (const { key, value } of backup) {
+      try {
+        if (value === null) storage.removeItem(key)
+        else storage.setItem(key, value)
+      } catch { restored = false }
+    }
+    throw new Error(restored
+      ? 'Nie udało się usunąć warsztatu. Poprzednie dane zostały przywrócone.'
+      : 'Nie udało się w pełni przywrócić warsztatu. Nie kontynuuj edycji.')
+  }
 }
 
 export function appendWorkshopSteps(existingSteps, names, createId) {
