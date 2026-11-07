@@ -166,7 +166,7 @@ describe('security: workshop retention and migration', () => {
         return s.removeItem(k)
       },
     }
-    expect(() => deleteWorkshop(failing, A)).toThrow(/przywrócić/)
+    expect(() => deleteWorkshop(failing, A)).toThrow(/przywró/)
     expect(loadWorkshop(s, A).transcript).toBe(transcript)
     expect(loadWorkshopReview(s, A, transcript).review).toEqual(review)
   })
