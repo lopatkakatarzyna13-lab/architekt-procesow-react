@@ -21,6 +21,8 @@ jobs:
       - run: npm ci
       - name: SEC-04 HTTP smoke test (no API key)
         run: node --test server/security.smoke.mjs
+      - name: SEC-04 persistent quota HTTP smoke test
+        run: node --test server/persistentUsage.smoke.mjs
       - name: Unit and integration tests
         run: npx vitest run
       - name: ESLint
