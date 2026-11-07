@@ -88,9 +88,9 @@ jobs:
           node tests/browser-offline.mjs
 
 
-  update-eslint-once:
+  investigate-minimatch-once:
     if: >-
-      github.event_name == 'push' && contains(github.event.head_commit.message, '[eslint9]')
+      github.event_name == 'push' && contains(github.event.head_commit.message, '[minimatch]')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -98,39 +98,32 @@ jobs:
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-      - name: Update only ESLint and matching rules package
+      - name: Scoped security override for ESLint config
         run: |
           npm install --global npm@11
-          npm install --save-dev --save-exact eslint@9.39.5 @eslint/js@9.39.5 --ignore-scripts
-          changed="$(git diff --name-only)"
-          echo "$changed"
+          npm pkg set 'overrides.@eslint/config-array.minimatch=^11.0.1'
+          npm install --package-lock-only --ignore-scripts
           mapfile -t files < <(git diff --name-only)
           if [ "${#files[@]}" -ne 2 ] || [ "${files[0]}" != "package-lock.json" ] || [ "${files[1]}" != "package.json" ]; then
-            echo "Expected package.json and package-lock.json only."
+            echo "Unexpected file changes"
             exit 1
           fi
-      - name: Verify clean install
-        run: npm ci
-      - name: Verify quality
+      - name: Verify controlled install and regressions
         run: |
+          npm ci
           npx vitest run
           npm run lint
           npm run build
-      - name: Require zero known npm advisories
-        run: |
           npm audit --audit-level=low
-          npm audit --omit=dev --audit-level=low
-      - name: Commit verified version change
+      - name: Save only verified dependencies
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
-          git commit -m "fix: align ESLint 9 and js config to resolve remaining advisories"
+          git commit -m "fix: override vulnerable minimatch in ESLint config"
           git push origin HEAD:feature/architekt-2-mvp
