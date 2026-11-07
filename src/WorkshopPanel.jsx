@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
+  deleteWorkshop, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
   saveWorkshop, saveWorkshopReview, validateWorkshopProposal,
 } from './workshop'
 
@@ -44,6 +44,26 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       setSavedAt(result.savedAt)
       setMessage('Transkrypcja zapisana na tym urządzeniu.')
     } catch { setMessage('Nie udało się zapisać transkrypcji. Skopiuj tekst w bezpieczne miejsce i spróbuj ponownie.') }
+  }
+
+  const clearWorkshop = () => {
+    if (analyzing) return
+    if (!window.confirm('Usunąć transkrypcję i propozycję tego warsztatu z tej przeglądarki? Zapisane kroki AS-IS i biblioteka procesów pozostaną bez zmian. Tej operacji nie można cofnąć.')) return
+    try {
+      deleteWorkshop(localStorage, processId)
+      revision.current += 1
+      setTranscript('')
+      setSavedTranscript('')
+      setSavedAt(null)
+      setAnalysis(null)
+      setReviewDirty(false)
+      setSelectedSteps([])
+      dirtyRef.current = false
+      setAnalysisMessage('')
+      setMessage('Dane warsztatu zostały usunięte z tej przeglądarki. Kroki AS-IS i biblioteka nie zostały zmienione.')
+    } catch (error) {
+      setMessage(error.message)
+    }
   }
 
   const changeTranscript = (value) => {
@@ -147,6 +167,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
         <button type="button" className="save-button" disabled={Boolean(initial.error) || !dirty} onClick={save}>Zapisz transkrypcję</button>
         <button type="button" className="save-button" disabled={Boolean(initial.error) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
         <button type="button" className="back-button" disabled={Boolean(initial.error) || analyzing} onClick={startManual}>Opracuj ręcznie</button>
+        <button type="button" className="back-button" disabled={Boolean(initial.error) || analyzing} onClick={clearWorkshop}>Usuń dane warsztatu</button>
         <span>{transcript.length} / {MAX_TRANSCRIPT_LENGTH} znaków</span>
       </div>
       {!analysisAvailable && <p>Analiza AI nie jest jeszcze dostępna w tym podglądzie. Możesz opracować ustalenia ręcznie.</p>}
