@@ -57,15 +57,13 @@ export function loadWorkshopReview(storage, processId, transcript) {
       throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
     }
     const stale = data.sourceTranscript !== transcript
-    // Migrate on read only when the source still exists and matches. If the
-    // source changed, do not erase the old draft or rewrite its provenance.
-    if (!stale) {
-      storage.setItem(key, JSON.stringify({
-        version: 2,
-        sourceMarker: transcriptMarker(transcript),
-        review: data.review,
-      }))
-    }
+    // The legacy review was verified against its own original transcript.
+    // Keep the same provenance marker even if the current transcript changed.
+    storage.setItem(key, JSON.stringify({
+      version: 2,
+      sourceMarker: transcriptMarker(data.sourceTranscript),
+      review: data.review,
+    }))
     return stale ? { review: null, stale: true } : { review: data.review, stale: false }
   }
 
