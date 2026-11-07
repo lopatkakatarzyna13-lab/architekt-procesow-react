@@ -23,7 +23,7 @@ export function createWorkshopHandler({
     }
     if (!isAllowedRequest(req, allowedOrigins)) return send(res, 403, { error: 'FORBIDDEN' })
     const admission = guard.acquire()
-    if (!admission.ok) return send(res, 429, { error: admission.code })
+    if (!admission.ok) return send(res, admission.code === 'USAGE_STORAGE_UNAVAILABLE' ? 503 : 429, { error: admission.code })
     try {
       const input = await readJsonBody(req)
       if (!input || typeof input !== 'object' || Array.isArray(input)) {
