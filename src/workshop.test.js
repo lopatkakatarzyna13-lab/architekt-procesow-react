@@ -116,7 +116,9 @@ describe('security: workshop retention and migration', () => {
     expect(value.version).toBe(2)
     expect(typeof value.sourceMarker).toBe('string')
     expect(value).not.toHaveProperty('sourceTranscript')
-    expect(s.getItem(reviewKey)).not.toContain(transcript)
+    // Reviewed evidence can legitimately quote the entire short transcript.
+    // The redundant top-level sourceTranscript field must be absent.
+    expect(Object.keys(value).sort()).toEqual(['review', 'sourceMarker', 'version'])
     expect(loadWorkshopReview(s, A, transcript).review).toEqual(review)
     expect(loadWorkshopReview(s, A, 'Inna transkrypcja').stale).toBe(true)
   })
