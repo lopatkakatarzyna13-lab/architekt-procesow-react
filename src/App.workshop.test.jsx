@@ -82,7 +82,7 @@ it('keeps a manual AS-IS step draft and the existing list when browser storage f
   await user.type(screen.getByLabelText(/Co kończy proces/), 'Przekazanie')
   await user.click(screen.getByRole('button', { name: /Zapisz zakres i przejdź dalej/ }))
 
-  await user.type(screen.getByLabelText('Nazwa kroku'), 'Weryfikacja dokumentów')
+  await user.type(screen.getByLabelText(/Nazwa kroku/), 'Weryfikacja dokumentów')
   const originalSetItem = Storage.prototype.setItem
   const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
     if (key === 'architekt-procesow:as-is') throw new Error('quota')
@@ -90,7 +90,7 @@ it('keeps a manual AS-IS step draft and the existing list when browser storage f
   })
   await user.click(screen.getByRole('button', { name: 'Dodaj krok' }))
   expect(screen.getByText('Nie udało się zapisać kroku. Spróbuj ponownie.')).toBeTruthy()
-  expect(screen.getByLabelText('Nazwa kroku').value).toBe('Weryfikacja dokumentów')
+  expect(screen.getByLabelText(/Nazwa kroku/).value).toBe('Weryfikacja dokumentów')
   expect(screen.getByText('Nie dodano jeszcze żadnego kroku')).toBeTruthy()
   expect(localStorage.getItem('architekt-procesow:as-is')).toBeNull()
 
