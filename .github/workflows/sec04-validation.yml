@@ -19,6 +19,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: SEC-04 HTTP smoke test (no API key)
+        run: node --test server/security.smoke.mjs
       - name: Unit and integration tests
         run: npx vitest run
       - name: ESLint
