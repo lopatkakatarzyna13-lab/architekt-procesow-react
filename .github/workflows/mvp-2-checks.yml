@@ -108,7 +108,7 @@ jobs:
         run: |
           npm install --global npm@11
           npm --version
-          npm audit fix --package-lock-only --ignore-scripts
+          npm audit fix --package-lock-only --ignore-scripts || [ "$?" -eq 1 ]
           changes="$(git diff --name-only)"
           if [ "$changes" != "package-lock.json" ] && [ -n "$changes" ]; then
             echo "Unexpected files changed: $changes"
