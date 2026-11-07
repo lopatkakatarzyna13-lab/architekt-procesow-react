@@ -1,0 +1,27 @@
+name: SEC-04 branch validation
+on:
+  push:
+    branches:
+      - feature/architekt-2-mvp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Unit and integration tests
+        run: npx vitest run
+      - name: ESLint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
