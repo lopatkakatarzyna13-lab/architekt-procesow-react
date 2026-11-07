@@ -3700,23 +3700,29 @@ const openSavedProcess = (process) => {
       },
     ]
 
-setSteps(nextSteps)
-localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ steps: nextSteps }))
-localStorage.setItem(
-  AS_IS_STORAGE_KEY,
-  JSON.stringify({
-    description: asIsDescription,
-    steps: nextSteps,
-    startMethod,
-    savedAt: new Date().toISOString(),
-  }),
-)
+try {
+      localStorage.setItem(
+        AS_IS_STORAGE_KEY,
+        JSON.stringify({
+          description: asIsDescription,
+          steps: nextSteps,
+          startMethod,
+          savedAt: null,
+        }),
+      )
+    } catch {
+      setAsIsSaveError(true)
+      setAsIsError('Nie udało się zapisać kroku. Spróbuj ponownie.')
+      return
+    }
 
+    setSteps(nextSteps)
     setStepDraft(emptyStep)
     setEditingStepId(null)
     setStepError('')
     setAsIsError('')
     setAsIsSaved(false)
+    setAsIsSaveError(false)
   }
 
   const editStep = (step) => {
