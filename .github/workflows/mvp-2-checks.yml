@@ -106,6 +106,8 @@ jobs:
           cache: npm
       - name: Fix lockfile within declared package ranges
         run: |
+          npm install --global npm@11
+          npm --version
           npm audit fix --package-lock-only --ignore-scripts
           changes="$(git diff --name-only)"
           if [ "$changes" != "package-lock.json" ] && [ -n "$changes" ]; then
