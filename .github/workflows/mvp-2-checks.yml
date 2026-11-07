@@ -86,3 +86,55 @@ jobs:
           done
           if [ "$ready" != 1 ]; then cat /tmp/architekt-vite.log; exit 1; fi
           node tests/browser-offline.mjs
+
+  remediate-lockfile-once:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'ci: run one-time non-breaking dependency lockfile remediation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Fix lockfile within declared package ranges
+        run: |
+          npm audit fix --package-lock-only --ignore-scripts
+          changes="$(git diff --name-only)"
+          if [ "$changes" != "package-lock.json" ] && [ -n "$changes" ]; then
+            echo "Unexpected files changed: $changes"
+            exit 1
+          fi
+      - name: Check dependency installation
+        run: npm ci
+      - name: Test changed dependency tree
+        run: |
+          npx vitest run
+          npm run lint
+          npm run build
+      - name: Report remaining advisories
+        run: |
+          npm audit --json > "$RUNNER_TEMP/audit-after.json" || true
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          const a=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/audit-after.json','utf8'))
+          console.log('AUDIT_AFTER',JSON.stringify(a.metadata?.vulnerabilities ?? {}))
+          for(const [name,v] of Object.entries(a.vulnerabilities ?? {})) console.log('AUDIT_REMAINS',name,v.severity,JSON.stringify(v.fixAvailable))
+          NODE
+      - name: Commit verified lockfile only
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'No changes needed'
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "fix: update vulnerable transitive packages within existing ranges"
+          git push origin HEAD:feature/architekt-2-mvp
