@@ -45,8 +45,10 @@ jobs:
         run: npm ci
       - name: Install isolated browser test tooling
         run: |
-          npm install --no-save --package-lock=false playwright@1.56.1
-          npx playwright install --with-deps chromium
+          npm install --prefix /tmp/architekt-browser --no-save playwright@1.56.1
+          ln -s /tmp/architekt-browser/node_modules/playwright node_modules/playwright
+          ln -s /tmp/architekt-browser/node_modules/playwright-core node_modules/playwright-core
+          node /tmp/architekt-browser/node_modules/playwright/cli.js install --with-deps chromium
       - name: Run workshop browser test with connection interruption
         run: |
           npm run dev -- --host 127.0.0.1 > /tmp/architekt-vite.log 2>&1 &
