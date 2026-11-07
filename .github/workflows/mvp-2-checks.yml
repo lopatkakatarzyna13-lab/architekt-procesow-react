@@ -111,7 +111,7 @@ jobs:
           npm install --save-dev --save-exact eslint@9.39.5 @eslint/js@9.39.5 --ignore-scripts
           changed="$(git diff --name-only)"
           echo "$changed"
-          if [ "$changed" != "$(printf 'package-lock.json\\npackage.json')" ]; then
+          if [ "$(git diff --name-only | sort)" != "$(printf '%s\\n' package-lock.json package.json | sort)" ]; then
             echo "Expected package.json and package-lock.json only."
             exit 1
           fi
