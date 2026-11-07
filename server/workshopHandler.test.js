@@ -60,8 +60,7 @@ describe('SEC-04 HTTP integration', () => {
     expect((await second.json()).error).toBe('BUSY')
     finish({ steps: [] })
     expect((await first).status).toBe(200)
-    // A subsequent request may proceed after the first completes.
-    finish = undefined
+    expect(analyze).toHaveBeenCalledOnce()
   })
   it('rejects oversized and invalid JSON without invoking AI', async () => {
     const analyze = vi.fn()
