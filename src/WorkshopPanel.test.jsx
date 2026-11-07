@@ -73,6 +73,35 @@ describe('workshop review screen', () => {
     expect(within(row).getByText('Do sprawdzenia')).toBeTruthy()
     expect(within(row).getByText('Fragment rozmowy: HR sprawdza dane.')).toBeTruthy()
   })
+  it('explains the AI usage limit and keeps manual workshop editing available', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 429, json: async () => ({ error: 'LIMIT_REACHED' }),
+    })))
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny proces testowy.')
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    expect(await screen.findByText(/Osiągnięto limit 12 prób analizy AI/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+    expect(screen.getByText('Propozycja do sprawdzenia')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Dodaj: kroki' }))
+    await user.type(screen.getByLabelText('Kroki — pozycja 1'), 'Sprawdzenie dokumentów')
+    expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Sprawdzenie dokumentów')
+  })
+
+  it('explains that another AI analysis is already in progress', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 429, json: async () => ({ error: 'BUSY' }),
+    })))
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny proces.')
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    expect(await screen.findByText(/Trwa już analiza AI/)).toBeTruthy()
+  })
+
   it('deletes only workshop text after confirmation and keeps saved AS-IS', async () => {
     const user = userEvent.setup()
     const approve = vi.spyOn(window, 'confirm').mockReturnValue(true)
