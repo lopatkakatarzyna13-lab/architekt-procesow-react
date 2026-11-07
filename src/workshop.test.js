@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { appendWorkshopSteps, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH, saveWorkshop, saveWorkshopReview, validateWorkshopProposal } from './workshop'
+import { appendWorkshopSteps, deleteWorkshop, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH, saveWorkshop, saveWorkshopReview, validateWorkshopProposal } from './workshop'
 
 const A = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const B = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const storage = () => {
   const data = new Map()
-  return { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, v) }
+  return { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, v), removeItem: (k) => data.delete(k) }
 }
 
 describe('workshop storage', () => {
@@ -99,5 +99,82 @@ describe('transfer of selected steps', () => {
     expect(() => appendWorkshopSteps(old, [' '], () => 'new')).toThrow()
     expect(() => appendWorkshopSteps(old, ['Inny'], () => 'same')).toThrow()
     expect(old).toEqual([{ id: 'same', name: 'Krok' }])
+  })
+})
+
+describe('security: workshop retention and migration', () => {
+  const transcript = 'HR sprawdza dokumenty.'
+  const review = { steps: [{ text: 'Kontrola', status: 'supported', evidence: 'HR sprawdza dokumenty.' }], roles: [], decisions: [], questions: [] }
+  const key = `architekt-procesow:workshop:${A}`
+  const reviewKey = `${key}:review`
+
+  it('stores review version 2 without a second full transcript', () => {
+    const s = storage()
+    saveWorkshop(s, A, transcript)
+    saveWorkshopReview(s, A, transcript, review)
+    const value = JSON.parse(s.getItem(reviewKey))
+    expect(value.version).toBe(2)
+    expect(typeof value.sourceMarker).toBe('string')
+    expect(value).not.toHaveProperty('sourceTranscript')
+    expect(s.getItem(reviewKey)).not.toContain(transcript)
+    expect(loadWorkshopReview(s, A, transcript).review).toEqual(review)
+    expect(loadWorkshopReview(s, A, 'Inna transkrypcja').stale).toBe(true)
+  })
+
+  it('migrates legacy review on read without losing reviewed steps', () => {
+    const s = storage()
+    saveWorkshop(s, A, transcript)
+    s.setItem(reviewKey, JSON.stringify({ version: 1, sourceTranscript: transcript, review }))
+    expect(loadWorkshopReview(s, A, transcript).review).toEqual(review)
+    const migrated = JSON.parse(s.getItem(reviewKey))
+    expect(migrated.version).toBe(2)
+    expect(migrated.sourceTranscript).toBeUndefined()
+    expect(migrated.review).toEqual(review)
+  })
+
+  it('does not overwrite invalid legacy data during attempted migration', () => {
+    const s = storage()
+    const malformed = JSON.stringify({ version: 1, sourceTranscript: transcript, review: { ...review, steps: [{ text: 'Wymyślone', status: 'supported', evidence: 'brak dowodu' }] } })
+    s.setItem(reviewKey, malformed)
+    expect(() => loadWorkshopReview(s, A, transcript)).toThrow()
+    expect(s.getItem(reviewKey)).toBe(malformed)
+  })
+
+  it('deletes only the selected workshop and review while retaining saved library', () => {
+    const s = storage()
+    saveWorkshop(s, A, transcript)
+    saveWorkshopReview(s, A, transcript, review)
+    saveWorkshop(s, B, 'Inny proces')
+    s.setItem('architekt-procesow:processes', JSON.stringify([{ id: A, name: 'Biblioteka' }]))
+    s.setItem('architekt-procesow:as-is', '{"steps":[{"name":"Kontrola"}]}')
+    deleteWorkshop(s, A)
+    expect(s.getItem(key)).toBeNull()
+    expect(s.getItem(reviewKey)).toBeNull()
+    expect(loadWorkshop(s, B).transcript).toBe('Inny proces')
+    expect(JSON.parse(s.getItem('architekt-procesow:processes'))).toHaveLength(1)
+    expect(s.getItem('architekt-procesow:as-is')).toContain('Kontrola')
+  })
+
+  it('restores existing workshop and review when deletion partially fails', () => {
+    const s = storage()
+    saveWorkshop(s, A, transcript)
+    saveWorkshopReview(s, A, transcript, review)
+    const failing = {
+      ...s,
+      removeItem(k) {
+        if (k === reviewKey) throw new Error('blocked')
+        return s.removeItem(k)
+      },
+    }
+    expect(() => deleteWorkshop(failing, A)).toThrow(/przywrócić/)
+    expect(loadWorkshop(s, A).transcript).toBe(transcript)
+    expect(loadWorkshopReview(s, A, transcript).review).toEqual(review)
+  })
+
+  it('rejects invalid process ID without touching storage', () => {
+    const s = storage()
+    saveWorkshop(s, A, transcript)
+    expect(() => deleteWorkshop(s, 'invalid')).toThrow()
+    expect(loadWorkshop(s, A).transcript).toBe(transcript)
   })
 })
