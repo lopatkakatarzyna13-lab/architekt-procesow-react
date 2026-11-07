@@ -29,6 +29,31 @@ jobs:
         run: npm run lint
       - name: Production build
         run: npm run build
+      - name: Classify dependency advisories (read-only)
+        run: |
+          npm audit --json > "$RUNNER_TEMP/audit-all.json" || true
+          npm audit --omit=dev --json > "$RUNNER_TEMP/audit-prod.json" || true
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          for (const [label, path] of [['all', process.env.RUNNER_TEMP + '/audit-all.json'], ['production', process.env.RUNNER_TEMP + '/audit-prod.json']]) {
+            const data = JSON.parse(fs.readFileSync(path, 'utf8'))
+            console.log('AUDIT_SCOPE', label, JSON.stringify(data.metadata?.vulnerabilities ?? {}))
+            for (const [name, v] of Object.entries(data.vulnerabilities ?? {})) {
+              console.log('AUDIT_PACKAGE', JSON.stringify({
+                scope: label,
+                name,
+                severity: v.severity,
+                direct: v.isDirect,
+                range: v.range,
+                fix: v.fixAvailable,
+                via: v.via.filter(x => typeof x === 'object').map(x => ({
+                  name: x.name, title: x.title, url: x.url, severity: x.severity, range: x.range,
+                })),
+              }))
+            }
+            if (data.error) console.log('AUDIT_ERROR', label, JSON.stringify(data.error))
+          }
+          NODE
 
   browser-offline:
     runs-on: ubuntu-24.04
