@@ -167,7 +167,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
         <button type="button" className="save-button" disabled={Boolean(initial.error) || !dirty} onClick={save}>Zapisz transkrypcję</button>
         <button type="button" className="save-button" disabled={Boolean(initial.error) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
         <button type="button" className="back-button" disabled={Boolean(initial.error) || analyzing} onClick={startManual}>Opracuj ręcznie</button>
-        <button type="button" className="back-button" disabled={Boolean(initial.error) || analyzing} onClick={clearWorkshop}>Usuń dane warsztatu</button>
+        <button type="button" className="back-button" disabled={analyzing} onClick={clearWorkshop}>Usuń dane warsztatu</button>
         <span>{transcript.length} / {MAX_TRANSCRIPT_LENGTH} znaków</span>
       </div>
       {!analysisAvailable && <p>Analiza AI nie jest jeszcze dostępna w tym podglądzie. Możesz opracować ustalenia ręcznie.</p>}
