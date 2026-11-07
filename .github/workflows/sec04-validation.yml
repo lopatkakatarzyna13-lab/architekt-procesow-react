@@ -18,11 +18,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
-      - name: SEC-04 HTTP smoke test (no API key)
-        run: node --test server/security.smoke.mjs
-      - name: SEC-04 persistent quota HTTP smoke test
-        run: node --test server/persistentUsage.smoke.mjs
+      - name: SEC-04 HTTP and persistent quota smoke tests (no npm or API key)
+        run: node --test server/security.smoke.mjs server/persistentUsage.smoke.mjs
+      - name: Install locked dependencies
+        run: npm ci
       - name: Unit and integration tests
         run: npx vitest run
       - name: ESLint
