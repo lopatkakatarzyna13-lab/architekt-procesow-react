@@ -134,6 +134,19 @@ describe('security: workshop retention and migration', () => {
     expect(migrated.review).toEqual(review)
   })
 
+  it('migrates a legacy review from an earlier transcript without silently using stale suggestions', () => {
+    const s = storage()
+    const previous = transcript
+    const updated = 'Nowy tekst po warsztacie.'
+    s.setItem(reviewKey, JSON.stringify({ version: 1, sourceTranscript: previous, review }))
+    expect(loadWorkshopReview(s, A, updated)).toEqual({ review: null, stale: true })
+    const migrated = JSON.parse(s.getItem(reviewKey))
+    expect(migrated.version).toBe(2)
+    expect(migrated).not.toHaveProperty('sourceTranscript')
+    expect(loadWorkshopReview(s, A, previous).review).toEqual(review)
+    expect(loadWorkshopReview(s, A, updated).stale).toBe(true)
+  })
+
   it('does not overwrite invalid legacy data during attempted migration', () => {
     const s = storage()
     const malformed = JSON.stringify({ version: 1, sourceTranscript: transcript, review: { ...review, steps: [{ text: 'Wymyślone', status: 'supported', evidence: 'brak dowodu' }] } })
