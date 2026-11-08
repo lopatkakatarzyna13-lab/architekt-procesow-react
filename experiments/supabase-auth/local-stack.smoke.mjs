@@ -23,14 +23,15 @@ async function makeUser(email) {
 }
 async function signIn(email) {
   const { data, error } = await client.auth.signInWithPassword({ email, password })
-  if (error || !data.session?.access_token) throw new Error('Synthetic sign-in failed')
-  return data.session.access_token
+  if (error || !data.session?.access_token || !data.session?.refresh_token) throw new Error('Synthetic sign-in failed')
+  return data.session
 }
 try {
   const owner = await makeUser('owner@example.test')
   await makeUser('other@example.test')
-  const ownerToken = await signIn('owner@example.test')
-  const otherToken = await signIn('other@example.test')
+  const ownerSession = await signIn('owner@example.test')
+  const ownerToken = ownerSession.access_token
+  const otherToken = (await signIn('other@example.test')).access_token
   const verify = createExperimentalVerifier({ url: API_URL, publishableKey: ANON_KEY, allowedUserId: owner, fetchImpl: fetch })
   assert.equal(await verify(ownerToken), true, 'allowed user')
   assert.equal(await verify(otherToken), false, 'different authenticated user')
@@ -63,10 +64,23 @@ try {
     assert.equal(await verify(ownerToken), false, 'expired user session')
     assert.equal((await call(ownerToken)).status, 403)
     assert.equal(analysisCalls, 1, 'expired token must not invoke fake analysis')
+
+    const { data: refreshed, error: refreshError } = await client.auth.refreshSession({ refresh_token: ownerSession.refresh_token })
+    assert.equal(refreshError, null, 'valid refresh token must renew the session')
+    assert.ok(refreshed.session?.access_token && refreshed.session?.refresh_token)
+    assert.equal(await verify(refreshed.session.access_token), true, 'refreshed user identity')
+    assert.equal((await call(refreshed.session.access_token)).status, 200)
+    assert.equal(analysisCalls, 2, 'refreshed session may invoke fake analysis')
+
+    const { error: signOutError } = await client.auth.signOut({ scope: 'global' })
+    assert.equal(signOutError, null, 'sign out must succeed')
+    const { data: revoked, error: revokedError } = await client.auth.refreshSession({ refresh_token: refreshed.session.refresh_token })
+    assert.ok(revokedError, 'revoked refresh token must not renew the session')
+    assert.equal(revoked.session, null)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
-  console.log('PASS: local Auth rejects expired and unauthorized sessions before simulated analysis')
+  console.log('PASS: local Auth rejects expired sessions, refreshes valid sessions and revokes refresh on sign out')
 } finally {
   for (const id of users) await admin.auth.admin.deleteUser(id)
 }

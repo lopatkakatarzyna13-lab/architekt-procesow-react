@@ -1,0 +1,7 @@
+# Lokalny Supabase — odnowienie i zakończenie sesji
+
+Punkt wyjścia: a2c2c65e85c69d0646a374549b2e674317a986e6. Status SEC-04: OTWARTY.
+
+Rozszerzono test w izolowanym Supabase o faktyczne odnowienie sesji testowego użytkownika po wygaśnięciu tokenu dostępu. W ramach scenariusza nowy token powinien zostać poprawnie zweryfikowany i dopuszczony przez testową bramkę do fikcyjnej analizy. Po globalnym wylogowaniu test próbuje odnowić sesję tym samym tokenem odświeżania i oczekuje odmowy.
+
+Próba działa wyłącznie w GitHub Actions na tymczasowym lokalnym Supabase, bez prawdziwego konta i bez OpenAI. Przebieg należy oceniać dopiero po odczytaniu wyniku CI dla konkretnego commitu. Bramka jest częścią testu, nie jest docelową funkcją Edge i nie jest podłączona do aplikacji. Odmowa odświeżenia nie oznacza, że wszystkie już wydane tokeny dostępu przestają być natychmiast ważne. Nie sprawdzono zarządzania sesją w przeglądarce, MFA, RLS, aktualnej konfiguracji kont, produkcyjnego API, limitów ani kosztów.
