@@ -1,12 +1,11 @@
 // CI-only test against an ephemeral local Supabase stack. Never contact a remote project.
 import assert from 'node:assert/strict'
-import { createHmac } from 'node:crypto'
 import { createServer } from 'node:http'
 import { createClient } from '@supabase/supabase-js'
 import { createExperimentalVerifier } from './verify.js'
 
-const { API_URL, ANON_KEY, SERVICE_ROLE_KEY, JWT_SECRET } = process.env
-if (!API_URL || !ANON_KEY || !SERVICE_ROLE_KEY || !JWT_SECRET) throw new Error('Missing ephemeral Supabase configuration')
+const { API_URL, ANON_KEY, SERVICE_ROLE_KEY } = process.env
+if (!API_URL || !ANON_KEY || !SERVICE_ROLE_KEY) throw new Error('Missing ephemeral Supabase configuration')
 const url = new URL(API_URL)
 if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
   throw new Error('Refusing to test against a non-local Supabase URL')
@@ -27,16 +26,6 @@ async function signIn(email) {
   if (error || !data.session?.access_token) throw new Error('Synthetic sign-in failed')
   return data.session.access_token
 }
-function signFixtureToken(original, expiry) {
-  const [header, payload] = original.split('.')
-  const decodedHeader = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'))
-  if (decodedHeader.alg !== 'HS256') throw new Error('Unsupported local token signing algorithm')
-  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
-  claims.exp = expiry
-  const content = `${header}.${Buffer.from(JSON.stringify(claims)).toString('base64url')}`
-  const signature = createHmac('sha256', JWT_SECRET).update(content).digest('base64url')
-  return `${content}.${signature}`
-}
 try {
   const owner = await makeUser('owner@example.test')
   await makeUser('other@example.test')
@@ -50,11 +39,9 @@ try {
   parts[2] = `${parts[2][0] === 'A' ? 'B' : 'A'}${parts[2].slice(1)}`
   assert.equal(await verify(parts.join('.')), false, 'modified signature')
   assert.equal(await verify('invalid-token'), false, 'invalid token')
-  const now = Math.floor(Date.now() / 1000)
-  const expired = signFixtureToken(ownerToken, now - 3600)
-  const unexpiredControl = signFixtureToken(ownerToken, now + 300)
-  assert.equal(await verify(unexpiredControl), true, 'newly signed control token')
-  assert.equal(await verify(expired), false, 'correctly signed but expired token')
+  const claims = JSON.parse(Buffer.from(ownerToken.split('.')[1], 'base64url').toString('utf8'))
+  const waitMs = claims.exp * 1000 - Date.now() + 3000
+  if (!Number.isFinite(waitMs) || waitMs <= 0 || waitMs > 90_000) throw new Error('Unexpected local token expiry configuration')
 
   let analysisCalls = 0
   const server = createServer(async (req, res) => {
@@ -68,10 +55,14 @@ try {
   try {
     const endpoint = `http://127.0.0.1:${server.address().port}`
     const call = (token) => fetch(endpoint, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    for (const token of ['', otherToken, parts.join('.'), expired]) assert.equal((await call(token)).status, 403)
+    for (const token of ['', otherToken, parts.join('.')]) assert.equal((await call(token)).status, 403)
     assert.equal(analysisCalls, 0, 'rejected requests must not invoke fake analysis')
     assert.equal((await call(ownerToken)).status, 200)
     assert.equal(analysisCalls, 1)
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
+    assert.equal(await verify(ownerToken), false, 'expired user session')
+    assert.equal((await call(ownerToken)).status, 403)
+    assert.equal(analysisCalls, 1, 'expired token must not invoke fake analysis')
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
