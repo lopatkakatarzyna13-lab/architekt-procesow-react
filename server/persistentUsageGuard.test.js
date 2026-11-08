@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createPersistentUsageGuard } from './persistentUsageGuard.js'
@@ -42,5 +42,33 @@ describe('SEC-04 persistent local AI quota', () => {
 
   it('rejects invalid quota configuration', () => {
     expect(() => createPersistentUsageGuard({ maxRequests: 0 })).toThrow('INVALID_LIMIT_CONFIG')
+  })
+
+  it('blocks requests after the quota file is removed, including after restart', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'architekt-ai-missing-'))
+    const filePath = join(dir, 'usage.json')
+    try {
+      const guard = createPersistentUsageGuard({ filePath })
+      expect(guard.acquire()).toEqual({ ok: true })
+      guard.release()
+      unlinkSync(filePath)
+      expect(createPersistentUsageGuard({ filePath }).acquire()).toEqual({ ok: false, code: 'USAGE_STORAGE_UNAVAILABLE' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('migrates an existing quota file without resetting its count', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'architekt-ai-migrate-'))
+    const filePath = join(dir, 'usage.json')
+    try {
+      writeFileSync(filePath, JSON.stringify({ version: 1, started: 1000, used: 1 }))
+      const guard = createPersistentUsageGuard({ filePath, maxRequests: 2, now: () => 1000 })
+      expect(guard.acquire()).toEqual({ ok: true })
+      guard.release()
+      expect(createPersistentUsageGuard({ filePath, maxRequests: 2, now: () => 1000 }).acquire()).toEqual({ ok: false, code: 'LIMIT_REACHED' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

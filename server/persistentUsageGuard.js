@@ -14,17 +14,25 @@ export function createPersistentUsageGuard({
   let inFlight = false
   const path = resolve(filePath)
   const tmpPath = `${path}.${process.pid}.tmp`
+  const markerPath = `${path}.initialized`
   return {
     acquire() {
       if (inFlight) return { ok: false, code: 'BUSY' }
       try {
         const current = now()
         if (!Number.isSafeInteger(current) || current < 0) return { ok: false, code: 'USAGE_STORAGE_UNAVAILABLE' }
+        let initialized = false
+        try {
+          if (readFileSync(markerPath, 'utf8') !== '1') return { ok: false, code: 'USAGE_STORAGE_UNAVAILABLE' }
+          initialized = true
+        } catch (error) {
+          if (error.code !== 'ENOENT') return { ok: false, code: 'USAGE_STORAGE_UNAVAILABLE' }
+        }
         let state
         try {
           state = JSON.parse(readFileSync(path, 'utf8'))
         } catch (error) {
-          if (error.code !== 'ENOENT') return { ok: false, code: 'USAGE_STORAGE_UNAVAILABLE' }
+          if (error.code !== 'ENOENT' || initialized) return { ok: false, code: 'USAGE_STORAGE_UNAVAILABLE' }
           state = { version: 1, started: current, used: 0 }
         }
         if (state?.version !== 1 || !Number.isSafeInteger(state.started) || !Number.isSafeInteger(state.used) ||
@@ -37,6 +45,7 @@ export function createPersistentUsageGuard({
         mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
         writeFileSync(tmpPath, JSON.stringify(updated), { mode: 0o600 })
         renameSync(tmpPath, path)
+        if (!initialized) writeFileSync(markerPath, '1', { mode: 0o600, flag: 'wx' })
         inFlight = true
         return { ok: true }
       } catch {
