@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
@@ -47,6 +47,25 @@ test('SEC-04 corrupted quota rejects HTTP request', async () => {
       assert.equal(result.status, 503)
       assert.equal((await result.json()).error, 'USAGE_STORAGE_UNAVAILABLE')
     } finally { await close(instance.server) }
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('SEC-04 missing initialized quota blocks HTTP before the provider is called', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sec04-'))
+  const filePath = join(dir, 'usage.json')
+  let calls = 0
+  try {
+    const first = await start(createPersistentUsageGuard({ filePath }), async () => { calls += 1; return { steps: [] } })
+    try { assert.equal((await request(first.url)).status, 200) }
+    finally { await close(first.server) }
+    unlinkSync(filePath)
+    const restarted = await start(createPersistentUsageGuard({ filePath }), async () => { calls += 1; return { steps: [] } })
+    try {
+      const result = await request(restarted.url)
+      assert.equal(result.status, 503)
+      assert.equal((await result.json()).error, 'USAGE_STORAGE_UNAVAILABLE')
+      assert.equal(calls, 1)
+    } finally { await close(restarted.server) }
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 

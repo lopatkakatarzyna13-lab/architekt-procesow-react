@@ -170,7 +170,8 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   return (
     <section className="workshop-panel" aria-labelledby="workshop-title">
       <h2 id="workshop-title">Transkrypcja warsztatu</h2>
-      <p>Wklej rozmowę dotyczącą tego procesu. Tekst zapisuje się wyłącznie w tej przeglądarce po kliknięciu „Zapisz transkrypcję”. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
+      <p>Wklej rozmowę dotyczącą tego procesu. Po kliknięciu „Zapisz transkrypcję” tekst zostanie zapisany w tej przeglądarce. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
+      {analysisAvailable && <p>Analiza AI wysyła transkrypcję do OpenAI po Twoim potwierdzeniu. Wpisanie lub zapisanie tekstu nie uruchamia analizy.</p>}
       <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} Wynik wymaga Twojej weryfikacji i nie zmienia automatycznie procesu. Mapa BPMN powstanie w kolejnym etapie.</p>
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
       <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(readError)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
