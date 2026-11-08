@@ -1,0 +1,40 @@
+name: Isolated Supabase Auth test
+on:
+  push:
+    branches:
+      - feature/architekt-2-mvp
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  local-auth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci --ignore-scripts
+      - name: Install official Supabase CLI
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
+        with:
+          version: 2.98.0
+      - name: Start isolated local Supabase and test Auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_dir="$RUNNER_TEMP/architekt-supabase"
+          mkdir -p "$test_dir"
+          cd "$test_dir"
+          supabase init
+          supabase start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          trap 'supabase stop --no-backup >/dev/null 2>&1 || true' EXIT
+          supabase status -o env > "$RUNNER_TEMP/supabase-local.env"
+          set -a
+          source "$RUNNER_TEMP/supabase-local.env"
+          set +a
+          cd "$GITHUB_WORKSPACE"
+          node experiments/supabase-auth/local-stack.smoke.mjs
