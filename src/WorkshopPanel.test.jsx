@@ -102,6 +102,42 @@ describe('workshop review screen', () => {
     expect(await screen.findByText(/Trwa już analiza AI/)).toBeTruthy()
   })
 
+  it('keeps manual editing available when the usage counter is unavailable', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, json: async () => ({ error: 'USAGE_STORAGE_UNAVAILABLE' }) })))
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny proces.')
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    expect(await screen.findByText(/Nie można odczytać lokalnego licznika/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+    await user.click(screen.getByRole('button', { name: 'Dodaj: kroki' }))
+    await user.type(screen.getByLabelText('Kroki — pozycja 1'), 'Ręczna weryfikacja')
+    expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Ręczna weryfikacja')
+  })
+
+  it('requires saving and selecting an AI proposal before transferring it', async () => {
+    const user = userEvent.setup()
+    const transfer = vi.fn(() => ({ added: 1, skipped: 0 }))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ proposal: {
+      steps: [{ text: 'Fikcyjny krok', status: 'supported', evidence: 'fragment rozmowy' }], roles: [], decisions: [], questions: [],
+    } }) })))
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} canTransferSteps onTransferSteps={transfer} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny fragment rozmowy')
+    await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    expect(await screen.findByText(/Cytat pomaga odnaleźć fragment rozmowy/)).toBeTruthy()
+    const button = screen.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' })
+    expect(button.disabled).toBe(true)
+    await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }))
+    expect(button.disabled).toBe(true)
+    expect(transfer).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    await user.click(button)
+    expect(transfer).toHaveBeenCalledWith(['Fikcyjny krok'])
+  })
+
   it('deletes only workshop text after confirmation and keeps saved AS-IS', async () => {
     const user = userEvent.setup()
     const approve = vi.spyOn(window, 'confirm').mockReturnValue(true)

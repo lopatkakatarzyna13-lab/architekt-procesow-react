@@ -191,6 +191,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       {analysis && <div className="workshop-results">
         <h3>Propozycja do sprawdzenia</h3>
         <p>Popraw lub dodaj ustalenia. Po edycji treści przez człowieka element jest oznaczony jako wymagający sprawdzenia. Zapisana propozycja pozostaje w tej przeglądarce.</p>
+        <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
         {Object.entries(categories).map(([key, title]) => <div key={key}>
           <h4>{title}</h4>
           {analysis[key].length ? <ul>{analysis[key].map((item, index) => <li key={`${key}-${index}`}>
