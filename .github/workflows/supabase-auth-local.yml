@@ -46,3 +46,4 @@ jobs:
           set +a
           cd "$GITHUB_WORKSPACE"
           node experiments/supabase-auth/local-stack.smoke.mjs
+          node experiments/supabase-auth/quota-postgres.smoke.mjs
