@@ -1,15 +1,20 @@
 // CI-only test against an ephemeral local Supabase stack. Never contact a remote project.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { createClient } from '@supabase/supabase-js'
 import { createExperimentalVerifier } from './verify.js'
 
-const { API_URL, ANON_KEY, SERVICE_ROLE_KEY } = process.env
-if (!API_URL || !ANON_KEY || !SERVICE_ROLE_KEY) throw new Error('Missing ephemeral Supabase configuration')
+const { API_URL, ANON_KEY, SERVICE_ROLE_KEY, DB_URL } = process.env
+if (!API_URL || !ANON_KEY || !SERVICE_ROLE_KEY || !DB_URL) throw new Error('Missing ephemeral Supabase configuration')
 const url = new URL(API_URL)
 if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
   throw new Error('Refusing to test against a non-local Supabase URL')
 }
+if (!['127.0.0.1', 'localhost', '[::1]'].includes(new URL(DB_URL).hostname)) throw new Error('Refusing non-local database')
+const exec = promisify(execFile)
+const query = (sql) => exec('psql', [DB_URL, '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-c', sql])
 const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
 const admin = createClient(API_URL, SERVICE_ROLE_KEY, options)
 const client = createClient(API_URL, ANON_KEY, options)
@@ -45,9 +50,14 @@ try {
   if (!Number.isFinite(waitMs) || waitMs <= 0 || waitMs > 90_000) throw new Error('Unexpected local token expiry configuration')
 
   let analysisCalls = 0
+  await query('CREATE TABLE public.fixture_integrated_quota (id integer PRIMARY KEY, used integer NOT NULL); INSERT INTO public.fixture_integrated_quota VALUES (1, 0)')
   const server = createServer(async (req, res) => {
     const match = /^Bearer ([^\s]+)$/.exec(req.headers.authorization || '')
     if (!match || !(await verify(match[1]))) { res.writeHead(403); return res.end() }
+    try {
+      const reservation = await query('UPDATE public.fixture_integrated_quota SET used = used + 1 WHERE id = 1 AND used < 3 RETURNING used')
+      if (!reservation.stdout.trim()) { res.writeHead(429); return res.end() }
+    } catch { res.writeHead(503); return res.end() }
     analysisCalls += 1
     res.writeHead(200)
     return res.end()
@@ -72,6 +82,14 @@ try {
     assert.equal((await call(refreshed.session.access_token)).status, 200)
     assert.equal(analysisCalls, 2, 'refreshed session may invoke fake analysis')
 
+    const concurrent = await Promise.all(Array.from({ length: 6 }, () => call(refreshed.session.access_token)))
+    assert.equal(concurrent.filter((response) => response.status === 200).length, 1)
+    assert.equal(concurrent.filter((response) => response.status === 429).length, 5)
+    assert.equal(analysisCalls, 3, 'quota must prevent extra analyses')
+    await query('DROP TABLE public.fixture_integrated_quota')
+    assert.equal((await call(refreshed.session.access_token)).status, 503)
+    assert.equal(analysisCalls, 3, 'database failure must block analysis')
+
     const { error: signOutError } = await client.auth.signOut({ scope: 'global' })
     assert.equal(signOutError, null, 'sign out must succeed')
     const { data: revoked, error: revokedError } = await client.auth.refreshSession({ refresh_token: refreshed.session.refresh_token })
@@ -79,8 +97,9 @@ try {
     assert.equal(revoked.session, null)
   } finally {
     await new Promise((resolve) => server.close(resolve))
+    await query('DROP TABLE IF EXISTS public.fixture_integrated_quota')
   }
-  console.log('PASS: local Auth rejects expired sessions, refreshes valid sessions and revokes refresh on sign out')
+  console.log('PASS: local Auth, shared quota and simulated analysis work together; database errors block analysis')
 } finally {
   for (const id of users) await admin.auth.admin.deleteUser(id)
 }
