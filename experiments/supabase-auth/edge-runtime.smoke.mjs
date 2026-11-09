@@ -32,28 +32,44 @@ try {
   }
   await exec('psql', [DB_URL, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', 'experiments/supabase-auth/edge-fixture.sql'])
   await writeFile(envFile, `ARCHITEKT_FIXTURE_MODE=true\nARCHITEKT_TEST_ORIGIN=http://127.0.0.1:5173\nARCHITEKT_TEST_USER_ID=${users[0]}\n`, { mode: 0o600 })
-  // Instrument only the disposable CI copy, logging booleans rather than URLs or credentials.
+  // Add a diagnostic code only to the disposable test copy; no URL or secret is exposed.
   const fixturePath = `${EDGE_TEST_DIR}/supabase/functions/workshop-fixture/index.ts`
   const fixtureSource = await readFile(fixturePath, 'utf8')
-  const marker = 'const localOnly = localUrl(projectUrl || undefined) && localUrl(allowedOrigin || undefined)'
-  if (!fixtureSource.includes(marker)) throw new Error('Fixture locality check not found')
-  await writeFile(fixturePath, fixtureSource.replace(marker, marker + "\nconsole.log('FIXTURE_LOCALITY_CHECK', localUrl(projectUrl || undefined), localUrl(allowedOrigin || undefined))"))
-  edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: ['ignore', 'pipe', 'pipe'] })
-  const diagnostics = new Set()
-  for (const stream of [edge.stdout, edge.stderr]) stream.on('data', (chunk) => {
-    for (const match of chunk.toString().matchAll(/FIXTURE_LOCALITY_CHECK (?:true|false) (?:true|false)/g)) diagnostics.add(match[0])
-  })
+  const marker = "return reply(503, 'NOT_CONFIGURED')"
+  if (!fixtureSource.includes(marker)) throw new Error('Fixture configuration check not found')
+  await writeFile(fixturePath, fixtureSource.replace(marker, "return reply(503, localUrl(projectUrl || undefined) ? 'PROJECT_LOCAL' : 'PROJECT_NONLOCAL')"))
+  edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: 'ignore' })
   const endpoint = `${API_URL}/functions/v1/workshop-fixture`
   const send = (token, { origin = 'http://127.0.0.1:5173', body = '{"transcript":"HR sprawdza dane"}', method = 'POST' } = {}) => fetch(endpoint, {
     method, headers: { apikey: ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}), Origin: origin, 'Content-Type': 'application/json' }, ...(method === 'POST' ? { body } : {}),
   })
   let ready = false
-  let lastStatus = 'no response'
+  const observed = new Set()
   for (let i = 0; i < 120; i++) {
-    try { lastStatus = (await send(tokens[0], { body: '{}' })).status; if (lastStatus === 400) { ready = true; break } } catch { /* runtime starting */ }
+    try {
+      if (i > 0 && i % 30 === 0) {
+        const session = await client.auth.signInWithPassword({ email: 'edge-owner@example.test', password })
+        if (session.error || !session.data.session?.access_token) throw new Error('Fixture re-sign-in failed')
+        tokens[0] = session.data.session.access_token
+      }
+      const response = await send(tokens[0], { body: '{}' })
+      let label = String(response.status)
+      if (response.status === 503) {
+        const body = await response.json().catch(() => ({}))
+        if (['PROJECT_LOCAL', 'PROJECT_NONLOCAL'].includes(body.error)) label += ':' + body.error
+      }
+      observed.add(label)
+      if (response.status === 400) { ready = true; break }
+    } catch { observed.add('network-or-login-error') }
     await delay(500)
   }
-  if (!ready) throw new Error(`Local Edge runtime did not become ready; HTTP status: ${lastStatus}; locality: ${[...diagnostics].join(', ') || 'unavailable'}`)
+  if (!ready) throw new Error(`Local Edge runtime did not become ready; observed: ${[...observed].join(', ')}`)
+  // Renew both short-lived test tokens before authorization assertions.
+  for (const [index, email] of ['edge-owner@example.test', 'edge-other@example.test'].entries()) {
+    const session = await client.auth.signInWithPassword({ email, password })
+    if (session.error || !session.data.session?.access_token) throw new Error('Fixture re-sign-in failed')
+    tokens[index] = session.data.session.access_token
+  }
   assert.ok([401, 403].includes((await send()).status), 'missing token')
   assert.equal((await send(tokens[1])).status, 403, 'other account')
   assert.equal((await send(tokens[0], { origin: 'http://not-allowed.test' })).status, 403, 'foreign origin')
