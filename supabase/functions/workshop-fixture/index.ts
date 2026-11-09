@@ -6,12 +6,25 @@ const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const active = Deno.env.get('ARCHITEKT_FIXTURE_MODE') === 'true'
 
+// Fail closed if the fixture is accidentally deployed to a hosted Supabase project.
+// A test flag alone must never allow using a service-role credential on the internet.
+function localUrl(value: string | undefined): boolean {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') &&
+      ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) &&
+      !url.username && !url.password
+  } catch { return false }
+}
+const localOnly = localUrl(projectUrl || undefined) && localUrl(allowedOrigin || undefined)
+
 function reply(status: number, error: string, cors: Record<string, string> = {}) {
   return new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors } })
 }
 
 Deno.serve(async (req: Request) => {
-  if (!active || !allowedOrigin || !allowedUser || !projectUrl || !anonKey || !serviceKey) return reply(503, 'NOT_CONFIGURED')
+  if (!active || !localOnly || !allowedOrigin || !allowedUser || !projectUrl || !anonKey || !serviceKey) return reply(503, 'NOT_CONFIGURED')
   const origin = req.headers.get('origin')
   if (origin !== allowedOrigin) return reply(403, 'FORBIDDEN')
   const cors = { 'Access-Control-Allow-Origin': allowedOrigin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Vary': 'Origin' }
