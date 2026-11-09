@@ -30,7 +30,10 @@ describe('isolated simulated authentication over local HTTP', () => {
     const mockAnalysis = vi.fn(async () => ({ steps: [] }))
     const appUrl = await start(async (req, res) => {
       const match = /^Bearer ([^\s]+)$/.exec(req.headers.authorization || '')
-      if (!match || !(await verify(match[1]))) { res.writeHead(403); return res.end() }
+      if (!match) { res.writeHead(403); return res.end() }
+      let allowed
+      try { allowed = await verify(match[1]) } catch { res.writeHead(503); return res.end() }
+      if (!allowed) { res.writeHead(403); return res.end() }
       await mockAnalysis()
       res.writeHead(200)
       return res.end()
@@ -43,7 +46,7 @@ describe('isolated simulated authentication over local HTTP', () => {
     expect((await call('allowed-fixture')).status).toBe(200)
     expect(mockAnalysis).toHaveBeenCalledTimes(1)
     authUnavailable = true
-    expect((await call('allowed-fixture')).status).toBe(403)
+    expect((await call('allowed-fixture')).status).toBe(503)
     expect(mockAnalysis).toHaveBeenCalledTimes(1)
     expect(authRequests.every(({ url }) => url === '/auth/v1/user')).toBe(true)
     expect(authRequests).toHaveLength(4)

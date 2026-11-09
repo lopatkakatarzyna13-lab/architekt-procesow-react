@@ -5,7 +5,10 @@ export function createTestGateway({ verify, reserve, analyze }) {
     if (request.method !== 'POST') return Response.json({ error: 'NOT_FOUND' }, { status: 404 })
     const match = /^Bearer ([^\s]+)$/.exec(request.headers.get('authorization') || '')
     try {
-      if (!match || !(await verify(match[1]))) return Response.json({ error: 'FORBIDDEN' }, { status: 403 })
+      if (!match) return Response.json({ error: 'FORBIDDEN' }, { status: 403 })
+      let allowed
+      try { allowed = await verify(match[1]) } catch { return Response.json({ error: 'AUTH_UNAVAILABLE' }, { status: 503 }) }
+      if (!allowed) return Response.json({ error: 'FORBIDDEN' }, { status: 403 })
       const input = await request.json().catch(() => null)
       if (typeof input?.transcript !== 'string' || !input.transcript.trim() || input.transcript.length > 20000) return Response.json({ error: 'INVALID_REQUEST' }, { status: 400 })
       if (!(await reserve())) return Response.json({ error: 'LIMIT_REACHED' }, { status: 429 })

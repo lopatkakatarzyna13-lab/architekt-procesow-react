@@ -109,8 +109,10 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       if (!response.ok) {
         if (result.error === 'MISSING_API_KEY') throw new Error('Brakuje konfiguracji klucza API po stronie serwera.')
         if (result.error === 'UNVERIFIED_RESPONSE') throw new Error('Nie udało się potwierdzić fragmentów źródłowych. Spróbuj ponownie.')
-        if (result.error === 'LIMIT_REACHED') throw new Error('Osiągnięto limit 12 prób analizy AI na godzinę. Możesz dalej opracowywać proces ręcznie i spróbować później.')
-        if (result.error === 'USAGE_STORAGE_UNAVAILABLE') throw new Error('Nie można odczytać lokalnego licznika analiz AI. Analiza została zablokowana dla ochrony kosztów. Możesz kontynuować pracę ręcznie.')
+        if (result.error === 'FORBIDDEN') throw new Error('Brak dostępu do analizy. Sprawdź logowanie i uprawnienia. Możesz kontynuować pracę ręcznie.')
+        if (result.error === 'AUTH_UNAVAILABLE') throw new Error('Usługa logowania jest niedostępna. Analiza została zablokowana. Możesz kontynuować pracę ręcznie.')
+        if (result.error === 'LIMIT_REACHED') throw new Error('Osiągnięto limit analiz AI. Możesz dalej opracowywać proces ręcznie i spróbować później.')
+        if (result.error === 'USAGE_STORAGE_UNAVAILABLE') throw new Error('Nie można sprawdzić licznika analiz AI. Analiza została zablokowana dla ochrony kosztów. Możesz kontynuować pracę ręcznie.')
         if (result.error === 'BUSY') throw new Error('Trwa już analiza AI. Zaczekaj na jej zakończenie, zanim uruchomisz kolejną.')
         if (result.error === 'TOO_LARGE') throw new Error('Żądanie jest zbyt duże. Skróć transkrypcję i spróbuj ponownie.')
         if (result.error === 'INVALID_TRANSCRIPT' || result.error === 'INVALID_REQUEST') throw new Error('Nieprawidłowe dane analizy. Sprawdź transkrypcję i spróbuj ponownie.')

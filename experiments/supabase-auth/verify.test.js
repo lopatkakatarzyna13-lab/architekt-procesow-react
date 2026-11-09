@@ -21,11 +21,13 @@ describe('isolated Supabase identity experiment', () => {
     expect(await verify('')).toBe(false)
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
-  it('fails closed for rejected tokens and network errors', async () => {
+  it('rejects invalid tokens but reports auth outages without granting access', async () => {
     const denied = createExperimentalVerifier({ ...options, fetchImpl: async () => json({ message: 'invalid token' }, 401) })
     expect(await denied('fictional-token')).toBe(false)
     const offline = createExperimentalVerifier({ ...options, fetchImpl: async () => { throw new Error('offline') } })
-    expect(await offline('fictional-token')).toBe(false)
+    await expect(offline('fictional-token')).rejects.toThrow('AUTH_UNAVAILABLE')
+    const failed = createExperimentalVerifier({ ...options, fetchImpl: async () => json({ message: 'unavailable' }, 503) })
+    await expect(failed('fictional-token')).rejects.toThrow('AUTH_UNAVAILABLE')
   })
   it('refuses incomplete configuration', () => {
     expect(() => createExperimentalVerifier({ ...options, allowedUserId: '', fetchImpl: vi.fn() })).toThrow('INVALID_TEST_CONFIGURATION')

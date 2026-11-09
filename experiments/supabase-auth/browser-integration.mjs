@@ -31,7 +31,10 @@ try {
     const reply = (status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)) }
     if (req.method !== 'POST' || req.url !== '/api/analyze-workshop') return reply(404, { error: 'NOT_FOUND' })
     const token = /^Bearer ([^\s]+)$/.exec(req.headers.authorization || '')?.[1]
-    if (!token || !(await verify(token))) return reply(403, { error: 'FORBIDDEN' })
+    if (!token) return reply(403, { error: 'FORBIDDEN' })
+    let allowed
+    try { allowed = await verify(token) } catch { return reply(503, { error: 'AUTH_UNAVAILABLE' }) }
+    if (!allowed) return reply(403, { error: 'FORBIDDEN' })
     let body = ''
     for await (const chunk of req) { body += chunk; if (body.length > 25000) return reply(413, { error: 'TOO_LARGE' }) }
     let transcript
@@ -72,6 +75,8 @@ try {
   const call = () => page.evaluate(async () => (await fetch('/api/analyze-workshop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript: 'HR sprawdza dane' }) })).status)
   assert.equal(await call(), 403, 'another authenticated account is denied')
   assert.equal(calls, 0)
+  await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
+  await page.getByText(/Brak dostępu do analizy/).waitFor()
   await page.getByRole('button', { name: 'Wyloguj testowo' }).click()
   assert.equal(await call(), 403, 'missing token is denied')
   await login('browser-owner@example.test')
@@ -96,13 +101,15 @@ try {
   assert.equal(results.filter((status) => status === 429).length, 4)
   assert.equal(calls, 3)
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
-  await page.getByText(/Osiągnięto limit 12 prób/).waitFor()
+  await page.getByText(/Osiągnięto limit analiz AI/).waitFor()
   await query('DROP TABLE public.fixture_browser_quota')
   assert.equal(await call(), 503)
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
-  await page.getByText(/Nie można odczytać lokalnego licznika/).waitFor()
+  await page.getByText(/Nie można sprawdzić licznika/).waitFor()
   authDown = true
-  assert.equal(await call(), 403, 'unavailable auth fails closed')
+  assert.equal(await call(), 503, 'unavailable auth fails closed')
+  await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
+  await page.getByText(/Usługa logowania jest niedostępna/).waitFor()
   authDown = false
   await context.route(`${API_URL}/auth/v1/token**`, (route) => route.abort())
   await page.getByRole('button', { name: 'Wyloguj testowo' }).click()

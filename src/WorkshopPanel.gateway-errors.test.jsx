@@ -9,10 +9,11 @@ beforeEach(() => { localStorage.clear(); vi.restoreAllMocks() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 it.each([
-  ['access denied', async () => false, async () => true],
-  ['exhausted quota', async () => true, async () => false],
-  ['unavailable quota', async () => true, async () => { throw new Error('offline') }],
-])('keeps the transcript and allows manual work on %s', async (_name, verify, reserve) => {
+  ['access denied', async () => false, async () => true, /Brak dostępu do analizy/],
+  ['auth outage', async () => { throw new Error('offline') }, async () => true, /Usługa logowania jest niedostępna/],
+  ['exhausted quota', async () => true, async () => false, /Osiągnięto limit/],
+  ['unavailable quota', async () => true, async () => { throw new Error('offline') }, /Nie udało się przeanalizować/],
+])('keeps the transcript and allows manual work on %s', async (_name, verify, reserve, message) => {
   const user = userEvent.setup()
   const analyze = vi.fn()
   const gateway = createTestGateway({ verify, reserve, analyze })
@@ -22,8 +23,7 @@ it.each([
   await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjne dane warsztatu')
   await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
   await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
-  if (_name === 'exhausted quota') expect(await screen.findByText(/Osiągnięto limit/)).toBeTruthy()
-  else expect(await screen.findByText(/Nie udało się przeanalizować/)).toBeTruthy()
+  expect(await screen.findByText(message)).toBeTruthy()
   expect(analyze).not.toHaveBeenCalled()
   expect(screen.getByLabelText('Tekst rozmowy').value).toBe('Fikcyjne dane warsztatu')
   await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))

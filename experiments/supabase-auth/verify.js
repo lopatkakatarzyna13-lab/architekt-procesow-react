@@ -9,11 +9,13 @@ export function createExperimentalVerifier({ url, publishableKey, allowedUserId,
   })
   return async (token) => {
     if (typeof token !== 'string' || !token.trim()) return false
-    try {
-      const { data, error } = await client.auth.getUser(token)
-      return !error && data?.user?.id === allowedUserId
-    } catch {
-      return false
+    let response
+    try { response = await client.auth.getUser(token) }
+    catch { throw new Error('AUTH_UNAVAILABLE') }
+    if (response.error) {
+      if ([400, 401, 403].includes(response.error.status)) return false
+      throw new Error('AUTH_UNAVAILABLE')
     }
+    return response.data?.user?.id === allowedUserId
   }
 }
