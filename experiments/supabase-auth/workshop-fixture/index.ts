@@ -18,7 +18,7 @@ function localUrl(value: string | undefined): boolean {
   } catch { return false }
 }
 // Hosted Supabase sets these runtime markers; never enable this fixture there.
-const hostedRuntime = ['SB_REGION', 'SB_EXECUTION_ID', 'DENO_DEPLOYMENT_ID']
+const hostedRuntime = ['SB_REGION', 'DENO_DEPLOYMENT_ID']
   .some((name) => Boolean(Deno.env.get(name)))
 function localGateway(value: string | undefined): boolean {
   if (localUrl(value)) return true

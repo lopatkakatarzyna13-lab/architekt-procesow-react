@@ -9,3 +9,6 @@ Brak w tym etapie: rzeczywistego dostawcy AI i kontroli jego kosztów, limitu go
 ## Korekta po weryfikacji 9.11
 
 Test `0f7a0d0` wykazał, że lokalny runtime Edge używa adresu bramki innego niż loopback. Log diagnostyczny [#25](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/42668768012) potwierdził `503:PROJECT_NONLOCAL`. Funkcję przeniesiono do `experiments/supabase-auth/workshop-fixture`, poza standardowy katalog wdrożeniowy Supabase. W izolowanym CI kopiowana jest do tymczasowego projektu. Kontrola dopuszcza loopback oraz dokładnie `http://kong:8000/` przy lokalnym originie, jawnej fladze testowej i braku znaczników środowiska hostowanego Supabase. To ograniczenie testowe, nie autoryzacja ani dowód bezpieczeństwa innych instalacji self-hosted. Próby zdalnych adresów i symulowanych znaczników środowiska hostowanego obejmuje test `edge-locality.smoke.mjs`. Wynik należy potwierdzić w CI dla bieżącego commitu. Nie wdrażać funkcji eksperymentalnej do hostowanego projektu.
+
+
+W CI stwierdzono, że `SB_EXECUTION_ID` jest dostępny także w lokalnym runtime; nie może samodzielnie identyfikować środowiska hostowanego. Blokada opiera się na `SB_REGION` i `DENO_DEPLOYMENT_ID` oraz pozostałych warunkach; test uwzględnia identyfikator lokalnego wykonania. Nie jest to kontrola ogólnego bezpieczeństwa instalacji self-hosted.

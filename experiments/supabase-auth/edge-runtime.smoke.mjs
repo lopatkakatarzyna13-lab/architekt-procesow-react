@@ -61,7 +61,6 @@ try {
       }
       observed.add(label)
       if (response.status === 400) { ready = true; break }
-      if (label.startsWith('503:CFG_')) break
     } catch { observed.add('network-or-login-error') }
     await delay(500)
   }

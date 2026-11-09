@@ -18,7 +18,7 @@ const scenarios = [
   ['nonlocal origin', { ARCHITEKT_TEST_ORIGIN: 'https://example.com' }, 503],
   ['disabled flag', { ARCHITEKT_FIXTURE_MODE: 'false' }, 503],
   ['hosted region', { SB_REGION: 'eu-central-1' }, 503],
-  ['hosted execution', { SB_EXECUTION_ID: 'fake' }, 503],
+  ['local execution identifier', { SB_EXECUTION_ID: 'fake' }, 403],
   ['hosted deployment', { DENO_DEPLOYMENT_ID: 'fake' }, 503],
 ]
 test('fixture rejects hosted and nonlocal configurations before any external call', async () => {
