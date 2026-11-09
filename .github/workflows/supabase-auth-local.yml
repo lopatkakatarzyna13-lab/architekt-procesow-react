@@ -36,6 +36,8 @@ jobs:
           mkdir -p "$test_dir"
           cd "$test_dir"
           supabase init
+          mkdir -p supabase/functions
+          cp -R "$GITHUB_WORKSPACE/supabase/functions/workshop-fixture" supabase/functions/
           python3 - <<'PY'
           from pathlib import Path
           p = Path('supabase/config.toml')
@@ -51,6 +53,8 @@ jobs:
           source "$RUNNER_TEMP/supabase-local.env"
           set +a
           cd "$GITHUB_WORKSPACE"
+          export EDGE_TEST_DIR="$test_dir"
           node experiments/supabase-auth/local-stack.smoke.mjs
           node experiments/supabase-auth/quota-postgres.smoke.mjs
           node experiments/supabase-auth/browser-integration.mjs
+          node experiments/supabase-auth/edge-runtime.smoke.mjs
