@@ -37,7 +37,7 @@ try {
   const fixtureSource = await readFile(fixturePath, 'utf8')
   const marker = 'const localOnly = localUrl(projectUrl || undefined) && localUrl(allowedOrigin || undefined)'
   if (!fixtureSource.includes(marker)) throw new Error('Fixture locality check not found')
-  await writeFile(fixturePath, fixtureSource.replace(marker, marker + "\\nconsole.log('FIXTURE_LOCALITY_CHECK', localUrl(projectUrl || undefined), localUrl(allowedOrigin || undefined))"))
+  await writeFile(fixturePath, fixtureSource.replace(marker, marker + "\nconsole.log('FIXTURE_LOCALITY_CHECK', localUrl(projectUrl || undefined), localUrl(allowedOrigin || undefined))"))
   edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: ['ignore', 'pipe', 'pipe'] })
   const diagnostics = new Set()
   for (const stream of [edge.stdout, edge.stderr]) stream.on('data', (chunk) => {
