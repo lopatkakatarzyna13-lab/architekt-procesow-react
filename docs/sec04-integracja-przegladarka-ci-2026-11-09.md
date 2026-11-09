@@ -1,0 +1,9 @@
+# SEC-04 — odizolowany test integracji przeglądarki
+
+Status: eksperyment testowy, SEC-04 nadal otwarty. Test używa wyłącznie tymczasowego lokalnego Supabase w GitHub Actions, fikcyjnych kont i stałej fikcyjnej odpowiedzi AI. Nie korzysta z OpenAI ani z produkcyjnego Supabase. Adresy usług są ograniczone do localhost.
+
+`browser-test.html` i `browser-test.jsx` to osobny ekran testowy Vite, nie logowanie w produkcyjnej aplikacji. Ekran pobiera prawdziwą sesję z tymczasowego Auth, dodaje jej token do żądania warsztatu i wyświetla istniejący interfejs. `browser-integration.mjs` uruchamia lokalny, testowy serwer HTTP, sprawdza konto przez Auth, rezerwuje limit w tymczasowej tabeli PostgreSQL i zwraca fikcyjną propozycję. Tabela, konta i usługi istnieją tylko w runnerze. Nie używać bramki ani konfiguracji jako produkcyjnego zabezpieczenia.
+
+Scenariusz ma sprawdzić dozwolone i obce konto, brak tokenu, logowanie, przejście warsztat → analiza → zatwierdzenie → AS-IS → zapis → otwarcie z biblioteki, równoczesne rezerwacje, limit, awarię tabeli i kontynuację pracy ręcznej. Awaria połączenia weryfikatora Auth jest sprawdzana przez próbę połączenia z niedostępnym lokalnym portem, a brak łączności przeglądarki z logowaniem przez blokadę sieci w Playwright. Nie są to testy awarii rzeczywistej usługi zdalnej.
+
+Wynik tego scenariusza jest potwierdzony dopiero po pomyślnym przebiegu workflow dla konkretnego commitu. Nie sprawdza on produkcyjnego wdrożenia, RLS, MFA, ochrony kluczy dostawcy AI, budżetu u dostawcy, rzeczywistych danych klientów ani bezpieczeństwa endpointu publicznego. Przed zamknięciem SEC-04 należy przygotować i przetestować docelową implementację, ograniczenia nadużyć i kosztów, obsługę sesji oraz ocenę bezpieczeństwa; dane warsztatowe w localStorage wymagają osobnej oceny.
