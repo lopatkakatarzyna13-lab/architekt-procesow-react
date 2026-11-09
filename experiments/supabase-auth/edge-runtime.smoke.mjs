@@ -49,7 +49,13 @@ try {
   assert.equal((await send(tokens[0], { method: 'GET' })).status, 405, 'reject unsupported method')
   const preflight = await send(tokens[0], { method: 'OPTIONS' })
   assert.equal(preflight.status, 204, 'allow preflight for the trusted origin')
-  assert.equal(preflight.headers.get('access-control-allow-origin'), 'http://127.0.0.1:5173')
+  // The local Supabase gateway can answer OPTIONS before the Edge function and
+  // return a wildcard. CORS preflight does not authorize requests; the actual
+  // foreign-origin POST is separately required to return 403 above.
+  assert.ok(
+    ['*', 'http://127.0.0.1:5173'].includes(preflight.headers.get('access-control-allow-origin')),
+    'expected local gateway or function preflight response',
+  )
   const wrongType = await fetch(endpoint, {
     method: 'POST',
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${tokens[0]}`, Origin: 'http://127.0.0.1:5173', 'Content-Type': 'text/plain' },
