@@ -46,6 +46,23 @@ try {
   assert.ok([401, 403].includes((await send()).status), 'missing token')
   assert.equal((await send(tokens[1])).status, 403, 'other account')
   assert.equal((await send(tokens[0], { origin: 'http://not-allowed.test' })).status, 403, 'foreign origin')
+  assert.equal((await send(tokens[0], { method: 'GET' })).status, 405, 'reject unsupported method')
+  const preflight = await send(tokens[0], { method: 'OPTIONS' })
+  assert.equal(preflight.status, 204, 'allow preflight for the trusted origin')
+  assert.equal(preflight.headers.get('access-control-allow-origin'), 'http://127.0.0.1:5173')
+  const wrongType = await fetch(endpoint, {
+    method: 'POST',
+    headers: { apikey: ANON_KEY, Authorization: `Bearer ${tokens[0]}`, Origin: 'http://127.0.0.1:5173', 'Content-Type': 'text/plain' },
+    body: '{"transcript":"HR sprawdza dane"}',
+  })
+  assert.equal(wrongType.status, 415, 'reject wrong content type')
+  const malformedAuth = await fetch(endpoint, {
+    method: 'POST',
+    headers: { apikey: ANON_KEY, Authorization: 'Bearer malformed token', Origin: 'http://127.0.0.1:5173', 'Content-Type': 'application/json' },
+    body: '{"transcript":"HR sprawdza dane"}',
+  })
+  assert.equal(malformedAuth.status, 403, 'reject malformed bearer token')
+  assert.equal((await send(tokens[0], { body: 'null' })).status, 400, 'reject null payload')
   assert.equal((await send(tokens[0], { body: '{' })).status, 400, 'invalid JSON')
   assert.equal((await send(tokens[0], { body: JSON.stringify({ transcript: 'x'.repeat(5000) }) })).status, 413)
   const first = await send(tokens[0])
