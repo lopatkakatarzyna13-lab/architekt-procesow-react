@@ -12,3 +12,6 @@ Test `0f7a0d0` wykazał, że lokalny runtime Edge używa adresu bramki innego ni
 
 
 W CI stwierdzono, że `SB_EXECUTION_ID` jest dostępny także w lokalnym runtime; nie może samodzielnie identyfikować środowiska hostowanego. Blokada opiera się na `SB_REGION` i `DENO_DEPLOYMENT_ID` oraz pozostałych warunkach; test uwzględnia identyfikator lokalnego wykonania. Nie jest to kontrola ogólnego bezpieczeństwa instalacji self-hosted.
+
+
+Wynik kontrolny: [test #28](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/42670799789) był nieudany; potwierdzono, że lokalna instancja nadaje identyfikator wykonania. Odpowiedź początkowa nie potwierdziła załadowania konfiguracji `--env-file`, dlatego kontrola gotowości ponownie oczekuje na uruchomienie właściwego runtime. Przebiegi dla `637b87b` zakończyły się niepowodzeniem bez utworzenia zadań Auth i SEC-04; przyczyna niewyjaśniona, wynik nie potwierdza ani nie wyklucza poprawności kodu. Przeglądarkowy scenariusz offline w MVP przeszedł. SEC-04 pozostaje otwarty.
