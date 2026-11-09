@@ -19,7 +19,7 @@ jobs:
       - name: Install locked application dependencies
         run: npm ci --ignore-scripts
       - name: Check fixture locality and hosted-runtime denial
-        run: node --experimental-strip-types --test experiments/supabase-auth/edge-locality.test.mjs
+        run: node --experimental-strip-types --test experiments/supabase-auth/edge-locality.smoke.mjs
       - name: Install browser for the isolated integration test
         run: |
           npm install --prefix /tmp/architekt-browser --no-save playwright@1.56.1
