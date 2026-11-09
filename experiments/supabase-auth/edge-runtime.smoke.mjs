@@ -37,7 +37,8 @@ try {
   const fixtureSource = await readFile(fixturePath, 'utf8')
   const marker = "return reply(503, 'NOT_CONFIGURED')"
   if (!fixtureSource.includes(marker)) throw new Error('Fixture configuration check not found')
-  await writeFile(fixturePath, fixtureSource.replace(marker, "return reply(503, localUrl(projectUrl || undefined) ? 'PROJECT_LOCAL' : 'PROJECT_NONLOCAL')"))
+  const diagnostic = "return reply(503, ['CFG', active ? 'A1' : 'A0', localGateway(projectUrl || undefined) ? 'G1' : 'G0', localUrl(allowedOrigin || undefined) ? 'O1' : 'O0', Deno.env.get('SB_REGION') ? 'R1' : 'R0', Deno.env.get('SB_EXECUTION_ID') ? 'E1' : 'E0', Deno.env.get('DENO_DEPLOYMENT_ID') ? 'D1' : 'D0', allowedUser && anonKey && serviceKey ? 'K1' : 'K0'].join('_'))"
+  await writeFile(fixturePath, fixtureSource.replace(marker, diagnostic))
   edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: 'ignore' })
   const endpoint = `${API_URL}/functions/v1/workshop-fixture`
   const send = (token, { origin = 'http://127.0.0.1:5173', body = '{"transcript":"HR sprawdza dane"}', method = 'POST' } = {}) => fetch(endpoint, {
@@ -56,10 +57,11 @@ try {
       let label = String(response.status)
       if (response.status === 503) {
         const body = await response.json().catch(() => ({}))
-        if (['PROJECT_LOCAL', 'PROJECT_NONLOCAL'].includes(body.error)) label += ':' + body.error
+        if (typeof body.error === 'string' && /^CFG_A[01]_G[01]_O[01]_R[01]_E[01]_D[01]_K[01]$/.test(body.error)) label += ':' + body.error
       }
       observed.add(label)
       if (response.status === 400) { ready = true; break }
+      if (label.startsWith('503:CFG_')) break
     } catch { observed.add('network-or-login-error') }
     await delay(500)
   }
