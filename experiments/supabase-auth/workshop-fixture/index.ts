@@ -17,7 +17,19 @@ function localUrl(value: string | undefined): boolean {
       !url.username && !url.password
   } catch { return false }
 }
-const localOnly = localUrl(projectUrl || undefined) && localUrl(allowedOrigin || undefined)
+// Hosted Supabase sets these runtime markers; never enable this fixture there.
+const hostedRuntime = ['SB_REGION', 'SB_EXECUTION_ID', 'DENO_DEPLOYMENT_ID']
+  .some((name) => Boolean(Deno.env.get(name)))
+function localGateway(value: string | undefined): boolean {
+  if (localUrl(value)) return true
+  try {
+    const url = new URL(value || '')
+    // Local CLI Edge workers reach the isolated gateway through Docker DNS.
+    return url.protocol === 'http:' && url.hostname === 'kong' && url.port === '8000' &&
+      url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password
+  } catch { return false }
+}
+const localOnly = !hostedRuntime && localGateway(projectUrl || undefined) && localUrl(allowedOrigin || undefined)
 
 function reply(status: number, error: string, cors: Record<string, string> = {}) {
   return new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors } })
@@ -71,3 +83,5 @@ Deno.serve(async (req: Request) => {
   } catch { return reply(503, 'USAGE_STORAGE_UNAVAILABLE', cors) }
   return new Response(JSON.stringify({ proposal: { steps: [{ text: 'Sprawdzenie danych', status: 'supported', evidence: 'HR sprawdza dane' }], roles: [], decisions: [], questions: [] } }), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors } })
 })
+
+export {}
