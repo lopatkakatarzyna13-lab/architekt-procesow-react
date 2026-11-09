@@ -67,7 +67,8 @@ try {
     headers: { apikey: ANON_KEY, Authorization: 'Bearer malformed token', Origin: 'http://127.0.0.1:5173', 'Content-Type': 'application/json' },
     body: '{"transcript":"HR sprawdza dane"}',
   })
-  assert.equal(malformedAuth.status, 403, 'reject malformed bearer token')
+  // The local Supabase gateway may reject invalid JWTs with 401 before the Edge function handles them.
+  assert.ok([401, 403].includes(malformedAuth.status), 'reject malformed bearer token')
   assert.equal((await send(tokens[0], { body: 'null' })).status, 400, 'reject null payload')
   assert.equal((await send(tokens[0], { body: '{' })).status, 400, 'invalid JSON')
   assert.equal((await send(tokens[0], { body: JSON.stringify({ transcript: 'x'.repeat(5000) }) })).status, 413)
