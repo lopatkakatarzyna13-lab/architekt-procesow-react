@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import { writeFile, unlink } from 'node:fs/promises'
+import { readFile, writeFile, unlink } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createClient } from '@supabase/supabase-js'
 
@@ -32,17 +32,28 @@ try {
   }
   await exec('psql', [DB_URL, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', 'experiments/supabase-auth/edge-fixture.sql'])
   await writeFile(envFile, `ARCHITEKT_FIXTURE_MODE=true\nARCHITEKT_TEST_ORIGIN=http://127.0.0.1:5173\nARCHITEKT_TEST_USER_ID=${users[0]}\n`, { mode: 0o600 })
-  edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: 'ignore' })
+  // Instrument only the disposable CI copy, logging booleans rather than URLs or credentials.
+  const fixturePath = `${EDGE_TEST_DIR}/supabase/functions/workshop-fixture/index.ts`
+  const fixtureSource = await readFile(fixturePath, 'utf8')
+  const marker = 'const localOnly = localUrl(projectUrl || undefined) && localUrl(allowedOrigin || undefined)'
+  if (!fixtureSource.includes(marker)) throw new Error('Fixture locality check not found')
+  await writeFile(fixturePath, fixtureSource.replace(marker, marker + "\\nconsole.log('FIXTURE_LOCALITY_CHECK', localUrl(projectUrl || undefined), localUrl(allowedOrigin || undefined))"))
+  edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: ['ignore', 'pipe', 'pipe'] })
+  const diagnostics = new Set()
+  for (const stream of [edge.stdout, edge.stderr]) stream.on('data', (chunk) => {
+    for (const match of chunk.toString().matchAll(/FIXTURE_LOCALITY_CHECK (?:true|false) (?:true|false)/g)) diagnostics.add(match[0])
+  })
   const endpoint = `${API_URL}/functions/v1/workshop-fixture`
   const send = (token, { origin = 'http://127.0.0.1:5173', body = '{"transcript":"HR sprawdza dane"}', method = 'POST' } = {}) => fetch(endpoint, {
     method, headers: { apikey: ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}), Origin: origin, 'Content-Type': 'application/json' }, ...(method === 'POST' ? { body } : {}),
   })
   let ready = false
+  let lastStatus = 'no response'
   for (let i = 0; i < 120; i++) {
-    try { if ((await send(tokens[0], { body: '{}' })).status === 400) { ready = true; break } } catch { /* runtime starting */ }
+    try { lastStatus = (await send(tokens[0], { body: '{}' })).status; if (lastStatus === 400) { ready = true; break } } catch { /* runtime starting */ }
     await delay(500)
   }
-  if (!ready) throw new Error('Local Edge runtime did not become ready')
+  if (!ready) throw new Error(`Local Edge runtime did not become ready; HTTP status: ${lastStatus}; locality: ${[...diagnostics].join(', ') || 'unavailable'}`)
   assert.ok([401, 403].includes((await send()).status), 'missing token')
   assert.equal((await send(tokens[1])).status, 403, 'other account')
   assert.equal((await send(tokens[0], { origin: 'http://not-allowed.test' })).status, 403, 'foreign origin')
