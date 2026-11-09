@@ -18,7 +18,7 @@ window.fetch = async (input, init) => {
   return realFetch(input, { ...init, headers })
 }
 
-function LocalTestApp() {
+export default function LocalTestApp() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')

@@ -7,3 +7,9 @@ Status: eksperyment testowy, SEC-04 nadal otwarty. Test używa wyłącznie tymcz
 Scenariusz ma sprawdzić dozwolone i obce konto, brak tokenu, logowanie, przejście warsztat → analiza → zatwierdzenie → AS-IS → zapis → otwarcie z biblioteki, równoczesne rezerwacje, limit, awarię tabeli i kontynuację pracy ręcznej. Awaria połączenia weryfikatora Auth jest sprawdzana przez próbę połączenia z niedostępnym lokalnym portem, a brak łączności przeglądarki z logowaniem przez blokadę sieci w Playwright. Nie są to testy awarii rzeczywistej usługi zdalnej.
 
 Wynik tego scenariusza jest potwierdzony dopiero po pomyślnym przebiegu workflow dla konkretnego commitu. Nie sprawdza on produkcyjnego wdrożenia, RLS, MFA, ochrony kluczy dostawcy AI, budżetu u dostawcy, rzeczywistych danych klientów ani bezpieczeństwa endpointu publicznego. Przed zamknięciem SEC-04 należy przygotować i przetestować docelową implementację, ograniczenia nadużyć i kosztów, obsługę sesji oraz ocenę bezpieczeństwa; dane warsztatowe w localStorage wymagają osobnej oceny.
+
+## Pierwszy wynik
+
+[Test integracji w CI](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/42572954773) dla `d3353bb6870119b601f741ed41e9c58ff248671d`: sukces, w tym scenariusz Chromium. W tym samym commicie lint wykrył brak eksportu komponentu testowego; poprawkę należy sprawdzić osobno na kolejnym commicie. Wynik nie zamyka SEC-04.
+
+Ograniczenia interfejsu zaobserwowane w teście: komunikat o limicie mówi o 12 próbach na godzinę, choć licznik w tej fiksturze ma limit 3; komunikat błędu licznika opisuje go jako lokalny, choć fikstura używa PostgreSQL. Brak rozróżnienia odmowy dostępu od niedostępności Auth w eksperymentalnej weryfikacji. Nie traktować tych komunikatów jako opisu docelowej bramki.
