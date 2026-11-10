@@ -59,6 +59,7 @@ jobs:
           node experiments/supabase-auth/local-stack.smoke.mjs
           node experiments/supabase-auth/quota-postgres.smoke.mjs
           node experiments/supabase-auth/ai-quota-postgres.smoke.mjs
+          node experiments/supabase-auth/ai-concurrency-postgres.smoke.mjs
           node experiments/supabase-auth/browser-integration.mjs
           node experiments/supabase-auth/edge-runtime.smoke.mjs
           node experiments/supabase-auth/ai-edge-runtime.smoke.mjs
