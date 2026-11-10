@@ -36,7 +36,7 @@ try {
   const originalImport = '../../../server/analyzeWorkshop.js'
   if (!source.includes(originalImport)) throw Error('ADAPTER_IMPORT_NOT_FOUND')
   await writeFile(indexPath, source.replace(originalImport, './fake-analyzer.js'))
-  await writeFile(`${EDGE_TEST_DIR}/supabase/functions/workshop-ai/fake-analyzer.js`, "export async function analyzeWorkshop() { return { steps: [], roles: [], decisions: [], questions: [] } }\\n")
+  await writeFile(`${EDGE_TEST_DIR}/supabase/functions/workshop-ai/fake-analyzer.js`, "export async function analyzeWorkshop() { return { steps: [], roles: [], decisions: [], questions: [] } }\n")
   await writeFile(envFile, `ARCHITEKT_AI_ENABLED=true\nARCHITEKT_AI_ORIGIN=http://127.0.0.1:5173\nARCHITEKT_AI_OWNER_ID=${users[0]}\nOPENAI_API_KEY=fake-ci-only\n`, { mode: 0o600 })
   edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: 'ignore' })
   const endpoint = `${API_URL}/functions/v1/workshop-ai`
