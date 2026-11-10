@@ -19,7 +19,7 @@ jobs:
           node-version: '22'
           cache: npm
       - name: SEC-04 HTTP and persistent quota smoke tests (no npm or API key)
-        run: node --test server/security.smoke.mjs server/persistentUsage.smoke.mjs
+        run: node --test server/security.smoke.mjs server/persistentUsage.smoke.mjs experiments/supabase-auth/ai-handler.smoke.mjs
       - name: Install locked dependencies
         run: npm ci
       - name: Unit and integration tests

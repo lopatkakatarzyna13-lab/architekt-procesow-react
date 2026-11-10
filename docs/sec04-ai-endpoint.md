@@ -1,0 +1,5 @@
+# SEC-04 — uwierzytelniony endpoint AI (kod do przeglądu)
+
+Kod przygotowany na gałęzi rozwojowej; nie wdrożono go ani nie wykonano migracji. Endpoint domyślnie wyłączony, wymaga jawnej konfiguracji, weryfikuje token przez Supabase Auth i porównuje identyfikator z listą jednego właściciela. Przed wywołaniem istniejącego adaptera rezerwuje licznik atomowo w PostgreSQL. Rezerwacja obejmuje również nieudane wywołania. Treść żądania ograniczono do 120 000 bajtów i 20 000 znaków, a błędy nie ujawniają danych dostawcy.
+
+SQL w experiments/supabase-auth/ai-quota-review.sql to projekt do przeglądu, nie migracja uruchomiona na hoście. Limit 10 prób na dzień UTC jest przykładowy i nie jest gwarancją limitu kosztów ani równoczesności; wymaga decyzji i niezależnego limitu u dostawcy. Brak jeszcze integracji aplikacji, testu runtime Edge i testu ścieżki z rzeczywistym dostawcą, oceny RLS i konfiguracji, limitu równoległości, obsługi sesji w interfejsie oraz końcowej oceny bezpieczeństwa. SEC-04 pozostaje otwarty. Nie używać rzeczywistych danych klientów. Nie wdrażać bez osobnej zgody.
