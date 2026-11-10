@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, cp, writeFile, unlink } from 'node:fs/promises'
+import { mkdir, cp, readFile, writeFile, unlink } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createClient } from '@supabase/supabase-js'
 const { API_URL, DB_URL, ANON_KEY, SERVICE_ROLE_KEY, EDGE_TEST_DIR } = process.env
@@ -30,8 +30,13 @@ try {
   await exec('psql', [DB_URL, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', 'experiments/supabase-auth/ai-quota-review.sql'])
   await mkdir(`${EDGE_TEST_DIR}/supabase/functions`, { recursive: true })
   await cp('supabase/functions/workshop-ai', `${EDGE_TEST_DIR}/supabase/functions/workshop-ai`, { recursive: true })
-  await mkdir(`${EDGE_TEST_DIR}/server`, { recursive: true })
-  await writeFile(`${EDGE_TEST_DIR}/server/analyzeWorkshop.js`, "export async function analyzeWorkshop() { return { steps: [], roles: [], decisions: [], questions: [] } }\\n")
+  // Redirect only the disposable copy to a stub inside the Edge runtime mount.
+  const indexPath = `${EDGE_TEST_DIR}/supabase/functions/workshop-ai/index.ts`
+  const source = await readFile(indexPath, 'utf8')
+  const originalImport = '../../../server/analyzeWorkshop.js'
+  if (!source.includes(originalImport)) throw Error('ADAPTER_IMPORT_NOT_FOUND')
+  await writeFile(indexPath, source.replace(originalImport, './fake-analyzer.js'))
+  await writeFile(`${EDGE_TEST_DIR}/supabase/functions/workshop-ai/fake-analyzer.js`, "export async function analyzeWorkshop() { return { steps: [], roles: [], decisions: [], questions: [] } }\\n")
   await writeFile(envFile, `ARCHITEKT_AI_ENABLED=true\nARCHITEKT_AI_ORIGIN=http://127.0.0.1:5173\nARCHITEKT_AI_OWNER_ID=${users[0]}\nOPENAI_API_KEY=fake-ci-only\n`, { mode: 0o600 })
   edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: 'ignore' })
   const endpoint = `${API_URL}/functions/v1/workshop-ai`
