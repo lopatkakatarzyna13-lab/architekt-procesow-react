@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { mkdir, cp, rename, writeFile, unlink } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createClient } from '@supabase/supabase-js'
+import { chromium } from 'playwright'
 const { API_URL, DB_URL, ANON_KEY, SERVICE_ROLE_KEY, EDGE_TEST_DIR } = process.env
 for (const value of [API_URL, DB_URL]) if (!value || !['localhost', '127.0.0.1', '[::1]'].includes(new URL(value).hostname)) throw Error('LOCAL_ONLY')
 if (!ANON_KEY || !SERVICE_ROLE_KEY || !EDGE_TEST_DIR) throw Error('MISSING_CONFIG')
@@ -16,7 +17,7 @@ const client = createClient(API_URL, ANON_KEY, opts)
 const users = [], tokens = []
 const password = 'fictional-password-ci-948!'
 const envFile = `${EDGE_TEST_DIR}/ai-test.env`
-let edge
+let edge, vite, browser
 try {
   for (const email of ['ai-owner@example.test', 'ai-other@example.test']) {
     const u = await admin.auth.admin.createUser({ email, password, email_confirm: true })
@@ -128,10 +129,57 @@ await import('./entry.ts')
     assert.equal(observed.filter((r) => r.status === 429 && r.error === 'LIMIT_REACHED').length, 3)
     assert.equal(used, '10')
   }
+  // Real app + in-memory Supabase session + actual Edge entry and adapter.
+  await query('DELETE FROM public.architekt_ai_quota')
+  vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
+    env: { ...process.env, VITE_SUPABASE_URL: API_URL, VITE_SUPABASE_PUBLISHABLE_KEY: ANON_KEY, VITE_WORKSHOP_AI_MODE: 'supabase', VITE_WORKSHOP_AI_ENABLED: 'true' }, stdio: 'ignore',
+  })
+  let webReady = false
+  for (let i = 0; i < 80; i++) { try { if ((await fetch('http://127.0.0.1:5173/')).ok) { webReady = true; break } } catch { /* wait */ } await delay(250) }
+  if (!webReady) throw Error('VITE_NOT_READY')
+  browser = await chromium.launch({ headless: true })
+  const page = await browser.newPage({ viewport: { width: 1366, height: 900 } })
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.goto('http://127.0.0.1:5173/')
+  await page.getByRole('button', { name: /Dodaj kroki samodzielnie/ }).click()
+  await page.getByLabel(/Nazwa procesu/).fill('Fikcyjny warsztat Edge')
+  await page.getByLabel(/Cel procesu/).fill('Przygotowanie danych')
+  await page.getByLabel(/Co rozpoczyna proces/).fill('Zgłoszenie')
+  await page.getByLabel(/Co kończy proces/).fill('Przekazanie')
+  await page.getByRole('button', { name: /Zapisz zakres i przejdź dalej/ }).click()
+  await page.getByLabel('Tekst rozmowy').fill('Fikcyjny proces')
+  await page.getByRole('button', { name: 'Zapisz transkrypcję' }).click()
+  await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
+  await page.getByText('Zaloguj się, aby uruchomić analizę AI.').waitFor()
+  assert.equal((await query('SELECT count(*) FROM public.architekt_ai_quota')).stdout.trim(), '0')
+  await page.getByLabel('E-mail do analizy AI').fill('ai-owner@example.test')
+  await page.getByLabel('Hasło do analizy AI').fill(password)
+  await page.getByRole('button', { name: 'Zaloguj do analizy AI' }).click()
+  await page.getByText('Zalogowano do analizy AI.').waitFor()
+  await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
+  assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), 'Fikcyjny proces')
+  assert.equal((await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim(), '1')
+  await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
+  await page.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }).check()
+  await page.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
+  await page.getByText('Proces AS-IS został zapisany').waitFor()
+  await page.getByRole('button', { name: /Nowy proces/ }).click()
+  await page.evaluate(() => sessionStorage.setItem('architekt-procesow-screen-to-open', 'processes'))
+  await page.reload()
+  await page.getByRole('button', { name: 'Otwórz proces' }).click()
+  assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), 'Fikcyjny proces')
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps.map((item) => item.name)), ['Fikcyjny proces'])
+  assert.ok(await page.getByRole('button', { name: 'Zaloguj do analizy AI' }).isVisible(), 'session must not persist across reload')
+  await browser.close(); browser = null
+  vite.kill('SIGTERM'); vite = null
+  console.log('PASS: browser login, real Edge adapter, fake provider, review, AS-IS save and reopen')
   await query('DROP TABLE public.architekt_ai_quota')
   assert.equal((await send(tokens[0])).status, 503)
   console.log('PASS: real AI Edge entry with local Auth and quota, real adapter and simulated offline provider')
 } finally {
+  if (browser) await browser.close().catch(() => {})
+  if (vite) vite.kill('SIGTERM')
   if (edge) edge.kill('SIGTERM')
   await unlink(envFile).catch(() => {})
   await query('DROP FUNCTION IF EXISTS public.architekt_ai_reserve(); DROP TABLE IF EXISTS public.architekt_ai_quota').catch(() => {})

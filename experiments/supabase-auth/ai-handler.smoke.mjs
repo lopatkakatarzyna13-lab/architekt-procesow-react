@@ -31,3 +31,13 @@ test('authorized request reserves before analysis; provider error is generic', a
   assert.equal(ok.status, 200)
   assert.deepEqual(await ok.json(), { proposal: { steps: [] } })
 })
+
+test('CORS preflight permits the Supabase SDK header only for the configured origin', async () => {
+  const handler = createHandler({ enabled: true, origin: 'https://app.example.test', ownerId: 'owner', verify: async () => 'owner', reserve: async () => true, analyze: async () => ({}) })
+  const allowed = await handler(new Request('https://edge.example.test', { method: 'OPTIONS', headers: { origin: 'https://app.example.test', 'access-control-request-headers': 'authorization, apikey, content-type, x-client-info' } }))
+  assert.equal(allowed.status, 204)
+  assert.match(allowed.headers.get('access-control-allow-headers'), /x-client-info/i)
+  const denied = await handler(new Request('https://edge.example.test', { method: 'OPTIONS', headers: { origin: 'https://other.example.test' } }))
+  assert.equal(denied.status, 403)
+  assert.equal(denied.headers.get('access-control-allow-origin'), null)
+})

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
 import {
   deleteWorkshop, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
   saveWorkshop, saveWorkshopReview, validateWorkshopProposal,
@@ -6,7 +7,7 @@ import {
 
 const categories = { steps: 'Kroki', roles: 'Role', decisions: 'Decyzje', questions: 'Pytania' }
 const emptyReview = () => ({ steps: [], roles: [], decisions: [], questions: [] })
-const analysisAvailable = import.meta.env.DEV || import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true'
+const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
 export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = false, onTransferSteps }) {
   const [initial] = useState(() => {
@@ -16,6 +17,11 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     try { return { ...data, error: '', reviewError: '', ...loadWorkshopReview(localStorage, processId, data.transcript) } }
     catch { return { ...data, error: '', review: null, reviewError: 'Nie można odczytać zapisanej propozycji. Zapis nowej propozycji jest zablokowany.' } }
   })
+  const [aiSession, setAiSession] = useState(null)
+  const [aiEmail, setAiEmail] = useState('')
+  const [aiPassword, setAiPassword] = useState('')
+  const [authMessage, setAuthMessage] = useState('')
+  const [authBusy, setAuthBusy] = useState(false)
   const [readError, setReadError] = useState(initial.error)
   const [reviewLoadError, setReviewLoadError] = useState(initial.reviewError)
   const [staleReview, setStaleReview] = useState(Boolean(initial.stale))
@@ -31,7 +37,29 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   const revision = useRef(0)
   const dirty = transcript !== savedTranscript
 
+  useEffect(() => {
+    if (!workshopAiClient || !analysisAvailable) return undefined
+    const { data } = workshopAiClient.auth.onAuthStateChange((_event, session) => setAiSession(session))
+    return () => data.subscription.unsubscribe()
+  }, [])
   useEffect(() => () => { dirtyRef.current = false }, [dirtyRef])
+  const signInAi = async (event) => {
+    event.preventDefault()
+    if (!workshopAiClient || authBusy) return
+    setAuthBusy(true); setAuthMessage('')
+    try {
+      const { error } = await workshopAiClient.auth.signInWithPassword({ email: aiEmail.trim(), password: aiPassword })
+      setAiPassword('')
+      if (error) setAuthMessage('Nie udało się zalogować. Sprawdź dane lub spróbuj ponownie.')
+    } catch { setAiPassword(''); setAuthMessage('Usługa logowania jest niedostępna.') }
+    finally { setAuthBusy(false) }
+  }
+  const signOutAi = async () => {
+    setAuthBusy(true)
+    try { const { error } = await workshopAiClient.auth.signOut(); if (error) throw error; setAiSession(null); setAuthMessage('Wylogowano z analizy AI.') }
+    catch { setAuthMessage('Nie udało się wylogować. Spróbuj ponownie.') }
+    finally { setAuthBusy(false) }
+  }
   useEffect(() => {
     if (!dirty && !reviewDirty) return undefined
     const warn = (event) => { event.preventDefault(); event.returnValue = '' }
@@ -99,13 +127,14 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     if (!transcript.trim()) { setAnalysisMessage('Najpierw wklej transkrypcję.'); return }
     if (transcript.length > 20_000) { setAnalysisMessage('Do analizy można przekazać maksymalnie 20 000 znaków.'); return }
     if (!replaceReview()) return
+    if (workshopAiRemote && !aiSession) { setAnalysisMessage('Zaloguj się, aby uruchomić analizę AI.'); return }
     if (!window.confirm('Transkrypcja zostanie wysłana do OpenAI w celu analizy. Użycie API może być płatne. Czy chcesz kontynuować?')) return
     const currentRevision = revision.current
     setAnalyzing(true)
     setAnalysisMessage('')
     try {
-      const response = await fetch('/api/analyze-workshop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript }) })
-      const result = await response.json()
+      const response = workshopAiRemote ? await requestWorkshopAnalysis(transcript) : await fetch('/api/analyze-workshop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript }) })
+      const result = workshopAiRemote ? response : await response.json()
       if (!response.ok) {
         if (result.error === 'MISSING_API_KEY') throw new Error('Brakuje konfiguracji klucza API po stronie serwera.')
         if (result.error === 'UNVERIFIED_RESPONSE') throw new Error('Nie udało się potwierdzić fragmentów źródłowych. Spróbuj ponownie.')
@@ -122,6 +151,8 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       else if (validateWorkshopProposal(result.proposal, transcript).length) setAnalysisMessage('Odpowiedź nie przeszła kontroli źródeł. Spróbuj ponownie.')
       else { setAnalysis(result.proposal); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
     } catch (error) {
+      if (error.message === 'AI_LOGIN_REQUIRED') { setAnalysisMessage('Sesja wygasła. Zaloguj się ponownie.'); return }
+      if (error.message === 'AI_NOT_CONFIGURED') { setAnalysisMessage('Analiza AI nie jest skonfigurowana.'); return }
       setAnalysisMessage(error.message.includes('JSON') || error instanceof TypeError ? 'Serwer analizy jest niedostępny. Sprawdź konfigurację.' : error.message)
     } finally { setAnalyzing(false) }
   }
@@ -175,6 +206,16 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       <p>Wklej rozmowę dotyczącą tego procesu. Po kliknięciu „Zapisz transkrypcję” tekst zostanie zapisany w tej przeglądarce. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
       {analysisAvailable && <p>Analiza AI wysyła transkrypcję do OpenAI po Twoim potwierdzeniu. Wpisanie lub zapisanie tekstu nie uruchamia analizy.</p>}
       <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} Wynik wymaga Twojej weryfikacji i nie zmienia automatycznie procesu. Mapa BPMN powstanie w kolejnym etapie.</p>
+      {analysisAvailable && workshopAiRemote && <div>
+        {!workshopAiClient ? <p>Analiza AI nie jest skonfigurowana.</p> : aiSession ? <div><p>Zalogowano do analizy AI.</p><button type="button" disabled={authBusy} onClick={signOutAi}>Wyloguj z analizy AI</button></div> : <form onSubmit={signInAi}>
+          <label htmlFor="ai-email">E-mail do analizy AI</label>
+          <input id="ai-email" type="email" autoComplete="username" value={aiEmail} onChange={(event) => setAiEmail(event.target.value)} required />
+          <label htmlFor="ai-password">Hasło do analizy AI</label>
+          <input id="ai-password" type="password" autoComplete="current-password" value={aiPassword} onChange={(event) => setAiPassword(event.target.value)} required />
+          <button type="submit" disabled={authBusy}>{authBusy ? 'Logowanie…' : 'Zaloguj do analizy AI'}</button>
+        </form>}
+        {authMessage && <p role="status">{authMessage}</p>}
+      </div>}
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
       <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(readError)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
       <div className="workshop-actions">

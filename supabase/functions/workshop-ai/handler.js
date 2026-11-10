@@ -5,7 +5,7 @@ export function createHandler({ enabled, origin, ownerId, verify, reserve, analy
   return async (req) => {
     if (!enabled || !origin || !ownerId || !verify || !reserve || !analyze) return reply(503, 'NOT_CONFIGURED')
     if (req.headers.get('origin') !== origin) return reply(403, 'FORBIDDEN')
-    const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Vary': 'Origin' }
+    const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Vary': 'Origin' }
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'POST, OPTIONS' } })
     if (req.method !== 'POST') return reply(405, 'METHOD_NOT_ALLOWED', cors)
     if (!/^application\/json(?:\s*;|$)/i.test(req.headers.get('content-type') || '')) return reply(415, 'INVALID_REQUEST', cors)
