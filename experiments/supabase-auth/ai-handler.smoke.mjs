@@ -50,3 +50,36 @@ test('release failure fails closed and does not return the proposal', async () =
   assert.equal(response.status, 503)
   assert.deepEqual(await response.json(), { error: 'USAGE_STORAGE_UNAVAILABLE' })
 })
+
+test('client disconnect during analysis keeps the lease until the provider completes', async () => {
+  let held = false
+  let releaseCount = 0
+  let resolveProvider
+  let providerStarted
+  const started = new Promise((resolve) => { providerStarted = resolve })
+  const pendingProvider = new Promise((resolve) => { resolveProvider = resolve })
+  const handler = createHandler({ ...good,
+    reserve: async () => {
+      if (held) return { status: 'BUSY' }
+      held = true
+      return acquired()
+    },
+    release: async () => { held = false; releaseCount += 1; return true },
+    analyze: async () => { providerStarted(); return pendingProvider },
+  })
+  const controller = new AbortController()
+  const firstRequest = new Request('https://example.test', { method: 'POST', signal: controller.signal, headers: { origin, authorization: 'Bearer test', 'content-type': 'application/json' }, body: '{"transcript":"Fikcyjny proces"}' })
+  const first = handler(firstRequest)
+  await started
+  controller.abort()
+  assert.equal(firstRequest.signal.aborted, true)
+  assert.equal(held, true)
+  const second = await handler(req())
+  assert.equal(second.status, 429)
+  assert.deepEqual(await second.json(), { error: 'BUSY' })
+  assert.equal(releaseCount, 0)
+  resolveProvider({ steps: [] })
+  assert.equal((await first).status, 200)
+  assert.equal(releaseCount, 1)
+  assert.equal(held, false)
+})
