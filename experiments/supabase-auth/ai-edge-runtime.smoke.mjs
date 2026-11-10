@@ -105,18 +105,24 @@ await import('./entry.ts')
   const first = await send(tokens[0])
   assert.equal(first.status, 200)
   assert.deepEqual((await first.json()).proposal, { steps: [{ text: 'Fikcyjny proces', status: 'supported', evidence: 'Fikcyjny proces' }], roles: [], decisions: [], questions: [] })
-  const results = await Promise.all(Array.from({ length: 12 }, () => send(tokens[0])))
-  const observed = await Promise.all(results.map(async (r) => {
-    const body = await r.json().catch(() => ({}))
-    const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED']
-    return { status: r.status, error: safeErrors.includes(body.error) ? body.error : body.error ? 'OTHER' : undefined }
-  }))
-  const used = (await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim()
-  const counts = observed.reduce((acc, r) => { const key = `${r.status}:${r.error || 'none'}`; acc[key] = (acc[key] || 0) + 1; return acc }, {})
-  console.log('Concurrent response counts:', JSON.stringify(counts), 'quota used:', used)
-  assert.equal(observed.filter((r) => r.status === 200).length, 9)
-  assert.equal(observed.filter((r) => r.status === 429 && r.error === 'LIMIT_REACHED').length, 3)
-  assert.equal(used, '10')
+  for (let round = 1; round <= 5; round++) {
+    if (round > 1) {
+      await query('DELETE FROM public.architekt_ai_quota')
+      assert.equal((await send(tokens[0])).status, 200)
+    }
+    const results = await Promise.all(Array.from({ length: 12 }, () => send(tokens[0])))
+    const observed = await Promise.all(results.map(async (r) => {
+      const body = await r.json().catch(() => ({}))
+      const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED']
+      return { status: r.status, error: safeErrors.includes(body.error) ? body.error : body.error ? 'OTHER' : undefined }
+    }))
+    const used = (await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim()
+    const counts = observed.reduce((acc, r) => { const key = `${r.status}:${r.error || 'none'}`; acc[key] = (acc[key] || 0) + 1; return acc }, {})
+    console.log('Round', round, 'concurrent response counts:', JSON.stringify(counts), 'quota used:', used)
+    assert.equal(observed.filter((r) => r.status === 200).length, 9)
+    assert.equal(observed.filter((r) => r.status === 429 && r.error === 'LIMIT_REACHED').length, 3)
+    assert.equal(used, '10')
+  }
   await query('DROP TABLE public.architekt_ai_quota')
   assert.equal((await send(tokens[0])).status, 503)
   console.log('PASS: real AI Edge entry with local Auth and quota, real adapter and simulated offline provider')
