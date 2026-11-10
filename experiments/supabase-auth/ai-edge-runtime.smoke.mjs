@@ -38,18 +38,41 @@ try {
   await writeFile(`${functionDir}/index.ts`, `
 const realFetch = globalThis.fetch
 const fakeProposal = { steps: [{ text: 'Fikcyjny proces', status: 'supported', evidence: 'Fikcyjny proces' }], roles: [], decisions: [], questions: [] }
-globalThis.fetch = (input, init) => {
+globalThis.fetch = async (input, init) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
   if (url === 'https://api.openai.com/v1/responses') {
-    return Promise.resolve(Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(fakeProposal) }] }] }))
+    return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(fakeProposal) }] }] })
   }
   if (!url.startsWith(Deno.env.get('SUPABASE_URL') + '/')) throw new Error('TEST_NETWORK_BLOCKED')
-  return realFetch(input, init)
+  try {
+    const response = await realFetch(input, init)
+    if (url.endsWith('/rest/v1/rpc/architekt_ai_reserve') && !response.ok) {
+      const body = await response.clone().json().catch(() => ({}))
+      const code = typeof body.code === 'string' && /^[A-Z0-9]{5,8}$/.test(body.code) ? body.code : 'unavailable'
+      console.log('TEST_QUOTA_FAILURE', response.status, code)
+    }
+    return response
+  } catch (error) {
+    console.log('TEST_NETWORK_FAILURE', error?.name === 'AbortError' || error?.name === 'TimeoutError' ? error.name : 'other')
+    throw error
+  }
 }
 await import('./entry.ts')
 `)
   await writeFile(envFile, `ARCHITEKT_AI_ENABLED=true\nARCHITEKT_AI_ORIGIN=http://127.0.0.1:5173\nARCHITEKT_AI_OWNER_ID=${users[0]}\nOPENAI_API_KEY=fake-ci-only\n`, { mode: 0o600 })
-  edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: 'ignore' })
+  edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: ['ignore', 'pipe', 'pipe'] })
+  // Forward only explicitly safe diagnostics, never runtime request logs or tokens.
+  for (const stream of [edge.stdout, edge.stderr]) {
+    let pending = ''
+    stream.on('data', (chunk) => {
+      pending += chunk.toString()
+      const lines = pending.split('\n'); pending = lines.pop().slice(-1000)
+      for (const line of lines) {
+        const match = line.match(/TEST_(?:QUOTA_FAILURE [0-9]{3} (?:[A-Z0-9]{5,8}|unavailable)|NETWORK_FAILURE (?:AbortError|TimeoutError|other))/)
+        if (match) console.log(match[0])
+      }
+    })
+  }
   const endpoint = `${API_URL}/functions/v1/workshop-ai`
   const send = (token, body = '{"transcript":"Fikcyjny proces"}') => fetch(endpoint, { method: 'POST', headers: { apikey: ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}), Origin: 'http://127.0.0.1:5173', 'Content-Type': 'application/json' }, body })
   let ready = false
