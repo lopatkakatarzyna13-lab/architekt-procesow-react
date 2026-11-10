@@ -1,9 +1,9 @@
 // Server-side request boundary. No client-supplied identity or limits are trusted.
 const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }
 const reply = (status, error, cors = {}) => new Response(JSON.stringify({ error }), { status, headers: { ...headers, ...cors } })
-export function createHandler({ enabled, origin, ownerId, verify, reserve, analyze }) {
+export function createHandler({ enabled, origin, ownerId, verify, reserve, release, analyze }) {
   return async (req) => {
-    if (!enabled || !origin || !ownerId || !verify || !reserve || !analyze) return reply(503, 'NOT_CONFIGURED')
+    if (!enabled || !origin || !ownerId || !verify || !reserve || !release || !analyze) return reply(503, 'NOT_CONFIGURED')
     if (req.headers.get('origin') !== origin) return reply(403, 'FORBIDDEN')
     const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Vary': 'Origin' }
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'POST, OPTIONS' } })
@@ -31,12 +31,15 @@ export function createHandler({ enabled, origin, ownerId, verify, reserve, analy
       if (!input || Array.isArray(input) || typeof input !== 'object' || Object.keys(input).length !== 1 || typeof input.transcript !== 'string' || !input.transcript.trim() || input.transcript.length > 20000) return reply(400, 'INVALID_REQUEST', cors)
       let admission
       try { admission = await reserve() } catch { return reply(503, 'USAGE_STORAGE_UNAVAILABLE', cors) }
-      if (admission === false) return reply(429, 'LIMIT_REACHED', cors)
-      if (admission !== true) return reply(503, 'USAGE_STORAGE_UNAVAILABLE', cors)
-      try {
-        const proposal = await analyze(input.transcript)
-        return new Response(JSON.stringify({ proposal }), { status: 200, headers: { ...headers, ...cors } })
-      } catch { return reply(503, 'ANALYSIS_FAILED', cors) }
+      if (admission?.status === 'LIMIT_REACHED') return reply(429, 'LIMIT_REACHED', cors)
+      if (admission?.status === 'BUSY') return reply(429, 'BUSY', cors)
+      if (admission?.status !== 'ACQUIRED' || typeof admission.lease_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(admission.lease_id)) return reply(503, 'USAGE_STORAGE_UNAVAILABLE', cors)
+      let proposal, failed = false, released = false
+      try { proposal = await analyze(input.transcript) } catch { failed = true }
+      try { released = (await release(admission.lease_id)) === true } catch { /* fail closed until lease expires */ }
+      if (!released) return reply(503, 'USAGE_STORAGE_UNAVAILABLE', cors)
+      if (failed) return reply(503, 'ANALYSIS_FAILED', cors)
+      return new Response(JSON.stringify({ proposal }), { status: 200, headers: { ...headers, ...cors } })
     } catch { return reply(400, 'INVALID_REQUEST', cors) }
   }
 }

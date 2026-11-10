@@ -27,8 +27,8 @@ try {
     if (login.error || !login.data.session?.access_token) throw Error('LOGIN_FAILED')
     tokens.push(login.data.session.access_token)
   }
-  await query('DROP FUNCTION IF EXISTS public.architekt_ai_reserve(); DROP TABLE IF EXISTS public.architekt_ai_quota')
-  await exec('psql', [DB_URL, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', 'experiments/supabase-auth/ai-quota-review.sql'])
+  await query('DROP FUNCTION IF EXISTS public.architekt_ai_acquire(); DROP FUNCTION IF EXISTS public.architekt_ai_release(uuid); DROP TABLE IF EXISTS public.architekt_ai_admission')
+  await exec('psql', [DB_URL, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', 'experiments/supabase-auth/ai-concurrency-review.sql'])
   await mkdir(`${EDGE_TEST_DIR}/supabase/functions`, { recursive: true })
   await cp('supabase/functions/workshop-ai', `${EDGE_TEST_DIR}/supabase/functions/workshop-ai`, { recursive: true })
   await cp('supabase/functions/_shared', `${EDGE_TEST_DIR}/supabase/functions/_shared`, { recursive: true })
@@ -47,14 +47,14 @@ globalThis.fetch = async (input, init) => {
   if (!url.startsWith(Deno.env.get('SUPABASE_URL') + '/')) throw new Error('TEST_NETWORK_BLOCKED')
   try {
     const response = await realFetch(input, init)
-    if (url.endsWith('/rest/v1/rpc/architekt_ai_reserve') && !response.ok) {
+    if (url.endsWith('/rest/v1/rpc/architekt_ai_acquire') && !response.ok) {
       const body = await response.clone().json().catch(() => ({}))
       const code = typeof body.code === 'string' && /^[A-Z0-9]{5,8}$/.test(body.code) ? body.code : 'unavailable'
       console.log('TEST_QUOTA_FAILURE', response.status, code)
     }
     return response
   } catch (error) {
-    const kind = url.includes('/rpc/architekt_ai_reserve') ? 'QUOTA' : 'AUTH'
+    const kind = url.includes('/rpc/architekt_ai_acquire') ? 'QUOTA' : 'AUTH'
     const safeName = ['AbortError', 'TimeoutError', 'TypeError', 'Error'].includes(error?.name) ? error.name : 'other'
     const safeCause = ['ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT'].includes(error?.cause?.code) ? error.cause.code : 'unknown'
     console.log('TEST_NETWORK_FAILURE', kind, safeName, safeCause)
@@ -105,14 +105,14 @@ await import('./entry.ts')
   if (!ready) throw Error(`EDGE_NOT_READY: ${[...seen].join(',')}; serve exit: ${exitCode}`)
   assert.ok([401, 403].includes((await send()).status))
   assert.equal((await send(tokens[1])).status, 403)
-  assert.equal((await query('SELECT count(*) FROM public.architekt_ai_quota')).stdout.trim(), '0')
+  assert.equal((await query('SELECT count(*) FROM public.architekt_ai_admission')).stdout.trim(), '0')
   const first = await send(tokens[0])
   const firstBody = await first.json().catch(() => ({}))
   if (first.status !== 200) console.log('FIRST_REQUEST_FAILED', first.status, ['USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED'].includes(firstBody.error) ? firstBody.error : 'OTHER')
   assert.equal(first.status, 200)
   assert.deepEqual(firstBody.proposal, { steps: [{ text: 'Fikcyjny proces', status: 'supported', evidence: 'Fikcyjny proces' }], roles: [], decisions: [], questions: [] })
   // Real app + in-memory Supabase session + actual Edge entry and adapter.
-  await query('DELETE FROM public.architekt_ai_quota')
+  await query('DELETE FROM public.architekt_ai_admission')
   vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
     env: { ...process.env, VITE_SUPABASE_URL: API_URL, VITE_SUPABASE_PUBLISHABLE_KEY: ANON_KEY, VITE_WORKSHOP_AI_MODE: 'supabase', VITE_WORKSHOP_AI_ENABLED: 'true' }, stdio: 'ignore',
   })
@@ -133,14 +133,14 @@ await import('./entry.ts')
   await page.getByRole('button', { name: 'Zapisz transkrypcję' }).click()
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
   await page.getByText('Zaloguj się, aby uruchomić analizę AI.').waitFor()
-  assert.equal((await query('SELECT count(*) FROM public.architekt_ai_quota')).stdout.trim(), '0')
+  assert.equal((await query('SELECT count(*) FROM public.architekt_ai_admission')).stdout.trim(), '0')
   await page.getByLabel('E-mail do analizy AI').fill('ai-owner@example.test')
   await page.getByLabel('Hasło do analizy AI').fill(password)
   await page.getByRole('button', { name: 'Zaloguj do analizy AI' }).click()
   await page.getByText('Zalogowano do analizy AI.').waitFor()
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
   assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), 'Fikcyjny proces')
-  assert.equal((await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim(), '1')
+  assert.equal((await query('SELECT used FROM public.architekt_ai_admission')).stdout.trim(), '1')
   await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
   await page.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }).check()
   await page.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }).click()
@@ -158,7 +158,7 @@ await import('./entry.ts')
   console.log('PASS: browser login, real Edge adapter, fake provider, review, AS-IS save and reopen')
   for (let round = 1; round <= 5; round++) {
     if (round >= 1) {
-      await query('DELETE FROM public.architekt_ai_quota')
+      await query('DELETE FROM public.architekt_ai_admission')
       assert.equal((await send(tokens[0])).status, 200)
     }
     const results = await Promise.allSettled(Array.from({ length: 12 }, () => send(tokens[0])))
@@ -169,17 +169,22 @@ await import('./entry.ts')
       }
       const r = result.value
       const body = await r.json().catch(() => ({}))
-      const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED']
+      const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED', 'BUSY']
       return { status: r.status, error: safeErrors.includes(body.error) ? body.error : body.error ? 'OTHER' : undefined }
     }))
-    const used = (await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim()
+    const used = (await query('SELECT used FROM public.architekt_ai_admission')).stdout.trim()
     const counts = observed.reduce((acc, r) => { const key = `${r.status}:${r.error || 'none'}`; acc[key] = (acc[key] || 0) + 1; return acc }, {})
     console.log('Round', round, 'concurrent response counts:', JSON.stringify(counts), 'quota used:', used)
-    assert.equal(observed.filter((r) => r.status === 200).length, 9)
-    assert.equal(observed.filter((r) => r.status === 429 && r.error === 'LIMIT_REACHED').length, 3)
-    assert.equal(used, '10')
+    assert.equal(observed.length, 12)
+    assert.ok(observed.every((r) => r.status === 200 || (r.status === 429 && ['BUSY', 'LIMIT_REACHED'].includes(r.error))), JSON.stringify(counts))
+    assert.equal(Number(used), 1 + observed.filter((r) => r.status === 200).length)
+    assert.ok(Number(used) <= 10)
+    for (let i = Number(used); i < 10; i++) assert.equal((await send(tokens[0])).status, 200)
+    const capped = await send(tokens[0])
+    assert.equal(capped.status, 429)
+    assert.equal((await capped.json()).error, 'LIMIT_REACHED')
   }
-  await query('DROP TABLE public.architekt_ai_quota')
+  await query('DROP TABLE public.architekt_ai_admission')
   assert.equal((await send(tokens[0])).status, 503)
   console.log('PASS: real AI Edge entry with local Auth and quota, real adapter and simulated offline provider')
 } finally {
@@ -187,6 +192,6 @@ await import('./entry.ts')
   if (vite) vite.kill('SIGTERM')
   if (edge) edge.kill('SIGTERM')
   await unlink(envFile).catch(() => {})
-  await query('DROP FUNCTION IF EXISTS public.architekt_ai_reserve(); DROP TABLE IF EXISTS public.architekt_ai_quota').catch(() => {})
+  await query('DROP FUNCTION IF EXISTS public.architekt_ai_acquire(); DROP FUNCTION IF EXISTS public.architekt_ai_release(uuid); DROP TABLE IF EXISTS public.architekt_ai_admission').catch(() => {})
   for (const id of users) await admin.auth.admin.deleteUser(id).catch(() => {})
 }

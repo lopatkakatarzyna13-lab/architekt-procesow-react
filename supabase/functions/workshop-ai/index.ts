@@ -19,8 +19,15 @@ Deno.serve(createHandler({
     return (await response.json()).id
   },
   reserve: async () => {
-    const response = await fetch(`${projectUrl}/rest/v1/rpc/architekt_ai_reserve`, {
+    const response = await fetch(`${projectUrl}/rest/v1/rpc/architekt_ai_acquire`, {
       method: 'POST', headers: { apikey: serviceKey!, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw new Error('USAGE_STORAGE_UNAVAILABLE')
+    return await response.json()
+  },
+  release: async (leaseId: string) => {
+    const response = await fetch(`${projectUrl}/rest/v1/rpc/architekt_ai_release`, {
+      method: 'POST', headers: { apikey: serviceKey!, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_lease_id: leaseId }), signal: AbortSignal.timeout(5000),
     })
     if (!response.ok) throw new Error('USAGE_STORAGE_UNAVAILABLE')
     return await response.json()
