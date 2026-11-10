@@ -54,7 +54,10 @@ globalThis.fetch = async (input, init) => {
     }
     return response
   } catch (error) {
-    console.log('TEST_NETWORK_FAILURE', error?.name === 'AbortError' || error?.name === 'TimeoutError' ? error.name : 'other')
+    const kind = url.includes('/rpc/architekt_ai_reserve') ? 'QUOTA' : 'AUTH'
+    const safeName = ['AbortError', 'TimeoutError', 'TypeError', 'Error'].includes(error?.name) ? error.name : 'other'
+    const safeCause = ['ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT'].includes(error?.cause?.code) ? error.cause.code : 'unknown'
+    console.log('TEST_NETWORK_FAILURE', kind, safeName, safeCause)
     throw error
   }
 }
@@ -69,7 +72,7 @@ await import('./entry.ts')
       pending += chunk.toString()
       const lines = pending.split('\n'); pending = lines.pop().slice(-1000)
       for (const line of lines) {
-        const match = line.match(/TEST_(?:QUOTA_FAILURE [0-9]{3} (?:[A-Z0-9]{5,8}|unavailable)|NETWORK_FAILURE (?:AbortError|TimeoutError|other))/)
+        const match = line.match(/TEST_(?:QUOTA_FAILURE [0-9]{3} (?:[A-Z0-9]{5,8}|unavailable)|NETWORK_FAILURE (?:AUTH|QUOTA) (?:AbortError|TimeoutError|TypeError|Error|other) (?:ECONNRESET|ECONNREFUSED|EPIPE|ETIMEDOUT|unknown))/)
         if (match) console.log(match[0])
       }
     })
@@ -104,31 +107,10 @@ await import('./entry.ts')
   assert.equal((await send(tokens[1])).status, 403)
   assert.equal((await query('SELECT count(*) FROM public.architekt_ai_quota')).stdout.trim(), '0')
   const first = await send(tokens[0])
+  const firstBody = await first.json().catch(() => ({}))
+  if (first.status !== 200) console.log('FIRST_REQUEST_FAILED', first.status, ['USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED'].includes(firstBody.error) ? firstBody.error : 'OTHER')
   assert.equal(first.status, 200)
-  assert.deepEqual((await first.json()).proposal, { steps: [{ text: 'Fikcyjny proces', status: 'supported', evidence: 'Fikcyjny proces' }], roles: [], decisions: [], questions: [] })
-  for (let round = 1; round <= 5; round++) {
-    if (round > 1) {
-      await query('DELETE FROM public.architekt_ai_quota')
-      assert.equal((await send(tokens[0])).status, 200)
-    }
-    const results = await Promise.allSettled(Array.from({ length: 12 }, () => send(tokens[0])))
-    const observed = await Promise.all(results.map(async (result) => {
-      if (result.status === 'rejected') {
-        const code = result.reason?.cause?.code === 'UND_ERR_SOCKET' ? 'SOCKET_CLOSED' : 'NETWORK_ERROR'
-        return { status: 0, error: code }
-      }
-      const r = result.value
-      const body = await r.json().catch(() => ({}))
-      const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED']
-      return { status: r.status, error: safeErrors.includes(body.error) ? body.error : body.error ? 'OTHER' : undefined }
-    }))
-    const used = (await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim()
-    const counts = observed.reduce((acc, r) => { const key = `${r.status}:${r.error || 'none'}`; acc[key] = (acc[key] || 0) + 1; return acc }, {})
-    console.log('Round', round, 'concurrent response counts:', JSON.stringify(counts), 'quota used:', used)
-    assert.equal(observed.filter((r) => r.status === 200).length, 9)
-    assert.equal(observed.filter((r) => r.status === 429 && r.error === 'LIMIT_REACHED').length, 3)
-    assert.equal(used, '10')
-  }
+  assert.deepEqual(firstBody.proposal, { steps: [{ text: 'Fikcyjny proces', status: 'supported', evidence: 'Fikcyjny proces' }], roles: [], decisions: [], questions: [] })
   // Real app + in-memory Supabase session + actual Edge entry and adapter.
   await query('DELETE FROM public.architekt_ai_quota')
   vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
@@ -174,6 +156,29 @@ await import('./entry.ts')
   await browser.close(); browser = null
   vite.kill('SIGTERM'); vite = null
   console.log('PASS: browser login, real Edge adapter, fake provider, review, AS-IS save and reopen')
+  for (let round = 1; round <= 5; round++) {
+    if (round >= 1) {
+      await query('DELETE FROM public.architekt_ai_quota')
+      assert.equal((await send(tokens[0])).status, 200)
+    }
+    const results = await Promise.allSettled(Array.from({ length: 12 }, () => send(tokens[0])))
+    const observed = await Promise.all(results.map(async (result) => {
+      if (result.status === 'rejected') {
+        const code = result.reason?.cause?.code === 'UND_ERR_SOCKET' ? 'SOCKET_CLOSED' : 'NETWORK_ERROR'
+        return { status: 0, error: code }
+      }
+      const r = result.value
+      const body = await r.json().catch(() => ({}))
+      const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED']
+      return { status: r.status, error: safeErrors.includes(body.error) ? body.error : body.error ? 'OTHER' : undefined }
+    }))
+    const used = (await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim()
+    const counts = observed.reduce((acc, r) => { const key = `${r.status}:${r.error || 'none'}`; acc[key] = (acc[key] || 0) + 1; return acc }, {})
+    console.log('Round', round, 'concurrent response counts:', JSON.stringify(counts), 'quota used:', used)
+    assert.equal(observed.filter((r) => r.status === 200).length, 9)
+    assert.equal(observed.filter((r) => r.status === 429 && r.error === 'LIMIT_REACHED').length, 3)
+    assert.equal(used, '10')
+  }
   await query('DROP TABLE public.architekt_ai_quota')
   assert.equal((await send(tokens[0])).status, 503)
   console.log('PASS: real AI Edge entry with local Auth and quota, real adapter and simulated offline provider')
