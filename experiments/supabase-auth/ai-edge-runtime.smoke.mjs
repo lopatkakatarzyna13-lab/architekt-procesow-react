@@ -26,6 +26,7 @@ try {
     if (login.error || !login.data.session?.access_token) throw Error('LOGIN_FAILED')
     tokens.push(login.data.session.access_token)
   }
+  await query('DROP FUNCTION IF EXISTS public.architekt_ai_reserve(); DROP TABLE IF EXISTS public.architekt_ai_quota')
   await exec('psql', [DB_URL, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', 'experiments/supabase-auth/ai-quota-review.sql'])
   await mkdir(`${EDGE_TEST_DIR}/supabase/functions`, { recursive: true })
   await cp('supabase/functions/workshop-ai', `${EDGE_TEST_DIR}/supabase/functions/workshop-ai`, { recursive: true })
