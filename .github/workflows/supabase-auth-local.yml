@@ -72,6 +72,7 @@ jobs:
           set +a
           cd "$GITHUB_WORKSPACE"
           export EDGE_TEST_DIR="$test_dir"
+          node experiments/supabase-auth/db-load-diagnostics.mjs baseline
           node experiments/supabase-auth/local-stack.smoke.mjs
           node experiments/supabase-auth/quota-postgres.smoke.mjs
           node experiments/supabase-auth/ai-quota-postgres.smoke.mjs
@@ -79,3 +80,4 @@ jobs:
           node experiments/supabase-auth/browser-integration.mjs
           node experiments/supabase-auth/edge-runtime.smoke.mjs
           node experiments/supabase-auth/ai-edge-runtime.smoke.mjs
+          node experiments/supabase-auth/db-load-diagnostics.mjs after-integration
