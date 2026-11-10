@@ -65,9 +65,6 @@ try {
     await delay(500)
   }
   if (!ready) throw Error(`EDGE_NOT_READY: ${[...seen].join(',')}; serve exit: ${exitCode}`)
-  const other = await client.auth.signInWithPassword({ email: 'ai-other@example.test', password })
-  if (other.error) throw Error('RELOGIN_FAILED')
-  tokens[1] = other.data.session.access_token
   assert.ok([401, 403].includes((await send()).status))
   assert.equal((await send(tokens[1])).status, 403)
   assert.equal((await query('SELECT count(*) FROM public.architekt_ai_quota')).stdout.trim(), '0')
