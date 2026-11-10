@@ -1,6 +1,6 @@
 // Disabled unless every server-side setting is explicitly configured.
 import { createHandler } from './handler.js'
-import { analyzeWorkshop } from '../../../server/analyzeWorkshop.js'
+import { analyzeWorkshop } from '../_shared/analyzeWorkshop.js'
 
 const projectUrl = Deno.env.get('SUPABASE_URL')
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')

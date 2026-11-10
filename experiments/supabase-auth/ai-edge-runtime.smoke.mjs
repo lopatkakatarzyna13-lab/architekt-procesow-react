@@ -1,8 +1,8 @@
-// Disposable local stack only. The temporary copy of the AI adapter is replaced by a non-network stub.
+// Disposable local stack only. The real adapter runs; only the provider response is simulated.
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, cp, readFile, writeFile, unlink } from 'node:fs/promises'
+import { mkdir, cp, rename, writeFile, unlink } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createClient } from '@supabase/supabase-js'
 const { API_URL, DB_URL, ANON_KEY, SERVICE_ROLE_KEY, EDGE_TEST_DIR } = process.env
@@ -30,13 +30,24 @@ try {
   await exec('psql', [DB_URL, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', 'experiments/supabase-auth/ai-quota-review.sql'])
   await mkdir(`${EDGE_TEST_DIR}/supabase/functions`, { recursive: true })
   await cp('supabase/functions/workshop-ai', `${EDGE_TEST_DIR}/supabase/functions/workshop-ai`, { recursive: true })
-  // Redirect only the disposable copy to a stub inside the Edge runtime mount.
-  const indexPath = `${EDGE_TEST_DIR}/supabase/functions/workshop-ai/index.ts`
-  const source = await readFile(indexPath, 'utf8')
-  const originalImport = '../../../server/analyzeWorkshop.js'
-  if (!source.includes(originalImport)) throw Error('ADAPTER_IMPORT_NOT_FOUND')
-  await writeFile(indexPath, source.replace(originalImport, './fake-analyzer.js'))
-  await writeFile(`${EDGE_TEST_DIR}/supabase/functions/workshop-ai/fake-analyzer.js`, "export async function analyzeWorkshop() { return { steps: [], roles: [], decisions: [], questions: [] } }\n")
+  await cp('supabase/functions/_shared', `${EDGE_TEST_DIR}/supabase/functions/_shared`, { recursive: true })
+  // The original entry and its imports stay intact. The test bootstrap intercepts
+  // the only provider URL before loading the entry, so no paid request is sent.
+  const functionDir = `${EDGE_TEST_DIR}/supabase/functions/workshop-ai`
+  await rename(`${functionDir}/index.ts`, `${functionDir}/entry.ts`)
+  await writeFile(`${functionDir}/index.ts`, `
+const realFetch = globalThis.fetch
+const fakeProposal = { steps: [{ text: 'Fikcyjny proces', status: 'supported', evidence: 'Fikcyjny proces' }], roles: [], decisions: [], questions: [] }
+globalThis.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  if (url === 'https://api.openai.com/v1/responses') {
+    return Promise.resolve(Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(fakeProposal) }] }] }))
+  }
+  if (!url.startsWith(Deno.env.get('SUPABASE_URL') + '/')) throw new Error('TEST_NETWORK_BLOCKED')
+  return realFetch(input, init)
+}
+await import('./entry.ts')
+`)
   await writeFile(envFile, `ARCHITEKT_AI_ENABLED=true\nARCHITEKT_AI_ORIGIN=http://127.0.0.1:5173\nARCHITEKT_AI_OWNER_ID=${users[0]}\nOPENAI_API_KEY=fake-ci-only\n`, { mode: 0o600 })
   edge = spawn('supabase', ['functions', 'serve', '--env-file', envFile], { cwd: EDGE_TEST_DIR, stdio: 'ignore' })
   const endpoint = `${API_URL}/functions/v1/workshop-ai`
@@ -70,15 +81,22 @@ try {
   assert.equal((await query('SELECT count(*) FROM public.architekt_ai_quota')).stdout.trim(), '0')
   const first = await send(tokens[0])
   assert.equal(first.status, 200)
-  assert.deepEqual((await first.json()).proposal, { steps: [], roles: [], decisions: [], questions: [] })
+  assert.deepEqual((await first.json()).proposal, { steps: [{ text: 'Fikcyjny proces', status: 'supported', evidence: 'Fikcyjny proces' }], roles: [], decisions: [], questions: [] })
   const results = await Promise.all(Array.from({ length: 12 }, () => send(tokens[0])))
-  assert.equal(results.filter((r) => r.status === 200).length, 9)
-  const denied = await Promise.all(results.filter((r) => r.status !== 200).map(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) })))
-  assert.deepEqual(denied, Array.from({ length: 3 }, () => ({ status: 429, body: { error: 'LIMIT_REACHED' } })), 'excess responses')
-  assert.equal((await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim(), '10')
+  const observed = await Promise.all(results.map(async (r) => {
+    const body = await r.json().catch(() => ({}))
+    const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED']
+    return { status: r.status, error: safeErrors.includes(body.error) ? body.error : body.error ? 'OTHER' : undefined }
+  }))
+  const used = (await query('SELECT used FROM public.architekt_ai_quota')).stdout.trim()
+  const counts = observed.reduce((acc, r) => { const key = `${r.status}:${r.error || 'none'}`; acc[key] = (acc[key] || 0) + 1; return acc }, {})
+  console.log('Concurrent response counts:', JSON.stringify(counts), 'quota used:', used)
+  assert.equal(observed.filter((r) => r.status === 200).length, 9)
+  assert.equal(observed.filter((r) => r.status === 429 && r.error === 'LIMIT_REACHED').length, 3)
+  assert.equal(used, '10')
   await query('DROP TABLE public.architekt_ai_quota')
   assert.equal((await send(tokens[0])).status, 503)
-  console.log('PASS: real AI Edge entry with local Auth and quota, fake offline analysis')
+  console.log('PASS: real AI Edge entry with local Auth and quota, real adapter and simulated offline provider')
 } finally {
   if (edge) edge.kill('SIGTERM')
   await unlink(envFile).catch(() => {})
