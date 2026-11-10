@@ -42,6 +42,8 @@ try {
   const endpoint = `${API_URL}/functions/v1/workshop-ai`
   const send = (token, body = '{"transcript":"Fikcyjny proces"}') => fetch(endpoint, { method: 'POST', headers: { apikey: ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}), Origin: 'http://127.0.0.1:5173', 'Content-Type': 'application/json' }, body })
   let ready = false
+  let exitCode = 'running'
+  edge.on('exit', (code) => { exitCode = String(code) })
   const seen = new Set()
   for (let i = 0; i < 120; i++) {
     try {
@@ -50,12 +52,19 @@ try {
         if (s.error || !s.data.session?.access_token) throw Error('RELOGIN_FAILED')
         tokens[0] = s.data.session.access_token
       }
-      const r = await send(tokens[0], '{}'); seen.add(r.status)
+      const r = await send(tokens[0], '{}')
+      let status = String(r.status)
+      if (r.status === 503) {
+        const body = await r.json().catch(() => ({}))
+        if (['NOT_CONFIGURED', 'AUTH_UNAVAILABLE', 'USAGE_STORAGE_UNAVAILABLE', 'ANALYSIS_FAILED'].includes(body.error)) status += ':' + body.error
+        else status += ':runtime-or-gateway'
+      }
+      seen.add(status)
       if (r.status === 400) { ready = true; break }
     } catch { seen.add('connection-error') }
     await delay(500)
   }
-  if (!ready) throw Error(`EDGE_NOT_READY: ${[...seen].join(',')}`)
+  if (!ready) throw Error(`EDGE_NOT_READY: ${[...seen].join(',')}; serve exit: ${exitCode}`)
   const other = await client.auth.signInWithPassword({ email: 'ai-other@example.test', password })
   if (other.error) throw Error('RELOGIN_FAILED')
   tokens[1] = other.data.session.access_token
