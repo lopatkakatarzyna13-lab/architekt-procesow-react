@@ -110,8 +110,13 @@ await import('./entry.ts')
       await query('DELETE FROM public.architekt_ai_quota')
       assert.equal((await send(tokens[0])).status, 200)
     }
-    const results = await Promise.all(Array.from({ length: 12 }, () => send(tokens[0])))
-    const observed = await Promise.all(results.map(async (r) => {
+    const results = await Promise.allSettled(Array.from({ length: 12 }, () => send(tokens[0])))
+    const observed = await Promise.all(results.map(async (result) => {
+      if (result.status === 'rejected') {
+        const code = result.reason?.cause?.code === 'UND_ERR_SOCKET' ? 'SOCKET_CLOSED' : 'NETWORK_ERROR'
+        return { status: 0, error: code }
+      }
+      const r = result.value
       const body = await r.json().catch(() => ({}))
       const safeErrors = ['LIMIT_REACHED', 'USAGE_STORAGE_UNAVAILABLE', 'AUTH_UNAVAILABLE', 'ANALYSIS_FAILED', 'FORBIDDEN', 'UNAUTHORIZED']
       return { status: r.status, error: safeErrors.includes(body.error) ? body.error : body.error ? 'OTHER' : undefined }
