@@ -977,6 +977,7 @@ function AsIsScreen({
   processId,
   workshopDirtyRef,
   onTransferWorkshopSteps,
+  onUseWorkshopFinding,
   scope,
   startMethod,
   description,
@@ -1026,7 +1027,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} />}
 
       {isStepsVariant ? (
         <StepsAsIs
@@ -3702,6 +3703,19 @@ const openSavedProcess = (process) => {
     }
   }
 
+  const useWorkshopFinding = (category, value) => {
+    const field = category === 'roles' ? 'owner' : category === 'systems' ? 'system' : null
+    if (startMethod !== 'steps' || !field || typeof value !== 'string' || !value.trim()) return { error: 'Nie udało się wstawić ustalenia.' }
+    const existing = stepDraft[field].trim()
+    const selected = value.trim()
+    if (existing && existing !== selected && !window.confirm(`W formularzu kroku znajduje się już wartość: „${existing}”. Zastąpić ją wartością „${selected}”?`)) return { cancelled: true }
+    setStepDraft((current) => ({ ...current, [field]: selected }))
+    setAsIsSaved(false)
+    setAsIsSaveError(false)
+    setAsIsError('')
+    return { ok: true }
+  }
+
   const addOrUpdateStep = () => {
     if (!stepDraft.name.trim()) {
       setStepError('Uzupełnij nazwę kroku.')
@@ -4485,6 +4499,7 @@ try {
             processId={processIdentityState.id}
             workshopDirtyRef={workshopDirtyRef}
             onTransferWorkshopSteps={transferWorkshopSteps}
+            onUseWorkshopFinding={useWorkshopFinding}
             scope={formData}
             startMethod={startMethod}
             description={asIsDescription}

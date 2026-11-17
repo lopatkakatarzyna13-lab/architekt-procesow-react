@@ -13,7 +13,7 @@ const unreviewedProposal = (proposal) => Object.fromEntries(Object.entries(compl
   [key, Array.isArray(items) ? items.map((item) => ({ ...item, reviewed: false })) : items]))
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
-export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = false, onTransferSteps }) {
+export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = false, onTransferSteps, onUseFinding }) {
   const [initial] = useState(() => {
     let data
     try { data = loadWorkshop(localStorage, processId) }
@@ -223,6 +223,14 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     } catch { setAnalysisMessage('Nie udało się zapisać propozycji. Istniejące dane nie zostały nadpisane.') }
   }
 
+  const insertFinding = (category, item) => {
+    if (dirty || reviewDirty || !item.reviewed || !onUseFinding) return
+    const result = onUseFinding(category, item.text)
+    if (result?.cancelled) return
+    if (result?.error) { setAnalysisMessage(result.error); return }
+    setAnalysisMessage('Wstawiono do formularza kroku poniżej. Aby zachować zmianę, dodaj krok lub zapisz jego edycję.')
+  }
+
   const transferSteps = () => {
     if (!analysis || reviewDirty || dirty || !selectedSteps.length || !canTransferSteps || !onTransferSteps) return
     const result = onTransferSteps(analysis.steps.filter((_, index) => selectedSteps.includes(index)).map((item) => item.text))
@@ -285,6 +293,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
             <textarea id={`review-${key}-${index}`} rows="2" value={item.text} onChange={(event) => editItem(key, index, event.target.value)} />
             <small>{item.status === 'supported' ? 'Źródło propozycji: cytat z rozmowy' : item.status === 'assumption' ? 'Źródło propozycji: założenie lub wpis ręczny' : 'Rodzaj: pytanie'}</small>
             <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => setItemReviewed(key, index, event.target.checked)} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
+            {canTransferSteps && onUseFinding && (key === 'roles' || key === 'systems') && <button type="button" className="back-button" disabled={dirty || reviewDirty || !item.reviewed} onClick={() => insertFinding(key, item)}>Wstaw {key === 'roles' ? 'rolę' : 'system'} do formularza kroku — pozycja {index + 1}</button>}
             {item.evidence && <blockquote>Fragment rozmowy: {item.evidence}</blockquote>}
             <button type="button" className="back-button" onClick={() => removeItem(key, index)}>Usuń pozycję {index + 1} — {title.toLowerCase()}</button>
           </li>)}</ul> : <p>Brak propozycji.</p>}
@@ -294,7 +303,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
         {reviewDirty && <p role="status">Masz niezapisaną propozycję.</p>}
         {canTransferSteps ? <div className="workshop-actions">
           <button type="button" className="save-button" disabled={!selectedSteps.length || reviewDirty || dirty} onClick={transferSteps}>Przenieś wybrane kroki do AS-IS</button>
-          <span>Najpierw zapisz propozycję. Role i pozostałe pola uzupełnij przy krokach.</span>
+          <span>Najpierw zapisz propozycję. Sprawdzone role i systemy możesz wstawić do formularza kroku.</span>
         </div> : <p>Przenoszenie kroków jest dostępne w trybie „Dodaj kroki samodzielnie”.</p>}
       </div>}
     </section>
