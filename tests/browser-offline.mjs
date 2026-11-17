@@ -49,7 +49,7 @@ try {
 
   // Test AI failure, without making any real provider request or using client data.
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
-  await page.getByText('Serwer analizy jest niedostępny. Sprawdź konfigurację.').waitFor()
+  await page.getByText(/Nie otrzymano odpowiedzi\. Analiza mogła już się rozpocząć/).waitFor()
   console.log('PASS: AI network failure is reported without discarding saved AS-IS')
 
   // A full offline restart is NOT covered: the project has no installed offline application cache.

@@ -143,6 +143,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
         if (result.error === 'LIMIT_REACHED') throw new Error('Osiągnięto limit analiz AI. Możesz dalej opracowywać proces ręcznie i spróbować później.')
         if (result.error === 'USAGE_STORAGE_UNAVAILABLE') throw new Error('Nie można sprawdzić licznika analiz AI. Wynik może być niedostępny — sprawdź limit przed ponowieniem próby. Możesz kontynuować pracę ręcznie.')
         if (result.error === 'BUSY') throw new Error('Trwa już analiza AI. Zaczekaj na jej zakończenie, zanim uruchomisz kolejną.')
+        if (result.error === 'RESULT_UNKNOWN') throw new Error('Nie otrzymano odpowiedzi. Analiza mogła już się rozpocząć, a ponowienie może zużyć kolejną próbę i spowodować koszt. Sprawdź połączenie i limit przed ponowieniem. Możesz pracować ręcznie.')
         if (result.error === 'TOO_LARGE') throw new Error('Żądanie jest zbyt duże. Skróć transkrypcję i spróbuj ponownie.')
         if (result.error === 'INVALID_TRANSCRIPT' || result.error === 'INVALID_REQUEST') throw new Error('Nieprawidłowe dane analizy. Sprawdź transkrypcję i spróbuj ponownie.')
         throw new Error('Nie udało się przeanalizować transkrypcji. Sprawdź konfigurację lub spróbuj później.')
@@ -153,7 +154,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     } catch (error) {
       if (error.message === 'AI_LOGIN_REQUIRED') { setAnalysisMessage('Sesja wygasła. Zaloguj się ponownie.'); return }
       if (error.message === 'AI_NOT_CONFIGURED') { setAnalysisMessage('Analiza AI nie jest skonfigurowana.'); return }
-      setAnalysisMessage(error.message.includes('JSON') || error instanceof TypeError ? 'Serwer analizy jest niedostępny. Sprawdź konfigurację.' : error.message)
+      setAnalysisMessage(error.message.includes('JSON') || error instanceof TypeError ? 'Nie otrzymano odpowiedzi. Analiza mogła już się rozpocząć, a ponowienie może zużyć kolejną próbę i spowodować koszt. Sprawdź połączenie i limit przed ponowieniem. Możesz pracować ręcznie.' : error.message)
     } finally { setAnalyzing(false) }
   }
 

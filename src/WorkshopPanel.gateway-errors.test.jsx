@@ -31,3 +31,17 @@ it.each([
   await user.type(screen.getByLabelText('Kroki — pozycja 1'), 'Ręczna weryfikacja')
   expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Ręczna weryfikacja')
 })
+
+it('warns that a lost response may have consumed a trial and preserves saved work', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network error')))
+  render(<WorkshopPanel processId="a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" dirtyRef={{ current: false }} />)
+  await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny warsztat')
+  await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+  await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+  expect(await screen.findByText(/ponowienie może zużyć kolejną próbę/)).toBeTruthy()
+  expect(screen.getByLabelText('Tekst rozmowy').value).toBe('Fikcyjny warsztat')
+  await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+  expect(screen.getByText('Propozycja do sprawdzenia')).toBeTruthy()
+})

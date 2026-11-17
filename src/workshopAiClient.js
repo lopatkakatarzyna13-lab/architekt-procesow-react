@@ -18,7 +18,7 @@ export async function requestWorkshopAnalysis(transcript, client = workshopAiCli
   })
   if (invokeError) {
     const body = await invokeError.context?.json?.().catch(() => null)
-    return { ok: false, error: body?.error || 'ANALYSIS_FAILED' }
+    return { ok: false, error: body?.error || 'RESULT_UNKNOWN' }
   }
   return { ok: true, ...result }
 }
