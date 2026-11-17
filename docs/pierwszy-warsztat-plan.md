@@ -17,7 +17,7 @@ Aktualizacja: 17 listopada 2026. Cel: osobista praca konsultantki z tekstem wars
 4. **Próba na fikcyjnym warsztacie — do wykonania.** Przejść przygotowanie procesu, tekst, propozycje, sprawdzenie, przeniesienie do AS-IS, zapis, otwarcie i wynikowy raport. Oddzielić wynik fikcyjnego dostawcy od oceny rzeczywistego modelu. Gotowe, gdy zapisano wyniki i poprawiono blokujące problemy.
 5. **Przygotowanie docelowego uruchomienia — do wykonania.** Przygotować konkretną listę konfiguracji, sprawdzenia i wycofania zmian, następnie poprosić o wymaganą zgodę na wdrożenie funkcji i SQL. Po zgodzie zweryfikować działanie w docelowym środowisku i przekazać prostą instrukcję.
 
-Stan: **0 z 5 zadań zakończonych**, pierwsze i drugie w toku. Te punkty mają różną pracochłonność; nie należy traktować ich liczby jako procentu ukończenia. Zmiany wyłącznie na `feature/architekt-2-mvp`, bez prawdziwych danych i płatnego API przed osobną decyzją.
+Stan: **0 z 5 zadań zakończonych**, pierwsze trzy w toku. Te punkty mają różną pracochłonność; nie należy traktować ich liczby jako procentu ukończenia. Zmiany wyłącznie na `feature/architekt-2-mvp`, bez prawdziwych danych i płatnego API przed osobną decyzją.
 
 Przegląd na 17.11: [ustalenia o danych warsztatowych](przeglad-danych-warsztatowych-2026-11-17.md). Odporność pozostaje otwarta: pełny test Supabase dla `e87c6df` nie przeszedł, mimo pomyślnych testów odzyskania i awarii procesu; przyczyna 503 pozostaje nieustalona. Nie używać danych klienta ani nie wdrażać hostowanego SQL lub Edge przed spełnieniem pozostałych warunków.
 
