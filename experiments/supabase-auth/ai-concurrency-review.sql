@@ -13,11 +13,14 @@ REVOKE ALL ON public.architekt_ai_admission FROM PUBLIC, anon, authenticated;
 CREATE FUNCTION public.architekt_ai_acquire() RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
 DECLARE state public.architekt_ai_admission%ROWTYPE;
-DECLARE today date := (clock_timestamp() AT TIME ZONE 'UTC')::date;
+DECLARE today date;
 DECLARE token uuid;
 BEGIN
-  INSERT INTO public.architekt_ai_admission (id, day, used) VALUES (true, today, 0) ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.architekt_ai_admission (id, day, used)
+    VALUES (true, (clock_timestamp() AT TIME ZONE 'UTC')::date, 0) ON CONFLICT (id) DO NOTHING;
   SELECT * INTO state FROM public.architekt_ai_admission WHERE id = true FOR UPDATE;
+  -- Compute the quota day after any wait for the row lock, not before it.
+  today := (clock_timestamp() AT TIME ZONE 'UTC')::date;
   IF state.lease_id IS NOT NULL AND state.lease_expires_at > clock_timestamp() THEN
     RETURN jsonb_build_object('status', 'BUSY');
   END IF;

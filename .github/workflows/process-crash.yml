@@ -35,3 +35,5 @@ jobs:
         run: node experiments/supabase-auth/process-crash.smoke.mjs
       - name: Check disabling new admission without deleting records
         run: node experiments/supabase-auth/disable-admission-postgres.smoke.mjs
+      - name: Check UTC day change while waiting for the admission lock
+        run: node experiments/supabase-auth/ai-midnight-postgres.smoke.mjs
