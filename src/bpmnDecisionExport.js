@@ -79,7 +79,7 @@ export async function createDecisionBpmn({ steps, processName, startName, endNam
     const startX = a.x + a.width; const endX = b.x; const y1 = a.y + a.height / 2; const y2 = b.y + b.height / 2
     // Alternate flows leave and enter the top of their gateways so a return
     // does not overlap the primary incoming and outgoing sequence flows.
-    const routeY = hasCollaboration && hasLanes ? 20 + (index % 4) * 8 : 35 + (index % 5) * 12
+    const routeY = hasCollaboration && hasLanes ? 42 + (index % 2) * 5 : 35 + (index % 5) * 12
     const positions = alternate
       ? [{ x: a.x + a.width / 2, y: a.y }, { x: a.x + a.width / 2, y: routeY }, { x: b.x + b.width / 2, y: routeY }, { x: b.x + b.width / 2, y: b.y }]
       : y1 === y2 ? [{ x: startX, y: y1 }, { x: endX, y: y2 }]

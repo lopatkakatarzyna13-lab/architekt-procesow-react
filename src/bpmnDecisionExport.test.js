@@ -66,6 +66,9 @@ describe('explicit BPMN decisions', () => {
     expect(plane.bpmnElement.id).toBe(collaboration.id)
     expect(plane.planeElement.filter((item) => item.bpmnElement?.$type === 'bpmn:Participant')).toHaveLength(2)
     expect(plane.planeElement.filter((item) => item.bpmnElement?.$type === 'bpmn:MessageFlow')).toHaveLength(2)
+    const returnEdge = plane.planeElement.find((item) => item.bpmnElement?.name === 'Brak danych')
+    const poolTop = plane.planeElement.find((item) => item.bpmnElement?.id === 'Participant_Main').bounds.y
+    expect(returnEdge.waypoint[1].y - poolTop).toBeGreaterThanOrEqual(30)
   })
   it('blocks malformed messages and multiple external pools', () => {
     const input = steps()
