@@ -39,7 +39,7 @@ try {
     await assert.rejects(query(`SET ROLE ${role}; SELECT public.architekt_ai_release('${replacement.lease_id}'::uuid)`))
     await assert.rejects(query(`SET ROLE ${role}; SELECT * FROM public.architekt_ai_admission`))
   }
-  console.log('PASS: atomic single-flight, stale-token safety, daily quota and role restrictions')
 } finally {
-  await query('DROP FUNCTION IF EXISTS public.architekt_ai_acquire(); DROP FUNCTION IF EXISTS public.architekt_ai_release(uuid); DROP TABLE IF EXISTS public.architekt_ai_admission').catch(() => {})
+  await query('DROP FUNCTION IF EXISTS public.architekt_ai_acquire(); DROP FUNCTION IF EXISTS public.architekt_ai_release(uuid); DROP TABLE IF EXISTS public.architekt_ai_admission')
 }
+console.log('PASS: atomic single-flight, stale-token safety, daily quota, role restrictions and fixture cleanup')
