@@ -45,3 +45,28 @@ it('warns that a lost response may have consumed a trial and preserves saved wor
   await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
   expect(screen.getByText('Propozycja do sprawdzenia')).toBeTruthy()
 })
+
+it('stops waiting, keeps saved work and ignores a late analysis result', async () => {
+  const user = userEvent.setup()
+  let resolveFetch
+  let requestSignal
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  vi.stubGlobal('fetch', vi.fn((_url, options) => {
+    requestSignal = options.signal
+    return new Promise((resolve) => { resolveFetch = resolve })
+  }))
+  render(<WorkshopPanel processId="a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" dirtyRef={{ current: false }} />)
+  await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny warsztat')
+  await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+  await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+  await user.click(screen.getByRole('button', { name: 'Przerwij oczekiwanie' }))
+  expect(requestSignal.aborted).toBe(true)
+  expect(screen.getByText(/Analiza może nadal trwać na serwerze/)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+  await user.click(screen.getByRole('button', { name: 'Dodaj: kroki' }))
+  await user.type(screen.getByLabelText('Kroki — pozycja 1'), 'Ręczne ustalenie')
+  resolveFetch({ ok: true, json: async () => ({ proposal: { steps: [], roles: [], decisions: [], questions: [] } }) })
+  await user.tab()
+  expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Ręczne ustalenie')
+  expect(screen.getByLabelText('Tekst rozmowy').value).toBe('Fikcyjny warsztat')
+})

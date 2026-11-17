@@ -35,6 +35,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   const [analyzing, setAnalyzing] = useState(false)
   const [selectedSteps, setSelectedSteps] = useState([])
   const revision = useRef(0)
+  const activeAnalysis = useRef(null)
   const dirty = transcript !== savedTranscript
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     return () => data.subscription.unsubscribe()
   }, [])
   useEffect(() => () => { dirtyRef.current = false }, [dirtyRef])
+  useEffect(() => () => { activeAnalysis.current?.abort(); activeAnalysis.current = null }, [])
   const signInAi = async (event) => {
     event.preventDefault()
     if (!workshopAiClient || authBusy) return
@@ -130,11 +132,15 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     if (workshopAiRemote && !aiSession) { setAnalysisMessage('Zaloguj się, aby uruchomić analizę AI.'); return }
     if (!window.confirm('Transkrypcja zostanie wysłana do OpenAI w celu analizy. Użycie API może być płatne. Czy chcesz kontynuować?')) return
     const currentRevision = revision.current
+    const controller = new AbortController()
+    activeAnalysis.current = controller
     setAnalyzing(true)
     setAnalysisMessage('')
     try {
-      const response = workshopAiRemote ? await requestWorkshopAnalysis(transcript) : await fetch('/api/analyze-workshop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript }) })
+      const response = workshopAiRemote ? await requestWorkshopAnalysis(transcript, workshopAiClient, controller.signal) : await fetch('/api/analyze-workshop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript }), signal: controller.signal })
+      if (activeAnalysis.current !== controller) return
       const result = workshopAiRemote ? response : await response.json()
+      if (activeAnalysis.current !== controller) return
       if (!response.ok) {
         if (result.error === 'MISSING_API_KEY') throw new Error('Brakuje konfiguracji klucza API po stronie serwera.')
         if (result.error === 'UNVERIFIED_RESPONSE') throw new Error('Nie udało się potwierdzić fragmentów źródłowych. Spróbuj ponownie.')
@@ -152,10 +158,20 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       else if (validateWorkshopProposal(result.proposal, transcript).length) setAnalysisMessage('Odpowiedź nie przeszła kontroli źródeł. Spróbuj ponownie.')
       else { setAnalysis(result.proposal); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
     } catch (error) {
+      if (activeAnalysis.current !== controller) return
       if (error.message === 'AI_LOGIN_REQUIRED') { setAnalysisMessage('Sesja wygasła. Zaloguj się ponownie.'); return }
       if (error.message === 'AI_NOT_CONFIGURED') { setAnalysisMessage('Analiza AI nie jest skonfigurowana.'); return }
       setAnalysisMessage(error.message.includes('JSON') || error instanceof TypeError ? 'Nie otrzymano odpowiedzi. Analiza mogła już się rozpocząć, a ponowienie może zużyć kolejną próbę i spowodować koszt. Sprawdź połączenie i limit przed ponowieniem. Możesz pracować ręcznie.' : error.message)
-    } finally { setAnalyzing(false) }
+    } finally { if (activeAnalysis.current === controller) { activeAnalysis.current = null; setAnalyzing(false) } }
+  }
+
+  const stopWaiting = () => {
+    const controller = activeAnalysis.current
+    if (!controller) return
+    activeAnalysis.current = null
+    controller.abort()
+    setAnalyzing(false)
+    setAnalysisMessage('Przerwano oczekiwanie na wynik w tej przeglądarce. Analiza może nadal trwać na serwerze; próba mogła zostać wykorzystana i spowodować koszt. Przed ponowieniem sprawdź limit. Możesz pracować ręcznie.')
   }
 
   const editItem = (category, index, value) => {
@@ -222,6 +238,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       <div className="workshop-actions">
         <button type="button" className="save-button" disabled={Boolean(readError) || !dirty} onClick={save}>Zapisz transkrypcję</button>
         <button type="button" className="save-button" disabled={Boolean(readError) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
+        {analyzing && <button type="button" className="back-button" onClick={stopWaiting}>Przerwij oczekiwanie</button>}
         <button type="button" className="back-button" disabled={Boolean(readError) || analyzing} onClick={startManual}>Opracuj ręcznie</button>
         <button type="button" className="back-button" disabled={analyzing} onClick={clearWorkshop}>Usuń dane warsztatu</button>
         <span>{transcript.length} / {MAX_TRANSCRIPT_LENGTH} znaków</span>

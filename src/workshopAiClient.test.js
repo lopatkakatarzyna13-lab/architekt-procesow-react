@@ -14,6 +14,20 @@ describe('authenticated workshop endpoint', () => {
     await expect(requestWorkshopAnalysis('tekst', client)).rejects.toThrow('AI_LOGIN_REQUIRED')
     expect(invoke).not.toHaveBeenCalled()
   })
+  it('does not send the transcript when waiting is stopped during session lookup', async () => {
+    const controller = new AbortController()
+    const invoke = vi.fn()
+    const client = { auth: { getSession: vi.fn(async () => { controller.abort(); return { data: { session: { access_token: 'fictional' } } } }) }, functions: { invoke } }
+    await expect(requestWorkshopAnalysis('fikcyjny tekst', client, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(invoke).not.toHaveBeenCalled()
+  })
+  it('passes the cancellation signal to the remote request', async () => {
+    const controller = new AbortController()
+    const invoke = vi.fn().mockResolvedValue({ data: { proposal: {} }, error: null })
+    const client = { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'fictional' } } }) }, functions: { invoke } }
+    await requestWorkshopAnalysis('tekst', client, controller.signal)
+    expect(invoke).toHaveBeenCalledWith('workshop-ai', expect.objectContaining({ signal: controller.signal }))
+  })
   it('returns the server limit error for display', async () => {
     const client = { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test' } } }) }, functions: { invoke: vi.fn().mockResolvedValue({ error: { context: new Response(JSON.stringify({ error: 'LIMIT_REACHED' })) } }) } }
     expect(await requestWorkshopAnalysis('tekst', client)).toEqual({ ok: false, error: 'LIMIT_REACHED' })

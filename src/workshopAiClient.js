@@ -9,12 +9,14 @@ export const workshopAiClient = workshopAiRemote && url && key
   ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false } })
   : null
 
-export async function requestWorkshopAnalysis(transcript, client = workshopAiClient) {
+export async function requestWorkshopAnalysis(transcript, client = workshopAiClient, signal) {
   if (!client) throw new Error('AI_NOT_CONFIGURED')
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
   const { data, error } = await client.auth.getSession()
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
   if (error || !data?.session?.access_token) throw new Error('AI_LOGIN_REQUIRED')
   const { data: result, error: invokeError } = await client.functions.invoke('workshop-ai', {
-    body: { transcript }, headers: { Authorization: `Bearer ${data.session.access_token}` },
+    body: { transcript }, headers: { Authorization: `Bearer ${data.session.access_token}` }, ...(signal ? { signal } : {}),
   })
   if (invokeError) {
     const body = await invokeError.context?.json?.().catch(() => null)
