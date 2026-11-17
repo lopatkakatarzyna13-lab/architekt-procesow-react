@@ -1,0 +1,46 @@
+// A separate browser context uses only fictional data; no external API calls.
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
+import { chromium } from 'playwright'
+import { BpmnModdle } from 'bpmn-moddle'
+
+const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) })
+try {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 900 }, acceptDownloads: true })
+  await page.goto('http://127.0.0.1:5173/')
+  await page.getByRole('button', { name: /Dodaj kroki samodzielnie/ }).click()
+  await page.getByLabel(/Nazwa procesu/).fill('Fikcyjny proces HR')
+  await page.getByLabel(/Cel procesu/).fill('Sprawdzenie danych')
+  await page.getByLabel(/Co rozpoczyna proces/).fill('Zgłoszenie')
+  await page.getByLabel(/Co kończy proces/).fill('Potwierdzenie')
+  await page.getByRole('button', { name: /Zapisz zakres i przejdź dalej/ }).click()
+  await page.getByLabel(/Nazwa kroku/).fill('Weryfikacja danych')
+  await page.getByRole('button', { name: 'Dodaj krok' }).click()
+  await page.getByLabel(/Nazwa kroku/).fill('Wysłanie dokumentów')
+  await page.getByRole('button', { name: 'Dodaj krok' }).click()
+  const button = page.getByRole('button', { name: 'Pobierz BPMN 2.0' })
+  assert.equal(await button.isDisabled(), true, 'unsaved process must not be exported')
+  await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
+  const [download] = await Promise.all([page.waitForEvent('download'), button.click()])
+  assert.equal(download.suggestedFilename(), 'proces-asis.bpmn')
+  const path = await download.path()
+  const xml = await readFile(path, 'utf8')
+  const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+  assert.deepEqual(warnings, [])
+  const process = rootElement.rootElements[0]
+  assert.equal(process.name, 'Fikcyjny proces HR')
+  assert.deepEqual(process.flowElements.filter((element) => element.$type === 'bpmn:Task').map((element) => element.name), ['Weryfikacja danych', 'Wysłanie dokumentów'])
+  assert.equal(rootElement.diagrams[0].plane.planeElement.length, 7)
+  execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path], { stdio: 'inherit' })
+  await page.getByLabel('Od kroku').selectOption({ label: '2. Wysłanie dokumentów' })
+  await page.getByLabel('Do kroku').selectOption({ label: '1. Weryfikacja danych' })
+  await page.getByLabel('Kiedy następuje przejście?').fill('Brak danych')
+  await page.getByRole('button', { name: 'Dodaj połączenie' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
+  assert.equal(await button.isDisabled(), true, 'an alternative path must block BPMN export')
+  await page.getByText(/Eksport BPMN nie obsługuje jeszcze dodatkowych połączeń/).waitFor()
+  console.log('PASS: linear BPMN download, re-import, XSD validation and safe blocking of alternative paths')
+} finally {
+  await browser.close()
+}

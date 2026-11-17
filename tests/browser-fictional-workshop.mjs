@@ -116,3 +116,5 @@ try {
 } finally {
   await browser.close()
 }
+
+await import('./browser-bpmn-export.mjs')

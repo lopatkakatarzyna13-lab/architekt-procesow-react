@@ -28,6 +28,7 @@ import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
 import { appendWorkshopSteps } from './workshop'
 import ProcessConnections from './ProcessConnections'
+import BpmnExport from './BpmnExport'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
@@ -1048,6 +1049,7 @@ function AsIsScreen({
           onCancelEdit={onCancelEdit}
         />
         <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
+        <BpmnExport steps={steps} scope={scope} saved={saved} />
         </>
       ) : (
         <DescribeAsIs
