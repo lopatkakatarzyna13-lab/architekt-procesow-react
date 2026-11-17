@@ -156,6 +156,34 @@ try {
   await preview.locator('[data-element-id="ExternalTask_1"]').waitFor({ state: 'visible' })
   await preview.locator('[data-element-id="ExternalTask_2"]').waitFor({ state: 'visible' })
   if (globalThis.process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: globalThis.process.env.BPMN_SCREENSHOT_PATH })
+  // Additional long, explicitly named transfers exercise dense diagrams without real data.
+  const longLabels = [
+    'Dane pracownika i dokumenty niezbędne do przygotowania umowy',
+    'Potwierdzenie danych i prośba o uzupełnienie brakujących informacji',
+    'Informacja o zmianie warunków zatrudnienia i planowanej dacie rozpoczęcia pracy',
+    'Projekt dokumentów pracowniczych do weryfikacji przez przedstawiciela firmy',
+  ]
+  for (const [index, label] of longLabels.entries()) {
+    await page.getByLabel('Krok w Twoim procesie').selectOption({ label: index % 2 ? '2. Wysłanie dokumentów' : '1. Weryfikacja danych' })
+    await page.getByLabel('Nazwa basenu Twojego procesu').fill('Firma')
+    await page.getByLabel('Nazwa basenu zewnętrznego').fill('Biuro rachunkowe')
+    await page.getByLabel('Kierunek wiadomości').selectOption(index % 2 ? 'incoming' : 'outgoing')
+    await page.getByLabel('Działanie uczestnika zewnętrznego (opcjonalnie)').selectOption({ label: index % 2 ? 'Przygotowanie dokumentów' : 'Sprawdzenie danych' })
+    await page.getByLabel('Co jest przekazywane?').fill(label)
+    await page.getByRole('button', { name: 'Dodaj wiadomość BPMN' }).click()
+  }
+  await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
+  const [denseDownload] = await Promise.all([page.waitForEvent('download'), button.click()])
+  const densePath = await denseDownload.path()
+  const dense = await new BpmnModdle().fromXML(await readFile(densePath, 'utf8'))
+  assert.deepEqual(dense.warnings, [])
+  const denseCollaboration = dense.rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+  assert.equal(denseCollaboration.messageFlows.length, 8)
+  for (const label of longLabels) assert.ok(denseCollaboration.messageFlows.some((flow) => flow.name === label))
+  execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', densePath], { stdio: 'inherit' })
+  await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
+  await preview.locator('[data-element-id="MessageFlow_8"]').first().waitFor({ state: 'attached' })
+  if (globalThis.process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: globalThis.process.env.BPMN_SCREENSHOT_PATH })
   await page.getByLabel('Pytanie decyzji — Wysłanie dokumentów').fill('Zmienione pytanie?')
   assert.equal(await preview.count(), 0, 'unsaved decision changes must hide the old preview')
   console.log('PASS: BPMN pools, message flows, lanes and decision download, XSD, rendering and safe preview invalidation')
