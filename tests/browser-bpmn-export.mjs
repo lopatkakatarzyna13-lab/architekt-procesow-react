@@ -104,7 +104,7 @@ try {
     assert.notEqual(geometry.visibility, 'hidden')
   }
   assert.equal(await preview.locator('.bjs-powered-by').isVisible(), true)
-  if (process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: process.env.BPMN_SCREENSHOT_PATH })
+  if (globalThis.process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: globalThis.process.env.BPMN_SCREENSHOT_PATH })
   await page.getByLabel('Pytanie decyzji — Wysłanie dokumentów').fill('Zmienione pytanie?')
   assert.equal(await preview.count(), 0, 'unsaved decision changes must hide the old preview')
   console.log('PASS: BPMN lanes and decision downloads, XSD, rendered lanes and safe preview invalidation')
