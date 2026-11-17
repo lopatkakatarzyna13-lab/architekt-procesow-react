@@ -136,7 +136,7 @@ try {
   await page.evaluate(() => { window.__fictionalPrintCalled = false; window.print = () => { window.__fictionalPrintCalled = true } })
   await page.getByRole('button', { name: 'Eksportuj do PDF' }).click()
   await page.waitForFunction(() => window.__fictionalPrintCalled === true)
-  const bpmnImage = page.locator('.print-bpmn-image').not('.print-tobe-bpmn')
+  const bpmnImage = page.locator('.print-bpmn-image:not(.print-tobe-bpmn)')
   assert.equal(await bpmnImage.count(), 1, 'report must include the BPMN diagram')
   assert.ok(await bpmnImage.evaluate((image) => image.complete && image.naturalWidth > 0), 'BPMN diagram must be decoded before print')
   assert.ok(await page.locator('.print-tobe-bpmn').evaluate((image) => image.complete && image.naturalWidth > 0), 'TO-BE BPMN diagram must be decoded before print')
