@@ -18,6 +18,7 @@ if (process.argv[2] === '--worker') {
     enabled: true, origin: 'https://app.example.test', ownerId: 'fixture-owner',
     verify: async () => 'fixture-owner', reserve: acquire, release,
     analyze: async () => {
+      setInterval(() => {}, 1000) // Keep the worker alive until the parent kills it.
       process.send('provider-started')
       return new Promise(() => {}) // fictional provider deliberately remains in flight
     },
