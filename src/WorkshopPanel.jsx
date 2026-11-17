@@ -5,8 +5,9 @@ import {
   saveWorkshop, saveWorkshopReview, validateWorkshopProposal,
 } from './workshop'
 
-const categories = { steps: 'Kroki', roles: 'Role', decisions: 'Decyzje', questions: 'Pytania' }
-const emptyReview = () => ({ steps: [], roles: [], decisions: [], questions: [] })
+const categories = { steps: 'Kroki', roles: 'Role', systems: 'Systemy', decisions: 'Decyzje', exceptions: 'Wyjątki', questions: 'Pytania' }
+const emptyReview = () => ({ steps: [], roles: [], systems: [], decisions: [], exceptions: [], questions: [] })
+const completeReview = (review) => review ? { ...emptyReview(), ...review } : null
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
 export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = false, onTransferSteps }) {
@@ -29,7 +30,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   const [savedTranscript, setSavedTranscript] = useState(initial.transcript)
   const [message, setMessage] = useState(initial.error)
   const [savedAt, setSavedAt] = useState(initial.savedAt)
-  const [analysis, setAnalysis] = useState(initial.review)
+  const [analysis, setAnalysis] = useState(() => completeReview(initial.review))
   const [reviewDirty, setReviewDirty] = useState(false)
   const [analysisMessage, setAnalysisMessage] = useState(initial.reviewError)
   const [storageUncertain, setStorageUncertain] = useState(false)
@@ -159,7 +160,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       }
       if (revision.current !== currentRevision) setAnalysisMessage('Transkrypcja lub propozycja zmieniła się podczas analizy. Uruchom analizę ponownie.')
       else if (validateWorkshopProposal(result.proposal, transcript).length) setAnalysisMessage('Odpowiedź nie przeszła kontroli źródeł. Spróbuj ponownie.')
-      else { setAnalysis(result.proposal); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
+      else { setAnalysis(completeReview(result.proposal)); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
     } catch (error) {
       if (activeAnalysis.current !== controller) return
       if (error.message === 'AI_LOGIN_REQUIRED') { setAnalysisMessage('Sesja wygasła. Zaloguj się ponownie.'); return }
@@ -264,7 +265,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       {analysisMessage && <p role="status">{analysisMessage}</p>}
       {analysis && <div className="workshop-results">
         <h3>Propozycja do sprawdzenia</h3>
-        <p>Popraw lub dodaj ustalenia. Po edycji treści przez człowieka element jest oznaczony jako wymagający sprawdzenia. Zapisana propozycja pozostaje w tej przeglądarce.</p>
+        <p>Popraw lub dodaj ustalenia, w tym systemy i wyjątki. Systemy i wyjątki dodajesz ręcznie. Po edycji treści przez człowieka element jest oznaczony jako wymagający sprawdzenia. Zapisana propozycja pozostaje w tej przeglądarce.</p>
         <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
         {Object.entries(categories).map(([key, title]) => <div key={key}>
           <h4>{title}</h4>

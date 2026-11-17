@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import WorkshopPanel from './WorkshopPanel'
+import { saveWorkshop, saveWorkshopReview } from './workshop'
 
 const PROCESS_A = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const PROCESS_B = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
@@ -19,7 +20,7 @@ describe('workshop review screen', () => {
     expect(dirtyRef.current).toBe(true)
     await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
     await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
-    for (const [category, text] of [['kroki', 'Sprawdzenie danych'], ['role', 'HR'], ['decyzje', 'Czy dane są kompletne?'], ['pytania', 'Kto zatwierdza?']]) {
+    for (const [category, text] of [['kroki', 'Sprawdzenie danych'], ['role', 'HR'], ['systemy', 'SAP'], ['wyjątki', 'Brak danych'], ['decyzje', 'Czy dane są kompletne?'], ['pytania', 'Kto zatwierdza?']]) {
       await user.click(screen.getByRole('button', { name: `Dodaj: ${category}` }))
       const title = category[0].toUpperCase() + category.slice(1)
       await user.type(screen.getByLabelText(`${title} — pozycja 1`), text)
@@ -32,10 +33,37 @@ describe('workshop review screen', () => {
     expect(screen.getByLabelText('Tekst rozmowy').value).toBe('HR sprawdza dane.')
     expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Sprawdzenie danych')
     expect(screen.getByLabelText('Pytania — pozycja 1').value).toBe('Kto zatwierdza?')
+    expect(screen.getByLabelText('Systemy — pozycja 1').value).toBe('SAP')
+    expect(screen.getByLabelText('Wyjątki — pozycja 1').value).toBe('Brak danych')
+    await user.clear(screen.getByLabelText('Systemy — pozycja 1'))
+    await user.type(screen.getByLabelText('Systemy — pozycja 1'), 'BPSC')
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
     second.unmount()
+    const reopened = render(<WorkshopPanel processId={PROCESS_A} dirtyRef={dirtyRef} />)
+    expect(screen.getByLabelText('Systemy — pozycja 1').value).toBe('BPSC')
+    expect(screen.getByLabelText('Wyjątki — pozycja 1').value).toBe('Brak danych')
+    reopened.unmount()
     render(<WorkshopPanel processId={PROCESS_B} dirtyRef={dirtyRef} />)
     expect(screen.getByLabelText('Tekst rozmowy').value).toBe('')
     expect(screen.queryByText('Propozycja do sprawdzenia')).toBeNull()
+  })
+
+  it('opens an older proposal and allows new categories to be added', async () => {
+    const user = userEvent.setup()
+    const transcript = 'HR sprawdza dane.'
+    saveWorkshop(localStorage, PROCESS_A, transcript)
+    saveWorkshopReview(localStorage, PROCESS_A, transcript, {
+      steps: [{ text: 'Sprawdzenie danych', status: 'assumption', evidence: '' }], roles: [], decisions: [], questions: [],
+    })
+    const view = render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Sprawdzenie danych')
+    await user.click(screen.getByRole('button', { name: 'Dodaj: systemy' }))
+    await user.type(screen.getByLabelText('Systemy — pozycja 1'), 'SAP')
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    view.unmount()
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    expect(screen.getByLabelText('Systemy — pozycja 1').value).toBe('SAP')
+    expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Sprawdzenie danych')
   })
 
   it('keeps unsaved review if the user cancels changing the transcript', async () => {
