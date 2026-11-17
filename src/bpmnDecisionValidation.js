@@ -9,6 +9,23 @@ export function getDecisionBpmnError(steps) {
     if (step.bpmnLane !== undefined && (typeof step.bpmnLane !== 'string' || step.bpmnLane.trim().length > 80)) return 'Nieprawidłowa nazwa toru BPMN. Sprawdź przypisania kroków.'
   }
   if (steps.some((step) => step.bpmnLane?.trim()) && steps.some((step) => !step.bpmnLane?.trim())) return 'Uzupełnij tor BPMN dla każdego kroku albo usuń wszystkie przypisania torów.'
+  let primaryParticipant = ''
+  let externalParticipant = ''
+  const messageKeys = new Set()
+  for (const step of steps) {
+    if (step.bpmnMessages !== undefined && !Array.isArray(step.bpmnMessages)) return 'Nieprawidłowe wiadomości BPMN. Sprawdź przekazania.'
+    for (const message of step.bpmnMessages || []) {
+      if (!message || [message.primary, message.external, message.label].some((value) => typeof value !== 'string' || !value.trim() || value.trim().length > 100) || !['incoming', 'outgoing'].includes(message.direction)) return 'Nieprawidłowe dane wiadomości BPMN. Sprawdź przekazania.'
+      const primary = message.primary.trim().toLocaleLowerCase('pl'); const external = message.external.trim().toLocaleLowerCase('pl')
+      if (primary === external || (primaryParticipant && primaryParticipant !== primary)) return 'Sprawdź nazwy basenów: własny basen musi być jeden i różny od zewnętrznego.'
+      if (externalParticipant && externalParticipant !== external) return 'Na razie można użyć tylko jednego zewnętrznego basenu w procesie.'
+      primaryParticipant = primary
+      externalParticipant = external
+      const key = JSON.stringify([step.id, external, message.direction, message.label.trim().toLocaleLowerCase('pl')])
+      if (messageKeys.has(key)) return 'Usuń powtórzoną wiadomość BPMN dla tego samego kroku.'
+      messageKeys.add(key)
+    }
+  }
   for (const step of steps) {
     if (step.extraConnections !== undefined && !Array.isArray(step.extraConnections)) return 'Nieprawidłowe połączenia. Sprawdź proces przed eksportem.'
     const links = step.extraConnections || []

@@ -44,6 +44,37 @@ describe('explicit BPMN decisions', () => {
     const decision = process.flowElements.find((element) => element.id === 'Decision_2')
     expect(decision.outgoing.map((flow) => [flow.name, flow.targetRef.id])).toEqual([['Tak', 'Task_3'], ['Brak danych', 'Merge_1']])
   })
+  it('represents messages across two pools without sequence flows crossing participants', async () => {
+    const input = steps().map((step, index) => ({ ...step, bpmnLane: index === 1 ? 'Kadry' : 'HR' }))
+    input[0].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Dane pracownika' }]
+    input[2].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'incoming', label: 'Dokumenty' }]
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(await createDecisionBpmn({ steps: input }))
+    expect(warnings).toEqual([])
+    const process = rootElement.rootElements.find((item) => item.$type === 'bpmn:Process')
+    const collaboration = rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+    expect(collaboration.participants.map((participant) => participant.name)).toEqual(['Firma', 'Biuro'])
+    expect(collaboration.participants[0].processRef.id).toBe(process.id)
+    expect(collaboration.participants[1].processRef).toBeUndefined()
+    expect(collaboration.messageFlows.map((flow) => [flow.name, flow.sourceRef.id, flow.targetRef.id])).toEqual([
+      ['Dane pracownika', 'Task_1', 'Participant_External_1'], ['Dokumenty', 'Participant_External_1', 'Task_3'],
+    ])
+    const ids = new Set(process.flowElements.map((item) => item.id))
+    for (const flow of process.flowElements.filter((item) => item.$type === 'bpmn:SequenceFlow')) {
+      expect(ids.has(flow.sourceRef.id) && ids.has(flow.targetRef.id)).toBe(true)
+    }
+    const plane = rootElement.diagrams[0].plane
+    expect(plane.bpmnElement.id).toBe(collaboration.id)
+    expect(plane.planeElement.filter((item) => item.bpmnElement?.$type === 'bpmn:Participant')).toHaveLength(2)
+    expect(plane.planeElement.filter((item) => item.bpmnElement?.$type === 'bpmn:MessageFlow')).toHaveLength(2)
+  })
+  it('blocks malformed messages and multiple external pools', () => {
+    const input = steps()
+    input[0].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Dane' }]
+    input[1].bpmnMessages = [{ primary: 'Firma', external: 'Bank', direction: 'incoming', label: 'Dokument' }]
+    expect(getDecisionBpmnError(input)).toMatch(/jednego zewnętrznego basenu/)
+    input[1].bpmnMessages = [null]
+    expect(getDecisionBpmnError(input)).toMatch(/Nieprawidłowe dane wiadomości/)
+  })
   it('requires every step to have a lane when any lane is supplied', () => {
     const input = steps(); input[0].bpmnLane = 'HR'
     expect(getDecisionBpmnError(input)).toMatch(/Uzupełnij tor BPMN dla każdego kroku/)

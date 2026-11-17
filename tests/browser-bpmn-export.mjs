@@ -67,6 +67,18 @@ try {
   await page.getByLabel('Kiedy kontynuować podstawową ścieżkę — Wysłanie dokumentów').fill('Kompletne')
   await page.getByRole('button', { name: 'Zapisz decyzję BPMN — Wysłanie dokumentów' }).click()
   assert.equal(await button.isDisabled(), true, 'the decision must be saved in the process first')
+  await page.getByLabel('Krok w Twoim procesie').selectOption({ label: '1. Weryfikacja danych' })
+  await page.getByLabel('Nazwa basenu Twojego procesu').fill('Firma')
+  await page.getByLabel('Nazwa basenu zewnętrznego').fill('Biuro rachunkowe')
+  await page.getByLabel('Kierunek wiadomości').selectOption('outgoing')
+  await page.getByLabel('Co jest przekazywane?').fill('Dane pracownika')
+  await page.getByRole('button', { name: 'Dodaj wiadomość BPMN' }).click()
+  await page.getByLabel('Krok w Twoim procesie').selectOption({ label: '2. Wysłanie dokumentów' })
+  await page.getByLabel('Nazwa basenu Twojego procesu').fill('Firma')
+  await page.getByLabel('Nazwa basenu zewnętrznego').fill('Biuro rachunkowe')
+  await page.getByLabel('Kierunek wiadomości').selectOption('incoming')
+  await page.getByLabel('Co jest przekazywane?').fill('Dokumenty')
+  await page.getByRole('button', { name: 'Dodaj wiadomość BPMN' }).click()
   await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
   const [branchedDownload] = await Promise.all([page.waitForEvent('download'), button.click()])
   const branchedPath = await branchedDownload.path()
@@ -80,6 +92,12 @@ try {
   assert.equal(merge.incoming.length, 2)
   const lanes = branched.rootElement.rootElements[0].laneSets[0].lanes
   assert.deepEqual(lanes.map((lane) => lane.name), ['HR', 'Biuro'])
+  const collaboration = branched.rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+  assert.deepEqual(collaboration.participants.map((item) => item.name), ['Firma', 'Biuro rachunkowe'])
+  assert.deepEqual(collaboration.messageFlows.map((item) => [item.name, item.sourceRef.id, item.targetRef.id]), [
+    ['Dane pracownika', 'Task_1', 'Participant_External_1'], ['Dokumenty', 'Participant_External_1', 'Task_2'],
+  ])
+  assert.equal(branched.rootElement.diagrams[0].plane.bpmnElement.id, collaboration.id)
   assert.ok(lanes[0].flowNodeRef.some((node) => node.id === merge.id))
   assert.ok(lanes[1].flowNodeRef.some((node) => node.id === decision.id))
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', branchedPath], { stdio: 'inherit' })
@@ -87,6 +105,8 @@ try {
   await preview.locator(`[data-element-id="${decision.id}"]`).waitFor({ state: 'visible' })
   await preview.locator(`[data-element-id="${merge.id}"]`).waitFor({ state: 'visible' })
   for (const lane of lanes) await preview.locator(`[data-element-id="${lane.id}"]`).waitFor({ state: 'visible' })
+  for (const participant of collaboration.participants) await preview.locator(`[data-element-id="${participant.id}"]`).waitFor({ state: 'visible' })
+  for (const flow of collaboration.messageFlows) await preview.locator(`[data-element-id="${flow.id}"] .djs-visual > path`).first().waitFor({ state: 'attached' })
   for (const flow of decision.outgoing) {
     // A horizontal SVG path has a zero-height bounding box, which Playwright
     // may classify as hidden even when its stroke is drawn. Inspect the line.
@@ -107,7 +127,7 @@ try {
   if (globalThis.process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: globalThis.process.env.BPMN_SCREENSHOT_PATH })
   await page.getByLabel('Pytanie decyzji — Wysłanie dokumentów').fill('Zmienione pytanie?')
   assert.equal(await preview.count(), 0, 'unsaved decision changes must hide the old preview')
-  console.log('PASS: BPMN lanes and decision downloads, XSD, rendered lanes and safe preview invalidation')
+  console.log('PASS: BPMN pools, message flows, lanes and decision download, XSD, rendering and safe preview invalidation')
 } finally {
   await browser.close()
 }

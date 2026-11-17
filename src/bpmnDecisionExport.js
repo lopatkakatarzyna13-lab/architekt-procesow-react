@@ -1,4 +1,5 @@
 import { createLinearBpmn, getLinearBpmnError } from './bpmnExport.js'
+import { getBpmnMessages } from './bpmnMessages.js'
 
 import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 export { getDecisionBpmnError } from './bpmnDecisionValidation.js'
@@ -7,7 +8,9 @@ export async function createDecisionBpmn({ steps, processName, startName, endNam
   const error = getDecisionBpmnError(steps)
   if (error) throw new Error(error)
   const hasLanes = steps.some((step) => step.bpmnLane?.trim())
-  if (!hasLanes && !steps.some((step) => step.extraConnections?.length)) {
+  const messages = getBpmnMessages(steps)
+  const hasCollaboration = messages.length > 0
+  if (!hasCollaboration && !hasLanes && !steps.some((step) => step.extraConnections?.length)) {
     const linearError = getLinearBpmnError(steps)
     if (linearError) throw new Error(linearError)
     return createLinearBpmn({ steps, processName, startName, endName })
@@ -26,12 +29,14 @@ export async function createDecisionBpmn({ steps, processName, startName, endNam
   const entry = (index) => merges[index] || tasks[index]
   const laneNames = hasLanes ? [...new Set(steps.map((step) => step.bpmnLane.trim()))] : []
   const laneHeight = 180
-  const centerY = (index) => hasLanes ? 190 + laneNames.indexOf(steps[index].bpmnLane.trim()) * laneHeight : 240
+  const laneTop = hasCollaboration ? 10 : 100
+  const shiftX = hasCollaboration ? 40 : 0
+  const centerY = (index) => hasLanes ? laneTop + laneHeight / 2 + laneNames.indexOf(steps[index].bpmnLane.trim()) * laneHeight : 240
   const boxes = new Map()
-  boxes.set(start, { x: 70, y: centerY(0) - 18, width: 36, height: 36 })
-  boxes.set(end, { x: 250 + steps.length * 360, y: centerY(steps.length - 1) - 18, width: 36, height: 36 })
+  boxes.set(start, { x: 70 + shiftX, y: centerY(0) - 18, width: 36, height: 36 })
+  boxes.set(end, { x: 250 + steps.length * 360 + shiftX, y: centerY(steps.length - 1) - 18, width: 36, height: 36 })
   steps.forEach((_, index) => {
-    const x = 250 + index * 360; const center = centerY(index)
+    const x = 250 + index * 360 + shiftX; const center = centerY(index)
     boxes.set(tasks[index], { x, y: center - 40, width: 100, height: 80 })
     if (merges[index]) boxes.set(merges[index], { x: x - 100, y: center - 25, width: 50, height: 50 })
     if (splits[index]) boxes.set(splits[index], { x: x + 145, y: center - 25, width: 50, height: 50 })
@@ -65,7 +70,8 @@ export async function createDecisionBpmn({ steps, processName, startName, endNam
   })
   const nodes = [start, ...steps.flatMap((_, index) => [merges[index], tasks[index], splits[index]].filter(Boolean)), end]
   process.flowElements = [...nodes, ...flows]
-  const laneShapes = lanes.map((lane, index) => moddle.create('bpmndi:BPMNShape', { id: `LaneShape_${index + 1}`, bpmnElement: lane, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: 10, y: 100 + index * laneHeight, width: 250 + steps.length * 360 + 80, height: laneHeight }) }))
+  const poolWidth = 250 + steps.length * 360 + 80 + shiftX
+  const laneShapes = lanes.map((lane, index) => moddle.create('bpmndi:BPMNShape', { id: `LaneShape_${index + 1}`, bpmnElement: lane, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: hasCollaboration ? 40 : 10, y: laneTop + index * laneHeight, width: poolWidth - (hasCollaboration ? 30 : 0), height: laneHeight }) }))
   const shapes = nodes.map((node, index) => moddle.create('bpmndi:BPMNShape', { id: `Shape_${index + 1}`, bpmnElement: node, ...(node.$type === 'bpmn:ExclusiveGateway' ? { isMarkerVisible: true } : {}), bounds: moddle.create('dc:Bounds', boxes.get(node)) }))
   const edges = flows.map((flow, index) => {
     const { source, target, alternate } = links[index]
@@ -73,14 +79,44 @@ export async function createDecisionBpmn({ steps, processName, startName, endNam
     const startX = a.x + a.width; const endX = b.x; const y1 = a.y + a.height / 2; const y2 = b.y + b.height / 2
     // Alternate flows leave and enter the top of their gateways so a return
     // does not overlap the primary incoming and outgoing sequence flows.
+    const routeY = hasCollaboration && hasLanes ? 20 + (index % 4) * 8 : 35 + (index % 5) * 12
     const positions = alternate
-      ? [{ x: a.x + a.width / 2, y: a.y }, { x: a.x + a.width / 2, y: 35 + (index % 5) * 12 }, { x: b.x + b.width / 2, y: 35 + (index % 5) * 12 }, { x: b.x + b.width / 2, y: b.y }]
+      ? [{ x: a.x + a.width / 2, y: a.y }, { x: a.x + a.width / 2, y: routeY }, { x: b.x + b.width / 2, y: routeY }, { x: b.x + b.width / 2, y: b.y }]
       : y1 === y2 ? [{ x: startX, y: y1 }, { x: endX, y: y2 }]
         : [{ x: startX, y: y1 }, { x: (startX + endX) / 2, y: y1 }, { x: (startX + endX) / 2, y: y2 }, { x: endX, y: y2 }]
     return moddle.create('bpmndi:BPMNEdge', { id: `Edge_${index + 1}`, bpmnElement: flow, waypoint: positions.map((point) => moddle.create('dc:Point', point)) })
   })
-  const plane = moddle.create('bpmndi:BPMNPlane', { id: 'Plane_1', bpmnElement: process, planeElement: [...laneShapes, ...shapes, ...edges] })
+  let planeElement = [...laneShapes, ...shapes, ...edges]
+  let rootElements = [process]
+  let planeRoot = process
+  if (hasCollaboration) {
+    const primary = moddle.create('bpmn:Participant', { id: 'Participant_Main', name: messages[0].primary.trim(), processRef: process })
+    const externalNames = [...new Map(messages.map((message) => [message.external.trim().toLocaleLowerCase('pl'), message.external.trim()])).entries()]
+    const participants = externalNames.map(([, name], index) => moddle.create('bpmn:Participant', { id: `Participant_External_${index + 1}`, name }))
+    const participantByName = new Map(externalNames.map(([key], index) => [key, participants[index]]))
+    const collaboration = moddle.create('bpmn:Collaboration', { id: 'Collaboration_1', participants: [primary, ...participants], messageFlows: [] })
+    const mainHeight = hasLanes ? laneNames.length * laneHeight : 320
+    const mainShape = moddle.create('bpmndi:BPMNShape', { id: 'ParticipantShape_Main', bpmnElement: primary, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: 10, y: 10, width: poolWidth, height: mainHeight }) })
+    const externalBoxes = participants.map((participant, index) => ({ x: 10, y: 10 + mainHeight + 100 + index * 110, width: poolWidth, height: 70, participant }))
+    const externalShapes = externalBoxes.map((box, index) => moddle.create('bpmndi:BPMNShape', { id: `ParticipantShape_External_${index + 1}`, bpmnElement: box.participant, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: box.x, y: box.y, width: box.width, height: box.height }) }))
+    const messageEdges = messages.map((message, index) => {
+      const task = tasks[indexes.get(message.stepId)]
+      const external = participantByName.get(message.external.trim().toLocaleLowerCase('pl'))
+      const messageFlow = moddle.create('bpmn:MessageFlow', { id: `MessageFlow_${index + 1}`, name: message.label.trim(), sourceRef: message.direction === 'outgoing' ? task : external, targetRef: message.direction === 'outgoing' ? external : task })
+      collaboration.messageFlows.push(messageFlow)
+      const taskBox = boxes.get(task); const externalBox = externalBoxes.find((box) => box.participant === external)
+      const x = taskBox.x + taskBox.width / 2 + (index % 5 - 2) * 10
+      const taskPoint = { x, y: taskBox.y + taskBox.height }
+      const poolPoint = { x, y: externalBox.y }
+      const points = message.direction === 'outgoing' ? [taskPoint, poolPoint] : [poolPoint, taskPoint]
+      return moddle.create('bpmndi:BPMNEdge', { id: `MessageEdge_${index + 1}`, bpmnElement: messageFlow, waypoint: points.map((point) => moddle.create('dc:Point', point)) })
+    })
+    planeRoot = collaboration
+    rootElements = [process, collaboration]
+    planeElement = [mainShape, ...laneShapes, ...externalShapes, ...shapes, ...edges, ...messageEdges]
+  }
+  const plane = moddle.create('bpmndi:BPMNPlane', { id: 'Plane_1', bpmnElement: planeRoot, planeElement })
   const diagram = moddle.create('bpmndi:BPMNDiagram', { id: 'Diagram_1', plane })
-  const definitions = moddle.create('bpmn:Definitions', { id: 'Definitions_1', targetNamespace: 'https://proceshunter.pl/bpmn', rootElements: [process], diagrams: [diagram] })
+  const definitions = moddle.create('bpmn:Definitions', { id: 'Definitions_1', targetNamespace: 'https://proceshunter.pl/bpmn', rootElements, diagrams: [diagram] })
   return (await moddle.toXML(definitions, { format: true })).xml
 }

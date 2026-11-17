@@ -31,6 +31,8 @@ import ProcessConnections from './ProcessConnections'
 import BpmnExport from './BpmnExport'
 import BpmnDecisions from './BpmnDecisions'
 import BpmnLanes from './BpmnLanes'
+import BpmnMessages from './BpmnMessages'
+import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
@@ -987,6 +989,8 @@ function AsIsScreen({
   onRemoveConnection,
   onSaveBpmnDecision,
   onSaveBpmnLane,
+  onAddBpmnMessage,
+  onRemoveBpmnMessage,
   onBpmnDraftChange,
   bpmnDraftDirty,
   scope,
@@ -1057,6 +1061,7 @@ function AsIsScreen({
         <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
         <BpmnDecisions steps={steps} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
         <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
+        <BpmnMessages steps={steps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
         <BpmnExport steps={steps} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>
       ) : (
@@ -3795,6 +3800,11 @@ const openSavedProcess = (process) => {
     try { return saveConnectionChange(setProcessLane(steps, sourceId, laneName)) }
     catch (error) { return { error: error.message } }
   }
+  const addMessage = (stepId, primary, external, direction, label) => {
+    try { return saveConnectionChange(addBpmnMessage(steps, stepId, primary, external, direction, label)) }
+    catch (error) { return { error: error.message } }
+  }
+  const removeMessage = (stepId, index) => saveConnectionChange(removeBpmnMessage(steps, stepId, index))
 
   const addOrUpdateStep = () => {
     if (!stepDraft.name.trim()) {
@@ -3858,6 +3868,7 @@ try {
   }
 
   const deleteStep = (stepId) => {
+    if (decisionDraftFlags['message-form']) { setAsIsError('Najpierw dodaj albo wyczyść niezapisaną wiadomość BPMN.'); return }
     const affectedDrafts = steps.filter((step) => decisionDraftFlags[step.id] && (step.id === stepId || (Array.isArray(step.extraConnections) && step.extraConnections.length > 0 && step.extraConnections.every((link) => link.targetId === stepId))))
     if ((affectedDrafts.length || decisionDraftFlags[`lane:${stepId}`]) && !window.confirm('Usunięcie kroku spowoduje utratę niezapisanych ustawień BPMN. Kontynuować?')) return
     for (const affected of affectedDrafts) onBpmnDraftChange(affected.id, false)
@@ -3895,7 +3906,7 @@ try {
   }
 
   const saveAsIs = () => {
-    if (decisionDraftDirty) { setAsIsError('Najpierw zapisz lub cofnij zmiany w formularzu decyzji albo toru BPMN.'); return }
+    if (decisionDraftDirty) { setAsIsError('Najpierw zapisz lub cofnij zmiany w formularzach BPMN.'); return }
     setAsIsSaved(false)
     setAsIsSaveError(false)
     setAsIsError('')
@@ -4589,6 +4600,8 @@ try {
             onRemoveConnection={removeConnection}
             onSaveBpmnDecision={saveBpmnDecision}
             onSaveBpmnLane={saveBpmnLane}
+            onAddBpmnMessage={addMessage}
+            onRemoveBpmnMessage={removeMessage}
             onBpmnDraftChange={onBpmnDraftChange}
             bpmnDraftDirty={decisionDraftDirty}
             scope={formData}
