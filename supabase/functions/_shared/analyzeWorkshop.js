@@ -39,7 +39,14 @@ export async function analyzeWorkshop(transcript, { apiKey, model = 'gpt-4.1-min
       text: { format: { type: 'json_schema', name: 'workshop_proposal', strict: true, schema } },
     }),
   })
-  if (!response.ok) throw new Error('PROVIDER_ERROR')
+  if (!response.ok) {
+    if (response.status === 429) {
+      const body = await response.json().catch(() => null)
+      const billingCodes = ['project_spend_limit_exceeded', 'organization_spend_limit_exceeded', 'organization_usage_limit_exceeded', 'credit_balance_exhausted']
+      if (billingCodes.includes(body?.error?.code)) throw new Error('PROVIDER_BILLING_LIMIT')
+    }
+    throw new Error('PROVIDER_ERROR')
+  }
   const result = await response.json()
   if (result.status !== 'completed') throw new Error('INCOMPLETE_RESPONSE')
   const content = result.output?.flatMap((entry) => entry.content ?? []) ?? []

@@ -32,9 +32,9 @@ export function createWorkshopHandler({
       const proposal = await analyze(input.transcript, { apiKey, model })
       return send(res, 200, { proposal })
     } catch (error) {
-      const safe = ['MISSING_API_KEY', 'INVALID_TRANSCRIPT', 'UNVERIFIED_RESPONSE', 'INVALID_REQUEST', 'TOO_LARGE']
+      const safe = ['MISSING_API_KEY', 'INVALID_TRANSCRIPT', 'UNVERIFIED_RESPONSE', 'INVALID_REQUEST', 'TOO_LARGE', 'PROVIDER_BILLING_LIMIT']
       const code = safe.includes(error?.message) ? error.message : 'ANALYSIS_FAILED'
-      const status = code === 'TOO_LARGE' ? 413 : ['INVALID_TRANSCRIPT', 'INVALID_REQUEST'].includes(code) ? 400 : 503
+      const status = code === 'TOO_LARGE' ? 413 : code === 'PROVIDER_BILLING_LIMIT' ? 429 : ['INVALID_TRANSCRIPT', 'INVALID_REQUEST'].includes(code) ? 400 : 503
       return send(res, status, { error: code })
     } finally {
       guard.release()

@@ -51,6 +51,15 @@ test('release failure fails closed and does not return the proposal', async () =
   assert.deepEqual(await response.json(), { error: 'USAGE_STORAGE_UNAVAILABLE' })
 })
 
+test('recognized provider billing limit is safe and releases the lease', async () => {
+  let released = false
+  const handler = createHandler({ ...good, analyze: async () => { throw Error('PROVIDER_BILLING_LIMIT') }, release: async () => { released = true; return true } })
+  const response = await handler(req())
+  assert.equal(response.status, 429)
+  assert.deepEqual(await response.json(), { error: 'PROVIDER_BILLING_LIMIT' })
+  assert.equal(released, true)
+})
+
 test('client disconnect during analysis keeps the lease until the provider completes', async () => {
   let held = false
   let releaseCount = 0

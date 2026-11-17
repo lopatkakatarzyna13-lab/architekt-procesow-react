@@ -35,6 +35,12 @@ describe('SEC-04 HTTP integration', () => {
     expect((await response.json()).proposal.steps).toEqual([])
     expect(analyze).toHaveBeenCalledOnce()
   })
+  it('reports a provider billing limit without exposing provider details', async () => {
+    const url = await start(async () => { throw new Error('PROVIDER_BILLING_LIMIT') })
+    const response = await request(url)
+    expect(response.status).toBe(429)
+    expect(await response.json()).toEqual({ error: 'PROVIDER_BILLING_LIMIT' })
+  })
   it('rejects foreign origins before calling AI', async () => {
     const analyze = vi.fn()
     const url = await start(analyze)

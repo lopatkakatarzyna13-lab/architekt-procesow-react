@@ -45,4 +45,15 @@ describe('workshop AI adapter', () => {
     await expect(analyzeWorkshop(transcript, { apiKey: 'test', fetchImpl: provider(proposal, 'incomplete') })).rejects.toThrow('INCOMPLETE_RESPONSE')
     await expect(analyzeWorkshop(transcript, { apiKey: 'test', fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'completed', output: [{ content: [{ type: 'refusal' }] }] }) }) })).rejects.toThrow('INVALID_RESPONSE')
   })
+  it('recognizes only documented billing limits and never forwards provider details', async () => {
+    for (const code of ['project_spend_limit_exceeded', 'organization_spend_limit_exceeded', 'organization_usage_limit_exceeded', 'credit_balance_exhausted']) {
+      const fake = vi.fn(async () => ({ ok: false, status: 429, json: async () => ({ error: { code, message: 'private fixture detail' } }) }))
+      await expect(analyzeWorkshop(transcript, { apiKey: 'test', fetchImpl: fake })).rejects.toThrow(/^PROVIDER_BILLING_LIMIT$/)
+      expect(fake).toHaveBeenCalledOnce()
+    }
+    const rateLimit = async () => ({ ok: false, status: 429, json: async () => ({ error: { code: 'rate_limit_exceeded', message: 'private fixture detail' } }) })
+    await expect(analyzeWorkshop(transcript, { apiKey: 'test', fetchImpl: rateLimit })).rejects.toThrow(/^PROVIDER_ERROR$/)
+    const malformed = async () => ({ ok: false, status: 429, json: async () => { throw new Error('private fixture detail') } })
+    await expect(analyzeWorkshop(transcript, { apiKey: 'test', fetchImpl: malformed })).rejects.toThrow(/^PROVIDER_ERROR$/)
+  })
 })

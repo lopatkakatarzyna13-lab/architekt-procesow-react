@@ -149,6 +149,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
         if (result.error === 'FORBIDDEN') throw new Error('Brak dostępu do analizy. Sprawdź logowanie i uprawnienia. Możesz kontynuować pracę ręcznie.')
         if (result.error === 'AUTH_UNAVAILABLE') throw new Error('Usługa logowania jest niedostępna. Analiza została zablokowana. Możesz kontynuować pracę ręcznie.')
         if (result.error === 'LIMIT_REACHED') throw new Error('Osiągnięto limit analiz AI. Możesz dalej opracowywać proces ręcznie i spróbować później.')
+        if (result.error === 'PROVIDER_BILLING_LIMIT') throw new Error('Dostawca AI zablokował analizę z powodu limitu wydatków, wykorzystania lub braku środków. Sprawdź rozliczenia przed kolejną próbą. Możesz kontynuować pracę ręcznie.')
         if (result.error === 'USAGE_STORAGE_UNAVAILABLE') throw new Error('Nie można sprawdzić licznika analiz AI. Wynik może być niedostępny — sprawdź limit przed ponowieniem próby. Możesz kontynuować pracę ręcznie.')
         if (result.error === 'BUSY') throw new Error('Trwa już analiza AI. Zaczekaj na jej zakończenie, zanim uruchomisz kolejną.')
         if (result.error === 'RESULT_UNKNOWN') throw new Error('Nie otrzymano odpowiedzi. Analiza mogła już się rozpocząć, a ponowienie może zużyć kolejną próbę i spowodować koszt. Sprawdź połączenie i limit przed ponowieniem. Możesz pracować ręcznie.')

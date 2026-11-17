@@ -34,11 +34,11 @@ export function createHandler({ enabled, origin, ownerId, verify, reserve, relea
       if (admission?.status === 'LIMIT_REACHED') return reply(429, 'LIMIT_REACHED', cors)
       if (admission?.status === 'BUSY') return reply(429, 'BUSY', cors)
       if (admission?.status !== 'ACQUIRED' || typeof admission.lease_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(admission.lease_id)) return reply(503, 'USAGE_STORAGE_UNAVAILABLE', cors)
-      let proposal, failed = false, released = false
-      try { proposal = await analyze(input.transcript) } catch { failed = true }
+      let proposal, failure = '', released = false
+      try { proposal = await analyze(input.transcript) } catch (error) { failure = error?.message === 'PROVIDER_BILLING_LIMIT' ? 'PROVIDER_BILLING_LIMIT' : 'ANALYSIS_FAILED' }
       try { released = (await release(admission.lease_id)) === true } catch { /* fail closed until lease expires */ }
       if (!released) return reply(503, 'USAGE_STORAGE_UNAVAILABLE', cors)
-      if (failed) return reply(503, 'ANALYSIS_FAILED', cors)
+      if (failure) return reply(failure === 'PROVIDER_BILLING_LIMIT' ? 429 : 503, failure, cors)
       return new Response(JSON.stringify({ proposal }), { status: 200, headers: { ...headers, ...cors } })
     } catch { return reply(400, 'INVALID_REQUEST', cors) }
   }

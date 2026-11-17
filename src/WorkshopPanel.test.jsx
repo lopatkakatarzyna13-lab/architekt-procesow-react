@@ -102,6 +102,18 @@ describe('workshop review screen', () => {
     expect(await screen.findByText(/Trwa już analiza AI/)).toBeTruthy()
   })
 
+  it('explains a provider billing limit and keeps manual work available', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 429, json: async () => ({ error: 'PROVIDER_BILLING_LIMIT' }) })))
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny proces')
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    expect(await screen.findByText(/Sprawdź rozliczenia przed kolejną próbą/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+    expect(screen.getByText('Propozycja do sprawdzenia')).toBeTruthy()
+  })
+
   it('keeps manual editing available when the usage counter is unavailable', async () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
