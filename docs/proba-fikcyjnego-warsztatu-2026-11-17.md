@@ -7,3 +7,5 @@ Scenariusz prowadzi przez: utworzenie procesu → zapis tekstu → propozycję z
 Zaobserwowany zakres: opis analityczny i TO-BE wprowadzono ręcznie, a nie wygenerowano przez model. Role i pytania z propozycji nie przechodzą automatycznie do procesu; osoba prowadząca je weryfikuje. Raport przedstawia dane procesu i macierz RACI, a PDF powstaje z widoku drukowania przeglądarki. Formalna walidacja BPMN, prawdziwe AI, transkrypcja na żywo i copilot pozostają dalszymi etapami mapy rozwoju.
 
 Próba nie jest formalnie zamknięta, dopóki wynik testu Chromium i czytelność oraz kompletność PDF nie zostaną zweryfikowane, a stwierdzone problemy poprawione. Dostęp do płatnego API i wdrożenie hostowanych funkcji wymagają osobnej decyzji. SEC-04 pozostaje otwarty.
+
+Wynik dla `c7ddd8d82e3a7beae9f73ad31e1460b895164bc4`: [kontrola MVP](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44136027944) zakończona sukcesem, a log potwierdza przejście w Chromium do raportu i wytworzenie niepustego PDF. Sprawdzono treści w interfejsie raportu oraz wywołanie drukowania. Test nie sprawdza wizualnej czytelności ani pełnej treści pliku PDF; to pozostaje otwarte.
