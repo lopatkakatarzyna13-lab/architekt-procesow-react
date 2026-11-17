@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
+import { getBpmnMessages } from './bpmnMessages'
 
 export default function BpmnPreview({ steps, externalSteps = [], scope }) {
   const canvasRef = useRef(null)
   const viewerRef = useRef(null)
   const [status, setStatus] = useState('loading')
+  const [selectedId, setSelectedId] = useState('')
+  const [navigationError, setNavigationError] = useState('')
+  const messages = getBpmnMessages(steps)
+  const targets = [
+    ...(messages.length ? [
+      { id: 'Participant_Main', name: `Basen: ${messages[0].primary}` },
+      { id: 'Participant_External_1', name: `Basen: ${messages[0].external}` },
+    ] : []),
+    ...steps.map((step, index) => ({ id: `Task_${index + 1}`, name: `Krok procesu ${index + 1}: ${step.name}` })),
+    ...externalSteps.map((step, index) => ({ id: `ExternalTask_${index + 1}`, name: `Działanie zewnętrzne ${index + 1}: ${step.name}` })),
+  ]
   useEffect(() => {
     let cancelled = false
     let viewer
@@ -32,12 +44,38 @@ export default function BpmnPreview({ steps, externalSteps = [], scope }) {
     const canvas = viewerRef.current?.get('canvas')
     if (canvas) canvas.zoom(Math.min(2, Math.max(0.2, canvas.zoom() * factor)), 'auto')
   }
+  const goToElement = () => {
+    const viewer = viewerRef.current
+    const element = viewer?.get('elementRegistry').get(selectedId)
+    if (!element || !Number.isFinite(element.x) || !Number.isFinite(element.y)) {
+      setNavigationError('Nie udało się znaleźć tego elementu na mapie.')
+      return
+    }
+    const canvas = viewer.get('canvas')
+    canvas.zoom(1, 'auto')
+    const view = canvas.viewbox()
+    // Participant pools can be very wide: show their name and first part.
+    const x = element.x + (element.type === 'bpmn:Participant' ? Math.min(200, element.width / 2) : element.width / 2)
+    const y = element.y + (element.type === 'bpmn:Participant' ? Math.min(100, element.height / 2) : element.height / 2)
+    canvas.viewbox({ x: x - view.width / 2, y: y - view.height / 2, width: view.width, height: view.height })
+    setNavigationError('')
+  }
   return <div className="bpmn-preview">
     <div className="bpmn-preview-controls" aria-label="Kontrolki podglądu BPMN">
       <button type="button" className="back-button" disabled={status !== 'ready'} onClick={() => zoom(1.2)}>Powiększ BPMN</button>
       <button type="button" className="back-button" disabled={status !== 'ready'} onClick={() => zoom(1 / 1.2)}>Pomniejsz BPMN</button>
       <button type="button" className="back-button" disabled={status !== 'ready'} onClick={() => viewerRef.current?.get('canvas').zoom('fit-viewport')}>Dopasuj BPMN</button>
     </div>
+    <div className="bpmn-preview-controls">
+      <label htmlFor="bpmn-target">Przejdź do elementu mapy</label>
+      <select id="bpmn-target" value={selectedId} disabled={status !== 'ready'} onChange={(event) => { setSelectedId(event.target.value); setNavigationError('') }}>
+        <option value="">Wybierz basen lub działanie</option>
+        {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
+      </select>
+      <button type="button" className="back-button" disabled={status !== 'ready' || !selectedId} onClick={goToElement}>Pokaż na mapie</button>
+    </div>
+    <p>Wybierz element, aby go przybliżyć. Mapę możesz przesuwać myszą lub dotykiem; użyj przycisku „Dopasuj BPMN”, aby ponownie zobaczyć całość.</p>
+    {navigationError && <p role="alert">{navigationError}</p>}
     {status === 'loading' && <p role="status">Przygotowuję podgląd BPMN…</p>}
     {status === 'warning' && <p role="alert">Nie można potwierdzić poprawnego wyświetlenia wszystkich elementów BPMN. Sprawdź dane procesu.</p>}
     {status === 'error' && <p role="alert">Nie udało się wyświetlić diagramu BPMN. Spróbuj ponownie.</p>}

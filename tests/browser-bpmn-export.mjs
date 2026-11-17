@@ -184,6 +184,23 @@ try {
   await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
   await preview.locator('[data-element-id="MessageFlow_8"]').first().waitFor({ state: 'attached' })
   if (globalThis.process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: globalThis.process.env.BPMN_SCREENSHOT_PATH })
+  // Navigation must make an external activity visible at a useful zoom in a dense map.
+  const picker = page.getByLabel('Przejdź do elementu mapy')
+  await picker.selectOption('ExternalTask_2')
+  await page.getByRole('button', { name: 'Pokaż na mapie' }).click()
+  const location = await preview.locator('[data-element-id="ExternalTask_2"] .djs-visual').evaluate((element) => {
+    const item = element.getBoundingClientRect()
+    const parent = element.closest('.bpmn-preview-canvas').getBoundingClientRect()
+    return { x: item.x + item.width / 2, y: item.y + item.height / 2, left: parent.left, right: parent.right, top: parent.top, bottom: parent.bottom, width: item.width }
+  })
+  assert.ok(location.x > location.left && location.x < location.right && location.y > location.top && location.y < location.bottom, 'selected external activity must be visible in the viewport')
+  assert.ok(location.width > 70, 'the selected activity must be readable at a useful zoom')
+  if (globalThis.process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: globalThis.process.env.BPMN_SCREENSHOT_PATH })
+  await picker.selectOption('Participant_Main')
+  await page.getByRole('button', { name: 'Pokaż na mapie' }).click()
+  await picker.selectOption('Task_1')
+  await page.getByRole('button', { name: 'Pokaż na mapie' }).click()
+  await page.getByRole('button', { name: 'Dopasuj BPMN' }).click()
   await page.getByLabel('Pytanie decyzji — Wysłanie dokumentów').fill('Zmienione pytanie?')
   assert.equal(await preview.count(), 0, 'unsaved decision changes must hide the old preview')
   console.log('PASS: BPMN pools, message flows, lanes and decision download, XSD, rendering and safe preview invalidation')
