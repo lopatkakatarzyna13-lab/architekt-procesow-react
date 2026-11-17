@@ -68,7 +68,22 @@ try {
   await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
   await preview.locator(`[data-element-id="${decision.id}"]`).waitFor({ state: 'visible' })
   await preview.locator(`[data-element-id="${merge.id}"]`).waitFor({ state: 'visible' })
-  for (const flow of decision.outgoing) await preview.locator(`[data-element-id="${flow.id}"]`).waitFor({ state: 'visible' })
+  for (const flow of decision.outgoing) {
+    // A horizontal SVG path has a zero-height bounding box, which Playwright
+    // may classify as hidden even when its stroke is drawn. Inspect the line.
+    const line = preview.locator(`[data-element-id="${flow.id}"] .djs-visual path`).first()
+    await line.waitFor({ state: 'attached' })
+    const geometry = await line.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return { length: element.getTotalLength(), width: rect.width, height: rect.height, stroke: style.stroke, display: style.display, visibility: style.visibility }
+    })
+    console.log('BPMN_FLOW_GEOMETRY', JSON.stringify({ id: flow.id, ...geometry }))
+    assert.ok(geometry.length > 0 && (geometry.width > 0 || geometry.height > 0), 'flow path must have measurable geometry')
+    assert.notEqual(geometry.stroke, 'none', 'flow path must have a visible stroke')
+    assert.notEqual(geometry.display, 'none')
+    assert.notEqual(geometry.visibility, 'hidden')
+  }
   assert.equal(await preview.locator('.bjs-powered-by').isVisible(), true)
   await page.getByLabel('Pytanie decyzji — Wysłanie dokumentów').fill('Zmienione pytanie?')
   assert.equal(await preview.count(), 0, 'unsaved decision changes must hide the old preview')
