@@ -1,5 +1,6 @@
 // Complete fictional workshop; provider response is intercepted in the browser.
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { chromium } from 'playwright'
 
 const launch = { headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) }
@@ -74,7 +75,11 @@ try {
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true, ...(process.env.FICTIONAL_PDF_PATH ? { path: process.env.FICTIONAL_PDF_PATH } : {}) })
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
-  console.log('PASS: fictional provider → review → AS-IS → save and reopen → analysis → TO-BE → RACI → report and printable PDF')
+  const pdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).replace(/\s+/g, ' ')
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR']) {
+    assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
+  }
+  console.log('PASS: fictional provider → review → AS-IS → save and reopen → analysis → TO-BE → RACI → report and checked PDF text')
 } finally {
   await browser.close()
 }
