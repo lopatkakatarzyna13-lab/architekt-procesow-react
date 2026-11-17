@@ -75,10 +75,13 @@ try {
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true, ...(process.env.FICTIONAL_PDF_PATH ? { path: process.env.FICTIONAL_PDF_PATH } : {}) })
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
-  const pdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).replace(/\s+/g, ' ')
+  const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
+  const pdfText = rawPdfText.replace(/\s+/g, ' ')
   for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
+  assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')
+  assert.equal(await page.locator('.print-raci-list .print-raci-r, .print-raci-list .print-raci-a').count(), 0, 'do not print empty R and A entries for an R/A assignment')
   console.log('PASS: fictional provider → review → AS-IS → save and reopen → analysis → TO-BE → RACI → report and checked PDF text')
 } finally {
   await browser.close()

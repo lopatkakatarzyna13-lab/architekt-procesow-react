@@ -3185,6 +3185,11 @@ footer span:first-child::before {
     page-break-after: avoid;
   }
 
+  .print-report .print-stakeholder-section {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
   .print-report .report-section-title + *,
   .print-report .report-summary-grid > :first-child,
   .print-report .report-steps > :first-child,

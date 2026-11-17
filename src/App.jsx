@@ -2741,7 +2741,7 @@ function PrintProcessMap({ title, steps, scope, variant, findings, unavailable }
 
 function PrintStakeholders({ stakeholders }) {
   return (
-    <section className="report-section">
+    <section className="report-section print-stakeholder-section">
       <ReportSectionTitle
         number="07"
         title="Interesariusze procesu"
@@ -2786,7 +2786,7 @@ function PrintRaci({ steps, stakeholders, raci }) {
         {steps.map((step, index) => {
           const assignments = ['RA', 'R', 'A', 'C', 'I']
             .map((role) => [role, assignedNames(step.id, role)])
-            .filter(([role, names]) => role === 'R' || role === 'A' || names.length > 0)
+            .filter(([, names]) => names.length > 0)
 
           return (
             <article key={step.id}>
