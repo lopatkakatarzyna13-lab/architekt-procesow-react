@@ -33,3 +33,5 @@ jobs:
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -c 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;'
       - name: Kill analysis worker and check admission state
         run: node experiments/supabase-auth/process-crash.smoke.mjs
+      - name: Check disabling new admission without deleting records
+        run: node experiments/supabase-auth/disable-admission-postgres.smoke.mjs
