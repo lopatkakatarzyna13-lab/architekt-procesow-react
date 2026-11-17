@@ -104,9 +104,11 @@ export function deleteWorkshop(storage, processId) {
         else storage.setItem(key, value)
       } catch { restored = false }
     }
-    throw new Error(restored
+    const error = new Error(restored
       ? 'Nie udało się usunąć warsztatu. Poprzednie dane zostały przywrócone.'
       : 'Nie udało się w pełni przywrócić warsztatu. Nie kontynuuj edycji.')
+    error.code = restored ? 'DELETE_ROLLED_BACK' : 'DELETE_ROLLBACK_FAILED'
+    throw error
   }
 }
 

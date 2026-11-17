@@ -32,6 +32,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   const [analysis, setAnalysis] = useState(initial.review)
   const [reviewDirty, setReviewDirty] = useState(false)
   const [analysisMessage, setAnalysisMessage] = useState(initial.reviewError)
+  const [storageUncertain, setStorageUncertain] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [selectedSteps, setSelectedSteps] = useState([])
   const revision = useRef(0)
@@ -98,6 +99,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       setAnalysisMessage('')
       setMessage('Dane warsztatu zostały usunięte z tej przeglądarki. Kroki AS-IS i biblioteka nie zostały zmienione.')
     } catch (error) {
+      if (error.code === 'DELETE_ROLLBACK_FAILED') setStorageUncertain(true)
       setMessage(error.message)
     }
   }
@@ -216,6 +218,15 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     setSelectedSteps([])
     setAnalysisMessage(`Dodano kroków: ${result.added}. Pominięto istniejących lub powtórzonych: ${result.skipped}. Sprawdź listę kroków poniżej i zapisz proces AS-IS.`)
   }
+
+  if (storageUncertain) return (
+    <section className="workshop-panel" aria-labelledby="workshop-storage-error">
+      <h2 id="workshop-storage-error">Nie można potwierdzić stanu zapisu</h2>
+      <p role="alert">Usuwanie warsztatu nie powiodło się i nie udało się w pełni przywrócić danych. Edycja została wstrzymana, aby nie nadpisać pozostałych danych. Sprawdź zapis przed dalszą pracą.</p>
+      <label htmlFor="workshop-recovery-text">Tekst dostępny w tym oknie — możesz go skopiować w bezpieczne miejsce</label>
+      <textarea id="workshop-recovery-text" rows="9" value={transcript} readOnly />
+    </section>
+  )
 
   return (
     <section className="workshop-panel" aria-labelledby="workshop-title">

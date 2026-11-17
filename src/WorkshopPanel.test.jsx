@@ -187,4 +187,27 @@ describe('workshop review screen', () => {
     expect(localStorage.getItem(`architekt-procesow:workshop:${PROCESS_A}`)).toContain('Dane fikcyjne.')
   })
 
+  it('blocks further edits if deletion and restoration both fail', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fikcyjny tekst do odzyskania')
+    await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+    const remove = Storage.prototype.removeItem
+    const set = Storage.prototype.setItem
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (key) {
+      if (key.endsWith(':review')) throw Error('fixture remove failed')
+      return remove.call(this, key)
+    })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+      if (key === `architekt-procesow:workshop:${PROCESS_A}`) throw Error('fixture restore failed')
+      return set.call(this, key, value)
+    })
+    await user.click(screen.getByRole('button', { name: 'Usuń dane warsztatu' }))
+    expect(screen.getByRole('alert').textContent).toContain('Edycja została wstrzymana')
+    expect(screen.getByLabelText(/Tekst dostępny w tym oknie/).value).toBe('Fikcyjny tekst do odzyskania')
+    expect(screen.queryByRole('button', { name: 'Zapisz transkrypcję' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Analizuj transkrypcję' })).toBeNull()
+  })
+
 })
