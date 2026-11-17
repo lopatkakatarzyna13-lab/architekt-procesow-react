@@ -5,7 +5,8 @@ export function getBpmnMessages(steps) {
     .map((message, index) => ({ ...(message || {}), stepId: step.id, index })))
 }
 
-export function addBpmnMessage(steps, stepId, mainParticipant, externalParticipant, direction, label) {
+export function addBpmnMessage(steps, stepId, mainParticipant, externalParticipant, direction, label, externalStepId = '', externalSteps = []) {
+  if (externalStepId && !externalSteps.some((item) => item.id === externalStepId)) throw new Error('Wybierz istniejące działanie zewnętrzne.')
   const step = steps.find((item) => item.id === stepId)
   const values = [mainParticipant, externalParticipant, label]
   if (!step || values.some((value) => typeof value !== 'string' || !value.trim() || value.trim().length > 100)) throw new Error('Wybierz krok i uzupełnij nazwy basenów oraz wiadomości (do 100 znaków).')
@@ -19,7 +20,7 @@ export function addBpmnMessage(steps, stepId, mainParticipant, externalParticipa
   if (messages.some((item) => norm(item.primary) !== norm(primary))) throw new Error('Nazwa basenu własnego procesu musi być taka sama we wszystkich wiadomościach.')
   if (messages.some((item) => item.stepId === stepId && norm(item.external) === norm(external) && item.direction === direction && norm(item.label) === norm(name))) throw new Error('Taka wiadomość już istnieje dla tego kroku.')
   const old = Array.isArray(step.bpmnMessages) ? step.bpmnMessages : []
-  return steps.map((item) => item.id === stepId ? { ...item, bpmnMessages: [...old, { primary, external, direction, label: name }] } : item)
+  return steps.map((item) => item.id === stepId ? { ...item, bpmnMessages: [...old, { primary, external, direction, label: name, ...(externalStepId ? { externalStepId } : {}) }] } : item)
 }
 
 export function removeBpmnMessage(steps, stepId, index) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-export default function BpmnPreview({ steps, scope }) {
+export default function BpmnPreview({ steps, externalSteps = [], scope }) {
   const canvasRef = useRef(null)
   const viewerRef = useRef(null)
   const [status, setStatus] = useState('loading')
@@ -13,7 +13,7 @@ export default function BpmnPreview({ steps, scope }) {
           import('bpmn-js/lib/NavigatedViewer'), import('./bpmnDecisionExport'),
           import('bpmn-js/dist/assets/diagram-js.css'), import('bpmn-js/dist/assets/bpmn-js.css'), import('bpmn-js/dist/assets/bpmn-font/css/bpmn.css'),
         ])
-        const xml = await createDecisionBpmn({ steps, processName: scope.processName, startName: scope.processStart, endName: scope.processEnd })
+        const xml = await createDecisionBpmn({ steps, externalSteps, processName: scope.processName, startName: scope.processStart, endName: scope.processEnd })
         if (cancelled) return
         viewer = new NavigatedViewer({ container: canvasRef.current })
         const { warnings } = await viewer.importXML(xml)
@@ -26,7 +26,7 @@ export default function BpmnPreview({ steps, scope }) {
     }
     load()
     return () => { cancelled = true; viewerRef.current = null; viewer?.destroy(); viewer = null }
-  }, [steps, scope])
+  }, [steps, externalSteps, scope])
 
   const zoom = (factor) => {
     const canvas = viewerRef.current?.get('canvas')

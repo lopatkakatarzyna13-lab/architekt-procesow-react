@@ -2,17 +2,17 @@ import { lazy, Suspense, useState } from 'react'
 const BpmnPreview = lazy(() => import('./BpmnPreview'))
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 
-export default function BpmnExport({ steps, scope, saved }) {
+export default function BpmnExport({ steps, externalSteps = [], scope, saved }) {
   const [message, setMessage] = useState('')
   const [previewKey, setPreviewKey] = useState(null)
-  const snapshot = JSON.stringify([steps, scope.processName, scope.processStart, scope.processEnd])
-  const previewVisible = saved && !getDecisionBpmnError(steps) && previewKey === snapshot
-  const error = getDecisionBpmnError(steps)
+  const snapshot = JSON.stringify([steps, externalSteps, scope.processName, scope.processStart, scope.processEnd])
+  const previewVisible = saved && !getDecisionBpmnError(steps, externalSteps) && previewKey === snapshot
+  const error = getDecisionBpmnError(steps, externalSteps)
   const exportFile = async () => {
     if (!saved || error) return
     try {
       const { createDecisionBpmn } = await import('./bpmnDecisionExport')
-      const xml = await createDecisionBpmn({ steps, processName: scope.processName, startName: scope.processStart, endName: scope.processEnd })
+      const xml = await createDecisionBpmn({ steps, externalSteps, processName: scope.processName, startName: scope.processStart, endName: scope.processEnd })
       const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
@@ -34,7 +34,7 @@ export default function BpmnExport({ steps, scope, saved }) {
       <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={() => setPreviewKey(previewVisible ? null : snapshot)}>{previewVisible ? 'Ukryj podgląd BPMN' : 'Pokaż podgląd BPMN'}</button>
       <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={exportFile}>Pobierz BPMN 2.0</button>
     </div>
-    {previewVisible && <Suspense fallback={<p role="status">Przygotowuję podgląd BPMN…</p>}><BpmnPreview key={snapshot} steps={steps} scope={scope} /></Suspense>}
+    {previewVisible && <Suspense fallback={<p role="status">Przygotowuję podgląd BPMN…</p>}><BpmnPreview key={snapshot} steps={steps} externalSteps={externalSteps} scope={scope} /></Suspense>}
     {message && <p role="status">{message}</p>}
   </section>
 }

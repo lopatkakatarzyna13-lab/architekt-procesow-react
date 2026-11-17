@@ -32,6 +32,7 @@ import BpmnExport from './BpmnExport'
 import BpmnDecisions from './BpmnDecisions'
 import BpmnLanes from './BpmnLanes'
 import BpmnMessages from './BpmnMessages'
+import BpmnExternalSteps from './BpmnExternalSteps'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -164,6 +165,7 @@ function loadSavedAsIs() {
     return {
       description: savedAsIs.description ?? '',
       steps: Array.isArray(savedAsIs.steps) ? savedAsIs.steps : [],
+      externalSteps: Array.isArray(savedAsIs.externalSteps) ? savedAsIs.externalSteps : [],
       isSaved: Boolean(savedAsIs.savedAt),
     }
   } catch {
@@ -991,6 +993,8 @@ function AsIsScreen({
   onSaveBpmnLane,
   onAddBpmnMessage,
   onRemoveBpmnMessage,
+  externalSteps,
+  onExternalStepsChange,
   onBpmnDraftChange,
   bpmnDraftDirty,
   scope,
@@ -1061,8 +1065,9 @@ function AsIsScreen({
         <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
         <BpmnDecisions steps={steps} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
         <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
-        <BpmnMessages steps={steps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
-        <BpmnExport steps={steps} scope={scope} saved={saved && !bpmnDraftDirty} />
+        <BpmnExternalSteps steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
+        <BpmnMessages steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
+        <BpmnExport steps={steps} externalSteps={externalSteps} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>
       ) : (
         <DescribeAsIs
@@ -3197,6 +3202,7 @@ function App() {
   const [scopeSaveError, setScopeSaveError] = useState(false)
   const [asIsDescription, setAsIsDescription] = useState(savedAsIs.description)
   const [steps, setSteps] = useState(savedAsIs.steps)
+  const [externalSteps, setExternalSteps] = useState(savedAsIs.externalSteps || [])
   const [stepDraft, setStepDraft] = useState(emptyStep)
   const [editingStepId, setEditingStepId] = useState(null)
   const [descriptionError, setDescriptionError] = useState('')
@@ -3603,6 +3609,7 @@ const openSavedProcess = (process) => {
   setFormData(nextScope.data)
   setAsIsDescription(nextAsIs.description)
   setSteps(nextAsIs.steps)
+  setExternalSteps(nextAsIs.externalSteps || [])
   setAsIsSaved(nextAsIs.isSaved)
   setFindings(nextAnalysis.findings)
   setAnalysisSaved(nextAnalysis.isSaved)
@@ -3741,7 +3748,7 @@ const openSavedProcess = (process) => {
     try {
       const result = appendWorkshopSteps(steps, names, () => globalThis.crypto.randomUUID())
       if (result.added.length) {
-        localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: result.steps, startMethod, savedAt: null }))
+        localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: result.steps, externalSteps, startMethod, savedAt: null }))
         setSteps(result.steps)
         setAsIsSaved(false)
         setAsIsSaveError(false)
@@ -3774,7 +3781,7 @@ const openSavedProcess = (process) => {
 
   const saveConnectionChange = (nextSteps) => {
     try {
-      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: nextSteps, startMethod, savedAt: null }))
+      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: nextSteps, externalSteps, startMethod, savedAt: null }))
       setSteps(nextSteps)
       setAsIsSaved(false)
       setAsIsSaveError(false)
@@ -3800,9 +3807,16 @@ const openSavedProcess = (process) => {
     try { return saveConnectionChange(setProcessLane(steps, sourceId, laneName)) }
     catch (error) { return { error: error.message } }
   }
-  const addMessage = (stepId, primary, external, direction, label) => {
-    try { return saveConnectionChange(addBpmnMessage(steps, stepId, primary, external, direction, label)) }
+  const addMessage = (stepId, primary, external, direction, label, externalStepId) => {
+    try { return saveConnectionChange(addBpmnMessage(steps, stepId, primary, external, direction, label, externalStepId, externalSteps)) }
     catch (error) { return { error: error.message } }
+  }
+  const changeExternalSteps = (next) => {
+    try {
+      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps: next, startMethod, savedAt: null }))
+      setExternalSteps(next); setAsIsSaved(false); setAsIsSaveError(false)
+      return { ok: true }
+    } catch { return { error: 'Nie udało się zapisać działań zewnętrznych.' } }
   }
   const removeMessage = (stepId, index) => saveConnectionChange(removeBpmnMessage(steps, stepId, index))
 
@@ -3835,6 +3849,7 @@ try {
         JSON.stringify({
           description: asIsDescription,
           steps: nextSteps,
+          externalSteps,
           startMethod,
           savedAt: null,
         }),
@@ -3928,6 +3943,7 @@ try {
         JSON.stringify({
           description: asIsDescription,
           steps,
+          externalSteps,
           startMethod,
           savedAt: new Date().toISOString(),
         }),
@@ -4600,6 +4616,8 @@ try {
             onRemoveConnection={removeConnection}
             onSaveBpmnDecision={saveBpmnDecision}
             onSaveBpmnLane={saveBpmnLane}
+            externalSteps={externalSteps}
+            onExternalStepsChange={changeExternalSteps}
             onAddBpmnMessage={addMessage}
             onRemoveBpmnMessage={removeMessage}
             onBpmnDraftChange={onBpmnDraftChange}

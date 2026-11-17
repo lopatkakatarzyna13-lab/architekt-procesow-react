@@ -70,6 +70,25 @@ describe('explicit BPMN decisions', () => {
     const poolTop = plane.planeElement.find((item) => item.bpmnElement?.id === 'Participant_Main').bounds.y
     expect(returnEdge.waypoint[1].y - poolTop).toBeGreaterThanOrEqual(30)
   })
+  it('exports explicitly ordered external actions and message endpoints while keeping sequence flows in their own pools', async () => {
+    const input = steps()
+    const externalSteps = [{ id: 'receive', name: 'Sprawdzenie danych' }, { id: 'prepare', name: 'Przygotowanie dokumentów' }]
+    input[0].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Dane', externalStepId: 'receive' }]
+    input[2].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'incoming', label: 'Dokumenty', externalStepId: 'prepare' }]
+    const xml = await createDecisionBpmn({ steps: input, externalSteps })
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+    expect(warnings).toEqual([])
+    const collaboration = rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+    const processes = collaboration.participants.map((item) => item.processRef)
+    expect(processes[1].flowElements.filter((item) => item.$type === 'bpmn:Task').map((item) => item.name)).toEqual(['Sprawdzenie danych', 'Przygotowanie dokumentów'])
+    expect(collaboration.messageFlows.map((item) => [item.sourceRef.id, item.targetRef.id])).toEqual([['Task_1', 'ExternalTask_1'], ['ExternalTask_2', 'Task_3']])
+    for (const process of processes) {
+      const nodes = new Set(process.flowElements)
+      for (const flow of process.flowElements.filter((item) => item.$type === 'bpmn:SequenceFlow')) expect(nodes.has(flow.sourceRef) && nodes.has(flow.targetRef)).toBe(true)
+    }
+    expect(rootElement.diagrams[0].plane.planeElement.filter((item) => item.bpmnElement?.$type === 'bpmn:Task')).toHaveLength(5)
+    expect(getDecisionBpmnError(input, [externalSteps[0]])).toMatch(/nieistniejące działanie/)
+  })
   it('blocks malformed messages and multiple external pools', () => {
     const input = steps()
     input[0].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Dane' }]

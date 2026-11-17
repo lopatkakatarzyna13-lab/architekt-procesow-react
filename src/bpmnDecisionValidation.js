@@ -1,5 +1,7 @@
-export function getDecisionBpmnError(steps) {
+export function getDecisionBpmnError(steps, externalSteps = []) {
   if (!Array.isArray(steps) || !steps.length) return 'Dodaj i zapisz co najmniej jeden krok.'
+  if (!Array.isArray(externalSteps) || externalSteps.some((step) => !step || typeof step.id !== 'string' || !step.id || typeof step.name !== 'string' || !step.name.trim() || step.name.trim().length > 100) || new Set(externalSteps.map((step) => step.id)).size !== externalSteps.length) return 'Sprawdź listę działań zewnętrznych.'
+  const externalIds = new Set(externalSteps.map((step) => step.id))
   const ids = new Set()
   for (const step of steps) {
     if (!step || typeof step.id !== 'string' || !step.id || ids.has(step.id) || typeof step.name !== 'string' || !step.name.trim()) return 'Lista kroków jest nieprawidłowa.'
@@ -16,6 +18,7 @@ export function getDecisionBpmnError(steps) {
     if (step.bpmnMessages !== undefined && !Array.isArray(step.bpmnMessages)) return 'Nieprawidłowe wiadomości BPMN. Sprawdź przekazania.'
     for (const message of step.bpmnMessages || []) {
       if (!message || [message.primary, message.external, message.label].some((value) => typeof value !== 'string' || !value.trim() || value.trim().length > 100) || !['incoming', 'outgoing'].includes(message.direction)) return 'Nieprawidłowe dane wiadomości BPMN. Sprawdź przekazania.'
+      if (message.externalStepId !== undefined && (typeof message.externalStepId !== 'string' || !externalIds.has(message.externalStepId))) return 'Wiadomość wskazuje nieistniejące działanie zewnętrzne.'
       const primary = message.primary.trim().toLocaleLowerCase('pl'); const external = message.external.trim().toLocaleLowerCase('pl')
       if (primary === external || (primaryParticipant && primaryParticipant !== primary)) return 'Sprawdź nazwy basenów: własny basen musi być jeden i różny od zewnętrznego.'
       if (externalParticipant && externalParticipant !== external) return 'Na razie można użyć tylko jednego zewnętrznego basenu w procesie.'
@@ -26,6 +29,7 @@ export function getDecisionBpmnError(steps) {
       messageKeys.add(key)
     }
   }
+  if (externalSteps.length && !externalParticipant) return 'Dodaj wiadomość, aby określić baseny procesu.'
   for (const step of steps) {
     if (step.extraConnections !== undefined && !Array.isArray(step.extraConnections)) return 'Nieprawidłowe połączenia. Sprawdź proces przed eksportem.'
     const links = step.extraConnections || []
