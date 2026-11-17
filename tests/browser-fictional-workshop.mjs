@@ -13,7 +13,7 @@ const proposal = {
     { text: 'Przygotowanie dokumentów', status: 'supported', evidence: 'biuro przygotowuje dokumenty.' },
   ],
   roles: [{ text: 'HR', status: 'supported', evidence: 'HR' }],
-  decisions: [],
+  decisions: [{ text: 'Czy dane są kompletne?', status: 'assumption', evidence: '' }],
   questions: [{ text: 'Jaki jest termin przekazania?', status: 'question', evidence: '' }],
 }
 let calls = 0
@@ -35,10 +35,26 @@ try {
   await page.getByRole('button', { name: 'Zapisz transkrypcję' }).click()
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
   assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), proposal.steps[0].text)
+  await page.getByRole('button', { name: 'Dodaj: systemy' }).click()
+  await page.getByLabel('Systemy — pozycja 1').fill('System Testowy')
+  await page.getByRole('button', { name: 'Dodaj: wyjątki' }).click()
+  await page.getByLabel('Wyjątki — pozycja 1').fill('Brak fikcyjnego dokumentu')
+  for (const category of ['role', 'systemy', 'decyzje', 'wyjątki', 'pytania']) {
+    await page.getByRole('checkbox', { name: `Sprawdzono treść — ${category}, pozycja 1` }).check()
+  }
   await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
   await page.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }).check()
   await page.getByRole('checkbox', { name: 'Wybierz krok 2 do przeniesienia' }).check()
   await page.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }).click()
+  await page.getByRole('button', { name: `Edytuj krok ${proposal.steps[0].text}` }).click()
+  await page.getByLabel('Opis czynności').fill('Pierwotny opis kontroli')
+  for (const item of ['rolę', 'system', 'decyzję', 'wyjątek']) {
+    await page.getByRole('button', { name: `Wstaw ${item} do formularza kroku — pozycja 1` }).click()
+  }
+  await page.getByRole('button', { name: 'Wstaw decyzję do formularza kroku — pozycja 1' }).click()
+  await page.getByText('To ustalenie jest już w opisie formularza kroku.').waitFor()
+  assert.equal(await page.getByLabel('Opis czynności').inputValue(), 'Pierwotny opis kontroli\nDecyzja: Czy dane są kompletne?\nWyjątek: Brak fikcyjnego dokumentu')
+  await page.getByRole('button', { name: 'Zapisz zmiany', exact: true }).click()
   await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
   await page.getByText('Proces AS-IS został zapisany').waitFor()
   await page.getByRole('button', { name: /Nowy proces/ }).click()
@@ -48,6 +64,12 @@ try {
   assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), transcript)
   const restored = await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps.map((step) => step.name))
   assert.deepEqual(restored, proposal.steps.map((step) => step.text))
+  const savedStep = await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps[0])
+  assert.equal(savedStep.owner, 'HR')
+  assert.equal(savedStep.system, 'System Testowy')
+  assert.equal(savedStep.description, 'Pierwotny opis kontroli\nDecyzja: Czy dane są kompletne?\nWyjątek: Brak fikcyjnego dokumentu')
+  assert.equal(await page.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }).isChecked(), true)
+  assert.equal(await page.getByLabel('Pytania — pozycja 1').inputValue(), proposal.questions[0].text)
   assert.equal(calls, 1)
   await page.getByRole('button', { name: 'Przejdź do analizy' }).click()
   await page.getByLabel(/Kategoria/).selectOption({ label: 'Wąskie gardło' })
@@ -77,12 +99,12 @@ try {
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')
   assert.equal(await page.locator('.print-raci-list .print-raci-r, .print-raci-list .print-raci-a').count(), 0, 'do not print empty R and A entries for an R/A assignment')
-  console.log('PASS: fictional provider → review → AS-IS → save and reopen → analysis → TO-BE → RACI → report and checked PDF text')
+  console.log('PASS: fictional provider → reviewed findings → selected step → save and reopen → analysis → TO-BE → RACI → report and checked PDF text')
 } finally {
   await browser.close()
 }
