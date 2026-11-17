@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getBpmnMessages } from './bpmnMessages'
 
-export default function BpmnPreview({ steps, externalSteps = [], scope }) {
+export default function BpmnPreview({ steps, externalSteps = [], scope, variant = 'as-is' }) {
   const canvasRef = useRef(null)
   const viewerRef = useRef(null)
   const [status, setStatus] = useState('loading')
@@ -79,6 +79,6 @@ export default function BpmnPreview({ steps, externalSteps = [], scope }) {
     {status === 'loading' && <p role="status">Przygotowuję podgląd BPMN…</p>}
     {status === 'warning' && <p role="alert">Nie można potwierdzić poprawnego wyświetlenia wszystkich elementów BPMN. Sprawdź dane procesu.</p>}
     {status === 'error' && <p role="alert">Nie udało się wyświetlić diagramu BPMN. Spróbuj ponownie.</p>}
-    <div ref={canvasRef} className="bpmn-preview-canvas" role="img" aria-label="Podgląd zapisanego diagramu BPMN AS-IS" />
+    <div ref={canvasRef} className="bpmn-preview-canvas" role="img" aria-label={`Podgląd zapisanego diagramu BPMN ${variant === 'to-be' ? 'TO-BE' : 'AS-IS'}`} />
   </div>
 }

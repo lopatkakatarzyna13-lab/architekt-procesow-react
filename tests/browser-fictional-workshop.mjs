@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { chromium } from 'playwright'
+import { readFile } from 'node:fs/promises'
+import { BpmnModdle } from 'bpmn-moddle'
 
 const launch = { headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) }
 const browser = await chromium.launch(launch)
@@ -100,6 +102,25 @@ try {
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Ustalić przewidywalny termin przekazania')
   await page.getByRole('button', { name: 'Skopiuj kroki z AS-IS' }).click()
   await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+  const toBeExport = page.getByRole('button', { name: 'Pobierz BPMN 2.0' })
+  await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
+  await page.getByRole('img', { name: 'Podgląd zapisanego diagramu BPMN TO-BE' }).locator('[data-element-id="Task_1"]').waitFor({ state: 'visible' })
+  const [toBeDownload] = await Promise.all([page.waitForEvent('download'), toBeExport.click()])
+  assert.equal(toBeDownload.suggestedFilename(), 'proces-tobe.bpmn')
+  const toBePath = await toBeDownload.path()
+  const toBeModel = await new BpmnModdle().fromXML(await readFile(toBePath, 'utf8'))
+  assert.deepEqual(toBeModel.warnings, [])
+  const toBeProcess = toBeModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Process')
+  assert.deepEqual(toBeProcess.flowElements.filter((item) => item.$type === 'bpmn:Task').map((item) => item.name), proposal.steps.map((item) => item.text))
+  assert.equal(toBeProcess.flowElements.filter((item) => item.$type === 'bpmn:ExclusiveGateway').length, 0)
+  assert.equal(toBeModel.rootElement.rootElements.some((item) => item.$type === 'bpmn:Collaboration'), false)
+  execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', toBePath], { stdio: 'inherit' })
+  await page.getByLabel(/Cel projektowanej zmiany/).fill('Poprawiony cel zmiany')
+  assert.equal(await toBeExport.isDisabled(), true, 'changing TO-BE must disable export until saved')
+  assert.equal(await page.getByRole('img', { name: 'Podgląd zapisanego diagramu BPMN TO-BE' }).count(), 0)
+  await page.getByLabel(/Cel projektowanej zmiany/).fill('Ustalić przewidywalny termin przekazania')
+  await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+
   await page.getByRole('button', { name: 'Przejdź do raportu' }).click()
   await page.getByLabel(/Nazwa osoby, roli lub zespołu/).fill('Koordynator HR')
   await page.getByRole('button', { name: 'Dodaj interesariusza' }).click()
@@ -115,15 +136,16 @@ try {
   await page.evaluate(() => { window.__fictionalPrintCalled = false; window.print = () => { window.__fictionalPrintCalled = true } })
   await page.getByRole('button', { name: 'Eksportuj do PDF' }).click()
   await page.waitForFunction(() => window.__fictionalPrintCalled === true)
-  const bpmnImage = page.locator('.print-bpmn-image')
+  const bpmnImage = page.locator('.print-bpmn-image').not('.print-tobe-bpmn')
   assert.equal(await bpmnImage.count(), 1, 'report must include the BPMN diagram')
   assert.ok(await bpmnImage.evaluate((image) => image.complete && image.naturalWidth > 0), 'BPMN diagram must be decoded before print')
+  assert.ok(await page.locator('.print-tobe-bpmn').evaluate((image) => image.complete && image.naturalWidth > 0), 'TO-BE BPMN diagram must be decoded before print')
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true, ...(process.env.FICTIONAL_PDF_PATH ? { path: process.env.FICTIONAL_PDF_PATH } : {}) })
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')

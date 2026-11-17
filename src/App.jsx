@@ -35,6 +35,7 @@ import BpmnMessages from './BpmnMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
+import { getToBeBpmnError, toBeBpmnScope } from './toBeBpmn'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -2033,6 +2034,7 @@ function ToBeScreen({
         onMove={onMoveStep}
       />
       <ToBeSummary steps={steps} selectedCount={selectedFindingIds.length} />
+      <BpmnExport steps={steps} scope={scope} saved={saved} variant="to-be" />
 
       {saved && (
         <div className="save-message success-message" role="status">
@@ -2914,8 +2916,13 @@ function PrintReport({
           findings={findings}
           unavailable={startMethod !== 'steps'}
         />
+        <div className="print-bpmn-details">
+          <h3>Mapa BPMN TO-BE — przebieg liniowy</h3>
+          <p>Kolejność odpowiada zapisanej liście kroków TO-BE. Początek i koniec mają ogólne nazwy. Decyzje, dodatkowe przejścia, tory, baseny i wiadomości nie są przenoszone automatycznie z AS-IS.</p>
+          {printBpmn.toBeSvg ? <img className="print-bpmn-image print-tobe-bpmn" src={printBpmn.toBeSvg} alt="Mapa BPMN procesu TO-BE" /> : <p>Nie zamieszczono diagramu BPMN TO-BE: {printBpmn.toBeError || 'model nie jest dostępny'}.</p>}
+        </div>
         <PrintProcessMap
-          title="Mapa TO-BE"
+          title="Uproszczony przebieg TO-BE"
           steps={toBeSteps}
           scope={scope}
           variant="to-be"
@@ -4518,7 +4525,7 @@ try {
     setReportError('')
     printPreparingRef.current = true
     setPrintPreparing(true)
-    let bpmn = { svg: '', error: '' }
+    let bpmn = { svg: '', error: '', toBeSvg: '', toBeError: '' }
     if (startMethod === 'steps') {
       const error = getDecisionBpmnError(steps, externalSteps)
       if (error) bpmn.error = error
@@ -4532,6 +4539,18 @@ try {
           bpmn.svg = svg
         } catch { bpmn.error = 'nie udało się przygotować diagramu; sprawdź podgląd BPMN i spróbuj ponownie' }
       }
+    }
+    const toBeError = getToBeBpmnError(toBeSteps)
+    if (toBeError) bpmn.toBeError = toBeError
+    else {
+      try {
+        const { createPrintBpmn } = await import('./createPrintBpmn')
+        const svg = await createPrintBpmn({ steps: toBeSteps, externalSteps: [], scope: toBeBpmnScope(formData) })
+        const image = new Image()
+        image.src = svg
+        if (typeof image.decode === 'function') await image.decode()
+        bpmn.toBeSvg = svg
+      } catch { bpmn.toBeError = 'nie udało się przygotować diagramu; sprawdź podgląd BPMN TO-BE i spróbuj ponownie' }
     }
     setPrintBpmn(bpmn)
     setPrintGeneratedAt(new Date())
