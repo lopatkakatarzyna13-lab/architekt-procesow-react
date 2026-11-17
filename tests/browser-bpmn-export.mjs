@@ -150,7 +150,7 @@ try {
   assert.deepEqual(externalModel.warnings, [])
   const externalCollaboration = externalModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
   assert.deepEqual(externalCollaboration.participants[1].processRef.flowElements.filter((item) => item.$type === 'bpmn:Task').map((item) => item.name), ['Sprawdzenie danych', 'Przygotowanie dokumentów'])
-  assert.deepEqual(externalCollaboration.messageFlows.slice(2).map((item) => [item.sourceRef.id, item.targetRef.id]), [['Task_1', 'ExternalTask_1'], ['ExternalTask_2', 'Task_2']])
+  assert.deepEqual(externalCollaboration.messageFlows.filter((item) => ['Formularz', 'Potwierdzenie'].includes(item.name)).map((item) => [item.sourceRef.id, item.targetRef.id]), [['Task_1', 'ExternalTask_1'], ['ExternalTask_2', 'Task_2']])
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', externalPath], { stdio: 'inherit' })
   await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
   await preview.locator('[data-element-id="ExternalTask_1"]').waitFor({ state: 'visible' })
