@@ -33,6 +33,8 @@ import BpmnDecisions from './BpmnDecisions'
 import BpmnLanes from './BpmnLanes'
 import BpmnMessages from './BpmnMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
+import PrintBpmnDetails from './PrintBpmnDetails'
+import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -2854,6 +2856,8 @@ function PrintReport({
   startMethod,
   asIsDescription,
   asIsSteps,
+  externalSteps,
+  printBpmn,
   findings,
   toBeAssumptions,
   selectedFindingIds,
@@ -2901,8 +2905,9 @@ function PrintReport({
           title="Mapy procesu"
           description="Statyczny przebieg procesów AS-IS i TO-BE."
         />
+        {startMethod === 'steps' && <PrintBpmnDetails steps={asIsSteps} externalSteps={externalSteps} svg={printBpmn.svg} error={printBpmn.error} />}
         <PrintProcessMap
-          title="Mapa AS-IS"
+          title="Uproszczony przebieg podstawowy AS-IS"
           steps={asIsSteps}
           scope={scope}
           variant="as-is"
@@ -2958,6 +2963,9 @@ function ReportScreen({
   startMethod,
   asIsDescription,
   asIsSteps,
+  externalSteps,
+  printBpmn,
+  printPreparing,
   findings,
   toBeAssumptions,
   selectedFindingIds,
@@ -3023,8 +3031,8 @@ function ReportScreen({
       <div className="form-actions">
         <button className="back-button" type="button" onClick={onBack}><span aria-hidden="true">←</span>Wróć do TO-BE</button>
         <button className="save-button" type="button" onClick={onSave}>Zapisz raport<span aria-hidden="true">✓</span></button>
-        <button className="export-button" type="button" onClick={onExport}>
-          Eksportuj do PDF
+        <button className="export-button" type="button" onClick={onExport} disabled={printPreparing}>
+          {printPreparing ? 'Przygotowuję PDF…' : 'Eksportuj do PDF'}
           <span aria-hidden="true">↗</span>
         </button>
       </div>
@@ -3033,6 +3041,8 @@ function ReportScreen({
         startMethod={startMethod}
         asIsDescription={asIsDescription}
         asIsSteps={asIsSteps}
+        externalSteps={externalSteps}
+        printBpmn={printBpmn}
         findings={findings}
         toBeAssumptions={toBeAssumptions}
         selectedFindingIds={selectedFindingIds}
@@ -3256,6 +3266,9 @@ function App() {
   const [reportSaved, setReportSaved] = useState(savedReport.isSaved)
   const [reportSaveError, setReportSaveError] = useState(false)
   const [printGeneratedAt, setPrintGeneratedAt] = useState(null)
+  const [printBpmn, setPrintBpmn] = useState({ svg: '', error: '' })
+  const [printPreparing, setPrintPreparing] = useState(false)
+  const printPreparingRef = useRef(false)
 
   const testSupabaseRead = async () => {
     if (!supabase) {
@@ -4486,7 +4499,8 @@ try {
     }
   }
 
-  const exportReport = () => {
+  const exportReport = async () => {
+    if (printPreparingRef.current) return
     const validationErrors = getRaciValidationErrors(toBeSteps, raci)
     setRaciErrors(validationErrors)
     setReportSaveError(false)
@@ -4502,6 +4516,24 @@ try {
     }
 
     setReportError('')
+    printPreparingRef.current = true
+    setPrintPreparing(true)
+    let bpmn = { svg: '', error: '' }
+    if (startMethod === 'steps') {
+      const error = getDecisionBpmnError(steps, externalSteps)
+      if (error) bpmn.error = error
+      else {
+        try {
+          const { createPrintBpmn } = await import('./createPrintBpmn')
+          const svg = await createPrintBpmn({ steps, externalSteps, scope: formData })
+          const image = new Image()
+          image.src = svg
+          if (typeof image.decode === 'function') await image.decode()
+          bpmn.svg = svg
+        } catch { bpmn.error = 'nie udało się przygotować diagramu; sprawdź podgląd BPMN i spróbuj ponownie' }
+      }
+    }
+    setPrintBpmn(bpmn)
     setPrintGeneratedAt(new Date())
 
     const previousTitle = document.title
@@ -4530,6 +4562,8 @@ try {
           window.print()
         } finally {
           window.setTimeout(restoreTitle, 500)
+          printPreparingRef.current = false
+          setPrintPreparing(false)
         }
       })
     })
@@ -4702,6 +4736,9 @@ try {
             startMethod={startMethod}
             asIsDescription={asIsDescription}
             asIsSteps={steps}
+            externalSteps={externalSteps}
+            printBpmn={printBpmn}
+            printPreparing={printPreparing}
             findings={findings}
             toBeAssumptions={toBeAssumptions}
             selectedFindingIds={selectedFindingIds}

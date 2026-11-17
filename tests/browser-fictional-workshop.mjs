@@ -50,6 +50,19 @@ try {
   await page.getByLabel('Do kroku').selectOption({ label: '1. Sprawdzenie kompletności danych' })
   await page.getByLabel('Kiedy następuje przejście?').fill('Brak danych — wróć do kontroli')
   await page.getByRole('button', { name: 'Dodaj połączenie' }).click()
+  await page.getByLabel('Pytanie decyzji — Przygotowanie dokumentów').fill('Czy dane są kompletne?')
+  await page.getByLabel('Kiedy kontynuować podstawową ścieżkę — Przygotowanie dokumentów').fill('Dane kompletne')
+  await page.getByRole('button', { name: 'Zapisz decyzję BPMN — Przygotowanie dokumentów' }).click()
+  await page.getByLabel('Nazwa działania').fill('Weryfikacja dokumentów przez biuro')
+  await page.getByRole('button', { name: 'Dodaj działanie zewnętrzne' }).click()
+  await page.getByLabel('Krok w Twoim procesie').selectOption({ label: '1. Sprawdzenie kompletności danych' })
+  await page.getByLabel('Nazwa basenu Twojego procesu').fill('Firma Testowa')
+  await page.getByLabel('Nazwa basenu zewnętrznego').fill('Biuro Testowe')
+  await page.getByLabel('Kierunek wiadomości').selectOption('outgoing')
+  await page.getByLabel('Działanie uczestnika zewnętrznego (opcjonalnie)').selectOption({ label: 'Weryfikacja dokumentów przez biuro' })
+  await page.getByLabel('Co jest przekazywane?').fill('Fikcyjne dane do weryfikacji')
+  await page.getByRole('button', { name: 'Dodaj wiadomość BPMN' }).click()
+
   await page.getByRole('button', { name: `Edytuj krok ${proposal.steps[0].text}` }).click()
   await page.getByLabel('Opis czynności').fill('Pierwotny opis kontroli')
   for (const item of ['rolę', 'system', 'decyzję', 'wyjątek']) {
@@ -102,12 +115,15 @@ try {
   await page.evaluate(() => { window.__fictionalPrintCalled = false; window.print = () => { window.__fictionalPrintCalled = true } })
   await page.getByRole('button', { name: 'Eksportuj do PDF' }).click()
   await page.waitForFunction(() => window.__fictionalPrintCalled === true)
+  const bpmnImage = page.locator('.print-bpmn-image')
+  assert.equal(await bpmnImage.count(), 1, 'report must include the BPMN diagram')
+  assert.ok(await bpmnImage.evaluate((image) => image.complete && image.naturalWidth > 0), 'BPMN diagram must be decoded before print')
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true, ...(process.env.FICTIONAL_PDF_PATH ? { path: process.env.FICTIONAL_PDF_PATH } : {}) })
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')
