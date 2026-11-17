@@ -71,8 +71,10 @@ export async function createDecisionBpmn({ steps, processName, startName, endNam
     const { source, target, alternate } = links[index]
     const a = boxes.get(source); const b = boxes.get(target)
     const startX = a.x + a.width; const endX = b.x; const y1 = a.y + a.height / 2; const y2 = b.y + b.height / 2
-    const positions = alternate || endX < startX
-      ? [{ x: startX, y: y1 }, { x: startX + 25, y: y1 }, { x: startX + 25, y: 35 + (index % 5) * 25 }, { x: endX - 25, y: 35 + (index % 5) * 25 }, { x: endX - 25, y: y2 }, { x: endX, y: y2 }]
+    // Alternate flows leave and enter the top of their gateways so a return
+    // does not overlap the primary incoming and outgoing sequence flows.
+    const positions = alternate
+      ? [{ x: a.x + a.width / 2, y: a.y }, { x: a.x + a.width / 2, y: 35 + (index % 5) * 12 }, { x: b.x + b.width / 2, y: 35 + (index % 5) * 12 }, { x: b.x + b.width / 2, y: b.y }]
       : y1 === y2 ? [{ x: startX, y: y1 }, { x: endX, y: y2 }]
         : [{ x: startX, y: y1 }, { x: (startX + endX) / 2, y: y1 }, { x: (startX + endX) / 2, y: y2 }, { x: endX, y: y2 }]
     return moddle.create('bpmndi:BPMNEdge', { id: `Edge_${index + 1}`, bpmnElement: flow, waypoint: positions.map((point) => moddle.create('dc:Point', point)) })

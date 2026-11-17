@@ -25,6 +25,10 @@ describe('explicit BPMN decisions', () => {
     expect(plane.planeElement.some((item) => item.bpmnElement.id === decision.id)).toBe(true)
     const returnEdge = plane.planeElement.find((item) => item.bpmnElement?.name === 'Brak danych')
     expect(returnEdge.waypoint.length).toBeGreaterThan(2)
+    const decisionBox = plane.planeElement.find((item) => item.bpmnElement?.id === decision.id).bounds
+    const mergeBox = plane.planeElement.find((item) => item.bpmnElement?.id === merge.id).bounds
+    expect(returnEdge.waypoint[0]).toMatchObject({ x: decisionBox.x + decisionBox.width / 2, y: decisionBox.y })
+    expect(returnEdge.waypoint.at(-1)).toMatchObject({ x: mergeBox.x + mergeBox.width / 2, y: mergeBox.y })
   })
   it('exports explicitly assigned lanes and associates all nodes without altering connections', async () => {
     const input = steps().map((step, index) => ({ ...step, bpmnLane: index === 1 ? 'Biuro rachunkowe' : 'HR' }))
