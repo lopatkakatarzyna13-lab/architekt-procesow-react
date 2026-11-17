@@ -39,3 +39,5 @@ jobs:
         run: node experiments/supabase-auth/ai-midnight-postgres.smoke.mjs
       - name: Test transactional migration draft and shutdown in disposable database
         run: node experiments/supabase-auth/migration-draft-postgres.smoke.mjs
+      - name: Test read-only migration inventory
+        run: node experiments/supabase-auth/preflight-postgres.smoke.mjs
