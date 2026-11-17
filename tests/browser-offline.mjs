@@ -60,6 +60,28 @@ try {
   const restoredSteps = await page.locator('ol.steps-list li .step-details strong').allTextContents()
   assert.deepEqual(restoredSteps, expectedSteps)
   console.log('PASS: after reconnecting and reloading, the saved workshop and AS-IS steps are restored')
+
+  // Hold a fictional response, stop waiting, then verify manual work stays available.
+  let releaseResponse
+  let markRequestStarted
+  const responseGate = new Promise((resolve) => { releaseResponse = resolve })
+  const requestStarted = new Promise((resolve) => { markRequestStarted = resolve })
+  await page.route('**/api/analyze-workshop', async (route) => {
+    markRequestStarted()
+    await responseGate
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ proposal: { steps: [], roles: [], decisions: [], questions: [] } }) }).catch(() => {})
+  })
+  await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
+  await requestStarted
+  await page.getByRole('button', { name: 'Przerwij oczekiwanie' }).click()
+  await page.getByText(/Analiza może nadal trwać na serwerze/).waitFor()
+  await page.getByRole('button', { name: 'Opracuj ręcznie' }).click()
+  await page.getByRole('button', { name: 'Dodaj: kroki' }).click()
+  await page.getByLabel('Kroki — pozycja 1').fill('Ustalenie po przerwaniu')
+  releaseResponse()
+  assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), 'Ustalenie po przerwaniu')
+  assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), transcript)
+  console.log('PASS: stopping the browser wait preserves transcript and permits manual work')
 } catch (error) {
   console.error('Browser test failed:', error)
   await page.screenshot({ path: '/tmp/architekt-browser-error.png', fullPage: true }).catch(() => {})
