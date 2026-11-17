@@ -27,6 +27,8 @@ import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
 import { appendWorkshopSteps } from './workshop'
+import ProcessConnections from './ProcessConnections'
+import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
@@ -978,6 +980,8 @@ function AsIsScreen({
   workshopDirtyRef,
   onTransferWorkshopSteps,
   onUseWorkshopFinding,
+  onAddConnection,
+  onRemoveConnection,
   scope,
   startMethod,
   description,
@@ -1030,6 +1034,7 @@ function AsIsScreen({
       {processId && <WorkshopPanel key={processId} processId={processId} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} />}
 
       {isStepsVariant ? (
+        <>
         <StepsAsIs
           stepDraft={stepDraft}
           stepError={stepError}
@@ -1042,6 +1047,8 @@ function AsIsScreen({
           onMoveStep={onMoveStep}
           onCancelEdit={onCancelEdit}
         />
+        <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
+        </>
       ) : (
         <DescribeAsIs
           description={description}
@@ -2374,6 +2381,19 @@ function createProcessFlow(steps, scope, variant, findings) {
     focusable: false,
     deletable: false,
   }))
+  if (variant === 'as-is') {
+    for (const connection of getProcessConnections(steps)) edges.push({
+      id: `extra-${connection.sourceId}-${connection.index}`,
+      source: `${variant}-step-${connection.sourceId}`,
+      target: `${variant}-step-${connection.targetId}`,
+      label: connection.label,
+      type: 'smoothstep',
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#b07824' },
+      style: { stroke: '#b07824', strokeWidth: 2, strokeDasharray: '6 4' },
+      labelBgStyle: { fill: '#fff8e8', fillOpacity: 1 },
+      selectable: false, focusable: false, deletable: false,
+    })
+  }
   return { nodes, edges }
 }
 
@@ -2463,6 +2483,7 @@ function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings 
         </div>
       ) : (
         <>
+          {mapVariant === 'as-is' && <p>Linia ciągła pokazuje kolejność kroków, a przerywana — dodane przejście. Układ nie jest formalnym modelem BPMN.</p>}
           {mapVariant === 'to-be' && (
             <div className="map-legend" aria-label="Legenda mapy TO-BE">
               <span className="legend-new">Nowy</span>
@@ -3722,6 +3743,21 @@ const openSavedProcess = (process) => {
     return { ok: true }
   }
 
+  const saveConnectionChange = (nextSteps) => {
+    try {
+      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: nextSteps, startMethod, savedAt: null }))
+      setSteps(nextSteps)
+      setAsIsSaved(false)
+      setAsIsSaveError(false)
+      return { ok: true }
+    } catch { return { error: 'Nie udało się zapisać połączenia. Lista kroków nie została zmieniona.' } }
+  }
+  const addConnection = (sourceId, targetId, label) => {
+    try { return saveConnectionChange(addProcessConnection(steps, sourceId, targetId, label)) }
+    catch (error) { return { error: error.message } }
+  }
+  const removeConnection = (sourceId, index) => saveConnectionChange(removeProcessConnection(steps, sourceId, index))
+
   const addOrUpdateStep = () => {
     if (!stepDraft.name.trim()) {
       setStepError('Uzupełnij nazwę kroku.')
@@ -3732,7 +3768,7 @@ const openSavedProcess = (process) => {
     const nextSteps = editingStepId
   ? steps.map((step) =>
       step.id === editingStepId
-        ? { ...stepDraft, id: editingStepId }
+        ? { ...step, ...stepDraft, id: editingStepId }
         : step,
     )
   : [
@@ -3784,7 +3820,7 @@ try {
   }
 
   const deleteStep = (stepId) => {
-    setSteps((currentSteps) => currentSteps.filter((step) => step.id !== stepId))
+    setSteps((currentSteps) => removeStepConnections(currentSteps, stepId))
     if (editingStepId === stepId) {
       cancelStepEdit()
     }
@@ -4506,6 +4542,8 @@ try {
             workshopDirtyRef={workshopDirtyRef}
             onTransferWorkshopSteps={transferWorkshopSteps}
             onUseWorkshopFinding={useWorkshopFinding}
+            onAddConnection={addConnection}
+            onRemoveConnection={removeConnection}
             scope={formData}
             startMethod={startMethod}
             description={asIsDescription}

@@ -46,6 +46,10 @@ try {
   await page.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }).check()
   await page.getByRole('checkbox', { name: 'Wybierz krok 2 do przeniesienia' }).check()
   await page.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }).click()
+  await page.getByLabel('Od kroku').selectOption({ label: '2. Przygotowanie dokumentów' })
+  await page.getByLabel('Do kroku').selectOption({ label: '1. Sprawdzenie kompletności danych' })
+  await page.getByLabel('Kiedy następuje przejście?').fill('Brak danych — wróć do kontroli')
+  await page.getByRole('button', { name: 'Dodaj połączenie' }).click()
   await page.getByRole('button', { name: `Edytuj krok ${proposal.steps[0].text}` }).click()
   await page.getByLabel('Opis czynności').fill('Pierwotny opis kontroli')
   for (const item of ['rolę', 'system', 'decyzję', 'wyjątek']) {
@@ -65,6 +69,8 @@ try {
   const restored = await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps.map((step) => step.name))
   assert.deepEqual(restored, proposal.steps.map((step) => step.text))
   const savedStep = await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps[0])
+  const savedConnections = await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps[1].extraConnections)
+  assert.deepEqual(savedConnections, [{ targetId: savedStep.id, label: 'Brak danych — wróć do kontroli' }])
   assert.equal(savedStep.owner, 'HR')
   assert.equal(savedStep.system, 'System Testowy')
   assert.equal(savedStep.description, 'Pierwotny opis kontroli\nDecyzja: Czy dane są kompletne?\nWyjątek: Brak fikcyjnego dokumentu')
@@ -85,6 +91,8 @@ try {
   await page.getByLabel(/Nazwa osoby, roli lub zespołu/).fill('Koordynator HR')
   await page.getByRole('button', { name: 'Dodaj interesariusza' }).click()
   for (const step of proposal.steps) await page.getByLabel(`${step.text}: Koordynator HR`).selectOption('RA')
+  await page.getByRole('button', { name: 'Mapa AS-IS' }).click()
+  await page.locator('.react-flow__edge-text').getByText('Brak danych — wróć do kontroli', { exact: true }).waitFor()
   await page.getByRole('button', { name: 'Zapisz raport' }).click()
   await page.getByText('Raport procesu został zapisany').waitFor()
   const report = page.locator('.report-workspace')
@@ -104,7 +112,7 @@ try {
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')
   assert.equal(await page.locator('.print-raci-list .print-raci-r, .print-raci-list .print-raci-a').count(), 0, 'do not print empty R and A entries for an R/A assignment')
-  console.log('PASS: fictional provider → reviewed findings → selected step → save and reopen → analysis → TO-BE → RACI → report and checked PDF text')
+  console.log('PASS: fictional provider → reviewed findings → selected step and return path → save and reopen → analysis → TO-BE → RACI → report and checked PDF text')
 } finally {
   await browser.close()
 }
