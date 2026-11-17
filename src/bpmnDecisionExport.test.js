@@ -89,6 +89,30 @@ describe('explicit BPMN decisions', () => {
     expect(rootElement.diagrams[0].plane.planeElement.filter((item) => item.bpmnElement?.$type === 'bpmn:Task')).toHaveLength(5)
     expect(getDecisionBpmnError(input, [externalSteps[0]])).toMatch(/nieistniejące działanie/)
   })
+  it('gives each message a separate label row between the participant pools', async () => {
+    const input = steps()
+    const externalSteps = [{ id: 'check', name: 'Kontrola' }, { id: 'create', name: 'Przygotowanie' }]
+    input[0].bpmnMessages = [
+      { primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Dane', externalStepId: 'check' },
+      { primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Formularz' },
+    ]
+    input[2].bpmnMessages = [
+      { primary: 'Firma', external: 'Biuro', direction: 'incoming', label: 'Dokument', externalStepId: 'create' },
+      { primary: 'Firma', external: 'Biuro', direction: 'incoming', label: 'Potwierdzenie' },
+    ]
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(await createDecisionBpmn({ steps: input, externalSteps }))
+    expect(warnings).toEqual([])
+    const elements = rootElement.diagrams[0].plane.planeElement
+    const main = elements.find((item) => item.bpmnElement?.id === 'Participant_Main').bounds
+    const external = elements.find((item) => item.bpmnElement?.id === 'Participant_External_1').bounds
+    const edges = elements.filter((item) => item.bpmnElement?.$type === 'bpmn:MessageFlow')
+    expect(edges).toHaveLength(4)
+    const labels = edges.map((edge) => edge.label.bounds).sort((a, b) => a.y - b.y)
+    expect(labels[0].y).toBeGreaterThan(main.y + main.height)
+    expect(labels.at(-1).y + labels.at(-1).height).toBeLessThan(external.y)
+    for (let i = 1; i < labels.length; i++) expect(labels[i].y).toBeGreaterThan(labels[i - 1].y + labels[i - 1].height)
+    expect(edges[0].waypoint[0].x).not.toBe(edges[1].waypoint[0].x)
+  })
   it('blocks malformed messages and multiple external pools', () => {
     const input = steps()
     input[0].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Dane' }]
