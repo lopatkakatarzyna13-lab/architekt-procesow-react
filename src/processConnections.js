@@ -33,3 +33,9 @@ export function setProcessDecision(steps, sourceId, question, mainLabel) {
   if (typeof question !== 'string' || !question.trim() || question.trim().length > 120 || typeof mainLabel !== 'string' || !mainLabel.trim() || mainLabel.trim().length > 120) throw new Error('Uzupełnij pytanie decyzji i opis podstawowej ścieżki (do 120 znaków).')
   return steps.map((item) => item.id === sourceId ? { ...item, bpmnDecision: { question: question.trim(), mainLabel: mainLabel.trim() } } : item)
 }
+
+export function setProcessLane(steps, sourceId, laneName) {
+  if (!steps.some((step) => step.id === sourceId)) throw new Error('Nie znaleziono kroku.')
+  if (typeof laneName !== 'string' || laneName.trim().length > 80) throw new Error('Nazwa toru może mieć maksymalnie 80 znaków.')
+  return steps.map((step) => step.id === sourceId ? { ...step, bpmnLane: laneName.trim() } : step)
+}

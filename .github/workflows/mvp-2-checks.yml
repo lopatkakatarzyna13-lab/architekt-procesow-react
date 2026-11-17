@@ -88,12 +88,14 @@ jobs:
           if [ "$ready" != 1 ]; then cat /tmp/architekt-vite.log; exit 1; fi
           node tests/browser-offline.mjs
           node tests/browser-delete-process.mjs
-          FICTIONAL_PDF_PATH="$RUNNER_TEMP/fictional-report.pdf" node tests/browser-fictional-workshop.mjs
+          FICTIONAL_PDF_PATH="$RUNNER_TEMP/fictional-report.pdf" BPMN_SCREENSHOT_PATH="$RUNNER_TEMP/bpmn-preview.png" node tests/browser-fictional-workshop.mjs
       - name: Save fictional report for visual review
         uses: actions/upload-artifact@v4
         with:
           name: fictional-workshop-report
-          path: ${{ runner.temp }}/fictional-report.pdf
+          path: |
+            ${{ runner.temp }}/fictional-report.pdf
+            ${{ runner.temp }}/bpmn-preview.png
           retention-days: 1
 
 

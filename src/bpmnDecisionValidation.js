@@ -6,6 +6,10 @@ export function getDecisionBpmnError(steps) {
     ids.add(step.id)
   }
   for (const step of steps) {
+    if (step.bpmnLane !== undefined && (typeof step.bpmnLane !== 'string' || step.bpmnLane.trim().length > 80)) return 'Nieprawidłowa nazwa toru BPMN. Sprawdź przypisania kroków.'
+  }
+  if (steps.some((step) => step.bpmnLane?.trim()) && steps.some((step) => !step.bpmnLane?.trim())) return 'Uzupełnij tor BPMN dla każdego kroku albo usuń wszystkie przypisania torów.'
+  for (const step of steps) {
     if (step.extraConnections !== undefined && !Array.isArray(step.extraConnections)) return 'Nieprawidłowe połączenia. Sprawdź proces przed eksportem.'
     const links = step.extraConnections || []
     if (!links.length) continue

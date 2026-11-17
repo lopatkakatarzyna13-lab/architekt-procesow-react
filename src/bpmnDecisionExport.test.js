@@ -26,6 +26,28 @@ describe('explicit BPMN decisions', () => {
     const returnEdge = plane.planeElement.find((item) => item.bpmnElement?.name === 'Brak danych')
     expect(returnEdge.waypoint.length).toBeGreaterThan(2)
   })
+  it('exports explicitly assigned lanes and associates all nodes without altering connections', async () => {
+    const input = steps().map((step, index) => ({ ...step, bpmnLane: index === 1 ? 'Biuro rachunkowe' : 'HR' }))
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(await createDecisionBpmn({ steps: input }))
+    expect(warnings).toEqual([])
+    const process = rootElement.rootElements[0]
+    expect(process.laneSets).toHaveLength(1)
+    const lanes = process.laneSets[0].lanes
+    expect(lanes.map((lane) => lane.name)).toEqual(['HR', 'Biuro rachunkowe'])
+    expect(lanes[0].flowNodeRef.map((node) => node.id)).toEqual(['StartEvent_1', 'Merge_1', 'Task_1', 'Task_3', 'EndEvent_1'])
+    expect(lanes[1].flowNodeRef.map((node) => node.id)).toEqual(['Task_2', 'Decision_2'])
+    expect(rootElement.diagrams[0].plane.planeElement.filter((shape) => shape.bpmnElement?.$type === 'bpmn:Lane')).toHaveLength(2)
+    const decision = process.flowElements.find((element) => element.id === 'Decision_2')
+    expect(decision.outgoing.map((flow) => [flow.name, flow.targetRef.id])).toEqual([['Tak', 'Task_3'], ['Brak danych', 'Merge_1']])
+  })
+  it('requires every step to have a lane when any lane is supplied', () => {
+    const input = steps(); input[0].bpmnLane = 'HR'
+    expect(getDecisionBpmnError(input)).toMatch(/Uzupełnij tor BPMN dla każdego kroku/)
+    input[1].bpmnLane = 'HR'; input[2].bpmnLane = 'Biuro'
+    expect(getDecisionBpmnError(input)).toBe('')
+    input[1].bpmnLane = null
+    expect(getDecisionBpmnError(input)).toMatch(/Nieprawidłowa nazwa toru/)
+  })
   it('blocks export when user has not identified paths or when links are corrupt or ambiguous', () => {
     const missing = steps(); delete missing[1].bpmnDecision
     expect(getDecisionBpmnError(missing)).toMatch(/Uzupełnij decyzję/)

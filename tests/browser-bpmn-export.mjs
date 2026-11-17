@@ -41,6 +41,20 @@ try {
   assert.deepEqual(process.flowElements.filter((element) => element.$type === 'bpmn:Task').map((element) => element.name), ['Weryfikacja danych', 'Wysłanie dokumentów'])
   assert.equal(rootElement.diagrams[0].plane.planeElement.length, 7)
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path], { stdio: 'inherit' })
+  await page.getByLabel('Tor BPMN — krok 1: Weryfikacja danych').fill('HR')
+  assert.equal(await button.isDisabled(), true, 'an unsaved lane draft must disable the export')
+  await page.getByRole('button', { name: 'Zapisz tor — krok 1: Weryfikacja danych' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
+  assert.equal(await button.isDisabled(), true, 'partial lane assignment must block the export')
+  await page.getByLabel('Tor BPMN — krok 2: Wysłanie dokumentów').fill('Biuro')
+  await page.getByRole('button', { name: 'Zapisz tor — krok 2: Wysłanie dokumentów' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
+  const [laneDownload] = await Promise.all([page.waitForEvent('download'), button.click()])
+  const lanePath = await laneDownload.path()
+  const laneModel = await new BpmnModdle().fromXML(await readFile(lanePath, 'utf8'))
+  assert.deepEqual(laneModel.warnings, [])
+  assert.deepEqual(laneModel.rootElement.rootElements[0].laneSets[0].lanes.map((lane) => lane.name), ['HR', 'Biuro'])
+  execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', lanePath], { stdio: 'inherit' })
   await page.getByLabel('Od kroku').selectOption({ label: '2. Wysłanie dokumentów' })
   await page.getByLabel('Do kroku').selectOption({ label: '1. Weryfikacja danych' })
   await page.getByLabel('Kiedy następuje przejście?').fill('Brak danych')
@@ -64,10 +78,15 @@ try {
   assert.equal(decision.name, 'Dane kompletne?')
   assert.deepEqual(decision.outgoing.map((flow) => flow.name).sort(), ['Brak danych', 'Kompletne'])
   assert.equal(merge.incoming.length, 2)
+  const lanes = branched.rootElement.rootElements[0].laneSets[0].lanes
+  assert.deepEqual(lanes.map((lane) => lane.name), ['HR', 'Biuro'])
+  assert.ok(lanes[0].flowNodeRef.some((node) => node.id === merge.id))
+  assert.ok(lanes[1].flowNodeRef.some((node) => node.id === decision.id))
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', branchedPath], { stdio: 'inherit' })
   await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
   await preview.locator(`[data-element-id="${decision.id}"]`).waitFor({ state: 'visible' })
   await preview.locator(`[data-element-id="${merge.id}"]`).waitFor({ state: 'visible' })
+  for (const lane of lanes) await preview.locator(`[data-element-id="${lane.id}"]`).waitFor({ state: 'visible' })
   for (const flow of decision.outgoing) {
     // A horizontal SVG path has a zero-height bounding box, which Playwright
     // may classify as hidden even when its stroke is drawn. Inspect the line.
@@ -85,9 +104,10 @@ try {
     assert.notEqual(geometry.visibility, 'hidden')
   }
   assert.equal(await preview.locator('.bjs-powered-by').isVisible(), true)
+  if (process.env.BPMN_SCREENSHOT_PATH) await preview.screenshot({ path: process.env.BPMN_SCREENSHOT_PATH })
   await page.getByLabel('Pytanie decyzji — Wysłanie dokumentów').fill('Zmienione pytanie?')
   assert.equal(await preview.count(), 0, 'unsaved decision changes must hide the old preview')
-  console.log('PASS: linear and decision BPMN downloads, XSD, rendered gateway and safe preview invalidation')
+  console.log('PASS: BPMN lanes and decision downloads, XSD, rendered lanes and safe preview invalidation')
 } finally {
   await browser.close()
 }

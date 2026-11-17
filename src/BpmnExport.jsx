@@ -26,7 +26,7 @@ export default function BpmnExport({ steps, scope, saved }) {
   }
   return <section className="step-connections" aria-labelledby="bpmn-export-title">
     <h2 id="bpmn-export-title">Eksport procesu BPMN 2.0</h2>
-    <p>Eksport obejmuje nazwę procesu, początek, nazwy zadań, koniec, połączenia oraz określone przez Ciebie bramki wyboru jednej ścieżki. Role, systemy, opisy, ustalenia i inne dane nie są uwzględniane. Plik nie jest przeznaczony do automatycznego wykonywania procesu.</p>
+    <p>Eksport obejmuje nazwę procesu, początek, nazwy zadań, koniec, połączenia oraz określone przez Ciebie bramki wyboru jednej ścieżki. Opcjonalne tory są uwzględniane tylko wtedy, gdy przypiszesz je wszystkim krokom. Pola odpowiedzialności, systemy, opisy i ustalenia nie są automatycznie uwzględniane. Plik nie jest przeznaczony do automatycznego wykonywania procesu.</p>
     <p>Dla dodatkowych przejść uzupełnij decyzję i warunek podstawowej ścieżki. Opisy warunków nie są regułami do automatycznego wykonania. Podgląd i plik powstają z tych samych zapisanych danych. Sprawdź model przed użyciem.</p>
     {!saved && <p>Najpierw zapisz proces AS-IS.</p>}
     {error && <p>{error}</p>}

@@ -30,7 +30,8 @@ import { appendWorkshopSteps } from './workshop'
 import ProcessConnections from './ProcessConnections'
 import BpmnExport from './BpmnExport'
 import BpmnDecisions from './BpmnDecisions'
-import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision } from './processConnections'
+import BpmnLanes from './BpmnLanes'
+import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
@@ -985,6 +986,7 @@ function AsIsScreen({
   onAddConnection,
   onRemoveConnection,
   onSaveBpmnDecision,
+  onSaveBpmnLane,
   onBpmnDraftChange,
   bpmnDraftDirty,
   scope,
@@ -1054,6 +1056,7 @@ function AsIsScreen({
         />
         <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
         <BpmnDecisions steps={steps} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
+        <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
         <BpmnExport steps={steps} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>
       ) : (
@@ -3138,7 +3141,7 @@ function App() {
   }, [decisionDraftDirty])
   const canLeaveWorkshop = () => {
     if (!workshopDirtyRef.current && !decisionDraftDirty) return true
-    if (!window.confirm('Transkrypcja, propozycja warsztatu lub decyzja BPMN ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')) return false
+    if (!window.confirm('Transkrypcja, propozycja warsztatu albo ustawienia BPMN mają niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')) return false
     setDecisionDraftFlags({})
     return true
   }
@@ -3788,6 +3791,10 @@ const openSavedProcess = (process) => {
     try { return saveConnectionChange(setProcessDecision(steps, sourceId, question, mainLabel)) }
     catch (error) { return { error: error.message } }
   }
+  const saveBpmnLane = (sourceId, laneName) => {
+    try { return saveConnectionChange(setProcessLane(steps, sourceId, laneName)) }
+    catch (error) { return { error: error.message } }
+  }
 
   const addOrUpdateStep = () => {
     if (!stepDraft.name.trim()) {
@@ -3852,8 +3859,9 @@ try {
 
   const deleteStep = (stepId) => {
     const affectedDrafts = steps.filter((step) => decisionDraftFlags[step.id] && (step.id === stepId || (Array.isArray(step.extraConnections) && step.extraConnections.length > 0 && step.extraConnections.every((link) => link.targetId === stepId))))
-    if (affectedDrafts.length && !window.confirm('Usunięcie kroku spowoduje utratę niezapisanej decyzji BPMN. Kontynuować?')) return
+    if ((affectedDrafts.length || decisionDraftFlags[`lane:${stepId}`]) && !window.confirm('Usunięcie kroku spowoduje utratę niezapisanych ustawień BPMN. Kontynuować?')) return
     for (const affected of affectedDrafts) onBpmnDraftChange(affected.id, false)
+    onBpmnDraftChange(`lane:${stepId}`, false)
     setSteps((currentSteps) => removeStepConnections(currentSteps, stepId))
     if (editingStepId === stepId) {
       cancelStepEdit()
@@ -3887,7 +3895,7 @@ try {
   }
 
   const saveAsIs = () => {
-    if (decisionDraftDirty) { setAsIsError('Najpierw zapisz lub cofnij zmiany w formularzu decyzji BPMN.'); return }
+    if (decisionDraftDirty) { setAsIsError('Najpierw zapisz lub cofnij zmiany w formularzu decyzji albo toru BPMN.'); return }
     setAsIsSaved(false)
     setAsIsSaveError(false)
     setAsIsError('')
@@ -4580,6 +4588,7 @@ try {
             onAddConnection={addConnection}
             onRemoveConnection={removeConnection}
             onSaveBpmnDecision={saveBpmnDecision}
+            onSaveBpmnLane={saveBpmnLane}
             onBpmnDraftChange={onBpmnDraftChange}
             bpmnDraftDirty={decisionDraftDirty}
             scope={formData}
