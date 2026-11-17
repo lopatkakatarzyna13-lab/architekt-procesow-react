@@ -26,3 +26,7 @@ Data: 17 listopada 2026. Punkt wyjścia: `b91ec7f31d318ab20b6b919fc1d0c31124030b
 5. Sprawdzić brak nowych przyjęć przy użyciu fikcyjnego kontrolowanego żądania oraz zachowanie zapisanego licznika i możliwości ręcznej pracy. Dopiero po osobnym przeglądzie zdecydować o przywróceniu uprawnień, dalszym usunięciu usług, retencji i kluczach. Cofnięcie uprawnień nie cofa treści już wysłanej dostawcy ani lokalnych danych przeglądarki.
 
 Ten plan nie potwierdza skuteczności wycofania w hostowanym środowisku. Żaden z punktów nie jest gotowością do użycia rzeczywistych danych ani automatyczną zgodą na operację.
+
+## Wynik próby lokalnej
+
+Dla `400e6788c98ef6e8e2ac86769f32270eba27d6fe` [test na odizolowanym PostgreSQL](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44139671457) zakończył się sukcesem: po wycofaniu prawa do nowych rezerwacji licznik pozostał bez zmian, aktywny identyfikator mógł zostać zwolniony, a dodatkowe uprawnienie odziedziczone przez inną rolę spowodowało wykrycie nieskutecznego wyłączenia. Nie jest to potwierdzenie zachowania bramki, kluczy, wdrożenia ani dostawcy w projekcie hostowanym.
