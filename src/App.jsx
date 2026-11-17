@@ -22,6 +22,7 @@ import {
 import { buildProcessSnapshot } from './processSnapshot'
 import { getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
+import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
@@ -3001,7 +3002,7 @@ function ReportScreen({
     </section>
   )
 }
-function ProcessesScreen({ processes, onOpen, onBack }) {
+function ProcessesScreen({ processes, onOpen, onDelete, currentId, onBack }) {
   return (
     <section className="processes-screen">
       <div className="processes-header">
@@ -3009,6 +3010,7 @@ function ProcessesScreen({ processes, onOpen, onBack }) {
           <p className="eyebrow">Biblioteka procesów</p>
           <h2>Moje procesy</h2>
           <p>Zapisane procesy możesz ponownie otworzyć i kontynuować.</p>
+          <p>Podczas usuwania pracuj w jednej karcie aplikacji. Usunięcie nie obejmuje wyeksportowanych plików ani kopii zapasowych.</p>
         </div>
 
         <button type="button" className="status-badge" onClick={onBack}>
@@ -3042,6 +3044,10 @@ function ProcessesScreen({ processes, onOpen, onBack }) {
               >
                 Otwórz proces
               </button>
+              <button type="button" className="back-button" aria-label={`Usuń proces ${process.name}`} onClick={() => onDelete(process)}>
+                Usuń proces
+              </button>
+              {isValidProcessId(process.id) && currentId?.toLowerCase() === process.id.toLowerCase() && <small>Otwarty proces: przed usunięciem rozpocznij lub otwórz inny.</small>}
             </article>
           ))}
         </div>
@@ -3089,6 +3095,8 @@ function restoreStorageBackup(storage, backup) {
 
 
 function App() {
+  const [libraryStorageUncertain, setLibraryStorageUncertain] = useState(false)
+  const [libraryMessage, setLibraryMessage] = useState('')
   const workshopDirtyRef = useRef(false)
   const canLeaveWorkshop = () => !workshopDirtyRef.current || window.confirm('Transkrypcja lub propozycja warsztatu ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')
   const [savedProcesses, setSavedProcesses] = useState(loadSavedProcesses)
@@ -3404,6 +3412,20 @@ const startNewProcess = () => {
 
   setProcessIdentityState({ id: null, error: '' })
   window.location.reload()
+}
+
+const removeSavedProcess = (process) => {
+  if (!isValidProcessId(process?.id)) { setLibraryMessage('Nie można usunąć procesu bez poprawnego identyfikatora.'); return }
+  if (processIdentityState.id?.toLowerCase() === process.id.toLowerCase()) { setLibraryMessage('To obecnie otwarty proces. Rozpocznij lub otwórz inny proces przed usunięciem.'); return }
+  if (!window.confirm(`Usunąć proces „${process.name}” z biblioteki oraz jego zapisany tekst warsztatu i propozycję w tej przeglądarce? Operacji nie można cofnąć. Inne procesy i wyeksportowane pliki pozostaną bez zmian.`)) return
+  try {
+    const remaining = deleteSavedProcess(localStorage, process.id, savedProcesses)
+    setSavedProcesses(remaining)
+    setLibraryMessage('Proces i zapisane dane jego warsztatu zostały usunięte z tej przeglądarki. Wyeksportowane pliki pozostają bez zmian.')
+  } catch (error) {
+    if (error.code === 'DELETE_ROLLBACK_FAILED') setLibraryStorageUncertain(true)
+    setLibraryMessage(error.message)
+  }
 }
 
 const openSavedProcess = (process) => {
@@ -4402,6 +4424,8 @@ try {
             ? 1
             : 0
 
+  if (libraryStorageUncertain) return <main><p role="alert">{libraryMessage}</p></main>
+
   return (
     <div className="app-shell">
       <AppHeader
@@ -4424,6 +4448,7 @@ try {
         </div>
       )}
       <main>
+       {screen === 'processes' && libraryMessage && <p role="status">{libraryMessage}</p>}
        {screen !== 'processes' && (
   <ProcessProgress activeStage={activeStage} />
 )}
@@ -4433,6 +4458,8 @@ try {
 
     processes={savedProcesses}
     onOpen={openSavedProcess}
+    onDelete={removeSavedProcess}
+    currentId={processIdentityState.id}
     onBack={() => setScreen(screenBeforeProcesses)}
   />
 ) : screen === 'start' ? (

@@ -86,5 +86,6 @@ jobs:
           done
           if [ "$ready" != 1 ]; then cat /tmp/architekt-vite.log; exit 1; fi
           node tests/browser-offline.mjs
+          node tests/browser-delete-process.mjs
 
 
