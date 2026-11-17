@@ -26,3 +26,7 @@ Dla `e87c6df` test MVP, przeglądarki, SEC-04 i odizolowanego zakończenia proce
 4. Wyjaśnić niestabilne testy pełnego Supabase na podstawie diagnostyki, gdy blokują ocenę; niezależne testy nie zastępują pełnej integracji.
 
 Kontrola pełnego Supabase dla `4a853f0` nie przeszła: test awarii napotkał tabelę po poprzednim teście, której usunięcie nie zostało potwierdzone. Nie oznacza to wyniku bieżącej funkcji biblioteki. https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44124276661
+
+## Ochrona biblioteki przed nadpisaniem
+
+W przeglądzie kodu `a909b72` wykryto, że nieczytelny zapis biblioteki był traktowany jak pusta tablica i mógł zostać automatycznie nadpisany przy uruchomieniu. Przygotowano poprawkę: brak automatycznego zapisu przy starcie, komunikat błędu i blokada zapisu do uszkodzonej biblioteki. Przed zapisem nowego procesu sprawdzana jest również zmiana biblioteki od chwili jej odczytu. Testy obejmują uszkodzony JSON, inne błędne formaty i zmianę w innej karcie. Sprawdzenie nie stanowi atomowej blokady między kartami; pracować w jednej karcie. Wynik kontroli w CI należy przypisać do commitu zawierającego poprawkę.

@@ -3058,13 +3058,13 @@ function ProcessesScreen({ processes, onOpen, onDelete, currentId, onBack }) {
 
 function loadSavedProcesses() {
   try {
-    const savedProcesses = JSON.parse(
-      localStorage.getItem(PROCESSES_STORAGE_KEY) || '[]'
-    )
-
-    return Array.isArray(savedProcesses) ? savedProcesses : []
+    const raw = localStorage.getItem(PROCESSES_STORAGE_KEY)
+    if (raw === null) return { processes: [], error: '' }
+    const savedProcesses = JSON.parse(raw)
+    if (!Array.isArray(savedProcesses)) throw new Error('INVALID_LIBRARY')
+    return { processes: savedProcesses, error: '' }
   } catch {
-    return []
+    return { processes: [], error: 'Nie można odczytać biblioteki procesów. Istniejący zapis nie został nadpisany. Wstrzymaj zapis do biblioteki i sprawdź dane.' }
   }
 }
 
@@ -3099,7 +3099,8 @@ function App() {
   const [libraryMessage, setLibraryMessage] = useState('')
   const workshopDirtyRef = useRef(false)
   const canLeaveWorkshop = () => !workshopDirtyRef.current || window.confirm('Transkrypcja lub propozycja warsztatu ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')
-  const [savedProcesses, setSavedProcesses] = useState(loadSavedProcesses)
+  const [initialLibrary] = useState(loadSavedProcesses)
+  const [savedProcesses, setSavedProcesses] = useState(initialLibrary.processes)
   const [processIdentityState, setProcessIdentityState] = useState(() => {
     try {
       return {
@@ -3128,12 +3129,6 @@ function App() {
 )
   const [screenBeforeProcesses, setScreenBeforeProcesses] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
-  useEffect(() => {
-  localStorage.setItem(
-    PROCESSES_STORAGE_KEY,
-    JSON.stringify(savedProcesses)
-  )
-}, [savedProcesses])
   const [workMode, setWorkMode] = useState(savedScope.workMode)
     useEffect(() => {
     const currentScope = loadSavedScope()
@@ -3278,6 +3273,10 @@ function App() {
   window.location.reload()
 }
 const startNewProcess = () => {
+  if (initialLibrary.error) {
+    setProcessIdentityState((current) => ({ ...current, error: initialLibrary.error }))
+    return
+  }
    const hasStartedProcess = Boolean(formData.processName?.trim())
 
   if (!hasStartedProcess) {
@@ -3325,6 +3324,10 @@ const startNewProcess = () => {
   if (!accepted) return
 
   try {
+    const latestRaw = localStorage.getItem(PROCESSES_STORAGE_KEY)
+    let latestLibrary
+    try { latestLibrary = latestRaw === null ? [] : JSON.parse(latestRaw) } catch { throw new Error('LIBRARY_CHANGED') }
+    if (!Array.isArray(latestLibrary) || JSON.stringify(latestLibrary) !== JSON.stringify(savedProcesses)) throw new Error('LIBRARY_CHANGED')
     const processId =
       processIdentityState.id ?? createProcessId(globalThis.crypto)
     const existingProcess = savedProcesses.find(
@@ -3354,10 +3357,10 @@ const startNewProcess = () => {
       JSON.stringify(updatedProcesses)
     )
     setSavedProcesses(updatedProcesses)
-  } catch {
+  } catch (error) {
     setProcessIdentityState((current) => ({
       ...current,
-      error: 'Nie udało się zapisać procesu w bibliotece. Dane i tożsamość procesu zostały zachowane.',
+      error: error.message === 'LIBRARY_CHANGED' ? 'Biblioteka zmieniła się lub jest nieczytelna. Proces nie został zapisany ani zresetowany. Sprawdź dane przed odświeżeniem strony.' : 'Nie udało się zapisać procesu w bibliotece. Dane i tożsamość procesu zostały zachowane.',
     }))
     return
   }
@@ -4453,7 +4456,9 @@ try {
   <ProcessProgress activeStage={activeStage} />
 )}
 
-{screen === 'processes' ? (
+{screen === 'processes' && initialLibrary.error ? (
+  <section><p role="alert">{initialLibrary.error}</p><button type="button" onClick={() => setScreen(screenBeforeProcesses)}>Wróć do procesu</button></section>
+) : screen === 'processes' ? (
   <ProcessesScreen
 
     processes={savedProcesses}
