@@ -71,7 +71,7 @@ try {
   for (const flow of decision.outgoing) {
     // A horizontal SVG path has a zero-height bounding box, which Playwright
     // may classify as hidden even when its stroke is drawn. Inspect the line.
-    const line = preview.locator(`[data-element-id="${flow.id}"] .djs-visual path`).first()
+    const line = preview.locator(`[data-element-id="${flow.id}"] .djs-visual > path`).first()
     await line.waitFor({ state: 'attached' })
     const geometry = await line.evaluate((element) => {
       const rect = element.getBoundingClientRect()
