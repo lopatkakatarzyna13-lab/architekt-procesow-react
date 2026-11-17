@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
+const BpmnPreview = lazy(() => import('./BpmnPreview'))
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 
 export default function BpmnExport({ steps, scope, saved }) {
   const [message, setMessage] = useState('')
+  const [previewKey, setPreviewKey] = useState(null)
+  const snapshot = JSON.stringify([steps, scope.processName, scope.processStart, scope.processEnd])
+  const previewVisible = saved && !getDecisionBpmnError(steps) && previewKey === snapshot
   const error = getDecisionBpmnError(steps)
   const exportFile = async () => {
     if (!saved || error) return
@@ -23,10 +27,14 @@ export default function BpmnExport({ steps, scope, saved }) {
   return <section className="step-connections" aria-labelledby="bpmn-export-title">
     <h2 id="bpmn-export-title">Eksport procesu BPMN 2.0</h2>
     <p>Eksport obejmuje nazwę procesu, początek, nazwy zadań, koniec, połączenia oraz określone przez Ciebie bramki wyboru jednej ścieżki. Role, systemy, opisy, ustalenia i inne dane nie są uwzględniane. Plik nie jest przeznaczony do automatycznego wykonywania procesu.</p>
-    <p>Dla dodatkowych przejść uzupełnij decyzję i warunek podstawowej ścieżki. Opisy warunków nie są regułami do automatycznego wykonania. Bramki są w pobranym pliku; obecna mapa w aplikacji nadal jest poglądowa. Sprawdź model przed użyciem.</p>
+    <p>Dla dodatkowych przejść uzupełnij decyzję i warunek podstawowej ścieżki. Opisy warunków nie są regułami do automatycznego wykonania. Podgląd i plik powstają z tych samych zapisanych danych. Sprawdź model przed użyciem.</p>
     {!saved && <p>Najpierw zapisz proces AS-IS.</p>}
     {error && <p>{error}</p>}
-    <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={exportFile}>Pobierz BPMN 2.0</button>
+    <div className="bpmn-actions">
+      <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={() => setPreviewKey(previewVisible ? null : snapshot)}>{previewVisible ? 'Ukryj podgląd BPMN' : 'Pokaż podgląd BPMN'}</button>
+      <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={exportFile}>Pobierz BPMN 2.0</button>
+    </div>
+    {previewVisible && <Suspense fallback={<p role="status">Przygotowuję podgląd BPMN…</p>}><BpmnPreview key={snapshot} steps={steps} scope={scope} /></Suspense>}
     {message && <p role="status">{message}</p>}
   </section>
 }

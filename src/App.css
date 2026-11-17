@@ -3599,3 +3599,7 @@ footer span:first-child::before {
 .step-connections form { display: grid; gap: 8px; max-width: 520px; }
 .step-connections select, .step-connections input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #b9b7d0; border-radius: 8px; font: inherit; }
 .step-connections li { margin: 10px 0; }
+
+.bpmn-actions, .bpmn-preview-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.bpmn-preview-canvas { position: relative; width: 100%; height: 420px; border: 1px solid #dedbed; border-radius: 8px; background: white; overflow: hidden; }
+@media (max-width: 600px) { .bpmn-preview-canvas { height: 330px; } }
