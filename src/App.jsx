@@ -3704,12 +3704,18 @@ const openSavedProcess = (process) => {
   }
 
   const useWorkshopFinding = (category, value) => {
-    const field = category === 'roles' ? 'owner' : category === 'systems' ? 'system' : null
+    const field = category === 'roles' ? 'owner' : category === 'systems' ? 'system' : ['decisions', 'exceptions'].includes(category) ? 'description' : null
     if (startMethod !== 'steps' || !field || typeof value !== 'string' || !value.trim()) return { error: 'Nie udało się wstawić ustalenia.' }
-    const existing = stepDraft[field].trim()
+    const existing = stepDraft[field]
     const selected = value.trim()
-    if (existing && existing !== selected && !window.confirm(`W formularzu kroku znajduje się już wartość: „${existing}”. Zastąpić ją wartością „${selected}”?`)) return { cancelled: true }
-    setStepDraft((current) => ({ ...current, [field]: selected }))
+    if (field === 'description') {
+      const entry = `${category === 'decisions' ? 'Decyzja' : 'Wyjątek'}: ${selected}`
+      if (`\n${existing}\n`.includes(`\n${entry}\n`)) return { duplicate: true }
+      setStepDraft((current) => ({ ...current, description: current.description ? `${current.description}\n${entry}` : entry }))
+    } else {
+      if (existing.trim() && existing.trim() !== selected && !window.confirm(`W formularzu kroku znajduje się już wartość: „${existing.trim()}”. Zastąpić ją wartością „${selected}”?`)) return { cancelled: true }
+      setStepDraft((current) => ({ ...current, [field]: selected }))
+    }
     setAsIsSaved(false)
     setAsIsSaveError(false)
     setAsIsError('')

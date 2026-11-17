@@ -228,6 +228,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     const result = onUseFinding(category, item.text)
     if (result?.cancelled) return
     if (result?.error) { setAnalysisMessage(result.error); return }
+    if (result?.duplicate) { setAnalysisMessage('To ustalenie jest już w opisie formularza kroku.'); return }
     setAnalysisMessage('Wstawiono do formularza kroku poniżej. Aby zachować zmianę, dodaj krok lub zapisz jego edycję.')
   }
 
@@ -293,7 +294,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
             <textarea id={`review-${key}-${index}`} rows="2" value={item.text} onChange={(event) => editItem(key, index, event.target.value)} />
             <small>{item.status === 'supported' ? 'Źródło propozycji: cytat z rozmowy' : item.status === 'assumption' ? 'Źródło propozycji: założenie lub wpis ręczny' : 'Rodzaj: pytanie'}</small>
             <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => setItemReviewed(key, index, event.target.checked)} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
-            {canTransferSteps && onUseFinding && (key === 'roles' || key === 'systems') && <button type="button" className="back-button" disabled={dirty || reviewDirty || !item.reviewed} onClick={() => insertFinding(key, item)}>Wstaw {key === 'roles' ? 'rolę' : 'system'} do formularza kroku — pozycja {index + 1}</button>}
+            {canTransferSteps && onUseFinding && ['roles', 'systems', 'decisions', 'exceptions'].includes(key) && <button type="button" className="back-button" disabled={dirty || reviewDirty || !item.reviewed} onClick={() => insertFinding(key, item)}>Wstaw {({ roles: 'rolę', systems: 'system', decisions: 'decyzję', exceptions: 'wyjątek' })[key]} do formularza kroku — pozycja {index + 1}</button>}
             {item.evidence && <blockquote>Fragment rozmowy: {item.evidence}</blockquote>}
             <button type="button" className="back-button" onClick={() => removeItem(key, index)}>Usuń pozycję {index + 1} — {title.toLowerCase()}</button>
           </li>)}</ul> : <p>Brak propozycji.</p>}
@@ -303,7 +304,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
         {reviewDirty && <p role="status">Masz niezapisaną propozycję.</p>}
         {canTransferSteps ? <div className="workshop-actions">
           <button type="button" className="save-button" disabled={!selectedSteps.length || reviewDirty || dirty} onClick={transferSteps}>Przenieś wybrane kroki do AS-IS</button>
-          <span>Najpierw zapisz propozycję. Sprawdzone role i systemy możesz wstawić do formularza kroku.</span>
+          <span>Najpierw zapisz propozycję. Sprawdzone role, systemy, decyzje i wyjątki możesz wstawić do formularza kroku. Aby uzupełnić istniejący krok, najpierw wybierz jego edycję.</span>
         </div> : <p>Przenoszenie kroków jest dostępne w trybie „Dodaj kroki samodzielnie”.</p>}
       </div>}
     </section>
