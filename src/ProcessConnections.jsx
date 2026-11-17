@@ -17,7 +17,7 @@ export default function ProcessConnections({ steps, onAdd, onRemove }) {
   }
   return <section className="step-connections" aria-labelledby="connections-title">
     <h2 id="connections-title">Dodatkowe połączenia kroków</h2>
-    <p>Kolejność na liście tworzy przebieg podstawowy. Dodaj tu inne przejście, np. powrót do poprawy. Połączenia są widoczne na interaktywnej mapie AS-IS. Nie są uwzględnione na mapie w wydruku PDF ani nie tworzą bramek BPMN.</p>
+    <p>Kolejność na liście tworzy przebieg podstawowy. Dodaj tu inne przejście, np. powrót do poprawy. Połączenia są widoczne na interaktywnej mapie AS-IS. Nie są uwzględnione na mapie w wydruku PDF. Bramkę BPMN określisz osobno w sekcji decyzji.</p>
     {steps.length < 2 ? <p>Dodaj co najmniej dwa kroki, aby połączyć je dodatkową ścieżką.</p> : <form onSubmit={add}>
       <label htmlFor="connection-source">Od kroku</label>
       <select id="connection-source" value={source} onChange={(event) => setSource(event.target.value)} required>

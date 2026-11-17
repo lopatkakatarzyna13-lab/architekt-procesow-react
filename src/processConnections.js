@@ -26,3 +26,10 @@ export function getProcessConnections(steps) {
     .flatMap((link, index) => link && ids.has(link.targetId) && link.targetId !== step.id && typeof link.label === 'string' && link.label.trim()
       ? [{ sourceId: step.id, targetId: link.targetId, label: link.label, index }] : []))
 }
+
+export function setProcessDecision(steps, sourceId, question, mainLabel) {
+  const step = steps.find((item) => item.id === sourceId)
+  if (!step || !Array.isArray(step.extraConnections) || step.extraConnections.length === 0) throw new Error('Najpierw dodaj inne przejście z tego kroku.')
+  if (typeof question !== 'string' || !question.trim() || question.trim().length > 120 || typeof mainLabel !== 'string' || !mainLabel.trim() || mainLabel.trim().length > 120) throw new Error('Uzupełnij pytanie decyzji i opis podstawowej ścieżki (do 120 znaków).')
+  return steps.map((item) => item.id === sourceId ? { ...item, bpmnDecision: { question: question.trim(), mainLabel: mainLabel.trim() } } : item)
+}

@@ -29,7 +29,8 @@ import WorkshopPanel from './WorkshopPanel'
 import { appendWorkshopSteps } from './workshop'
 import ProcessConnections from './ProcessConnections'
 import BpmnExport from './BpmnExport'
-import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections } from './processConnections'
+import BpmnDecisions from './BpmnDecisions'
+import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
@@ -983,6 +984,9 @@ function AsIsScreen({
   onUseWorkshopFinding,
   onAddConnection,
   onRemoveConnection,
+  onSaveBpmnDecision,
+  onBpmnDraftChange,
+  bpmnDraftDirty,
   scope,
   startMethod,
   description,
@@ -1049,7 +1053,8 @@ function AsIsScreen({
           onCancelEdit={onCancelEdit}
         />
         <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
-        <BpmnExport steps={steps} scope={scope} saved={saved} />
+        <BpmnDecisions steps={steps} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
+        <BpmnExport steps={steps} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>
       ) : (
         <DescribeAsIs
@@ -3122,7 +3127,21 @@ function App() {
   const [libraryStorageUncertain, setLibraryStorageUncertain] = useState(false)
   const [libraryMessage, setLibraryMessage] = useState('')
   const workshopDirtyRef = useRef(false)
-  const canLeaveWorkshop = () => !workshopDirtyRef.current || window.confirm('Transkrypcja lub propozycja warsztatu ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')
+  const [decisionDraftFlags, setDecisionDraftFlags] = useState({})
+  const decisionDraftDirty = Object.values(decisionDraftFlags).some(Boolean)
+  const onBpmnDraftChange = (id, dirty) => setDecisionDraftFlags((current) => ({ ...current, [id]: dirty }))
+  useEffect(() => {
+    if (!decisionDraftDirty) return undefined
+    const warn = (event) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [decisionDraftDirty])
+  const canLeaveWorkshop = () => {
+    if (!workshopDirtyRef.current && !decisionDraftDirty) return true
+    if (!window.confirm('Transkrypcja, propozycja warsztatu lub decyzja BPMN ma niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')) return false
+    setDecisionDraftFlags({})
+    return true
+  }
   const [initialLibrary] = useState(loadSavedProcesses)
   const [savedProcesses, setSavedProcesses] = useState(initialLibrary.processes)
   const [processIdentityState, setProcessIdentityState] = useState(() => {
@@ -3758,7 +3777,17 @@ const openSavedProcess = (process) => {
     try { return saveConnectionChange(addProcessConnection(steps, sourceId, targetId, label)) }
     catch (error) { return { error: error.message } }
   }
-  const removeConnection = (sourceId, index) => saveConnectionChange(removeProcessConnection(steps, sourceId, index))
+  const removeConnection = (sourceId, index) => {
+    const source = steps.find((step) => step.id === sourceId)
+    if (decisionDraftFlags[sourceId] && source?.extraConnections?.length === 1 && !window.confirm('Usunięcie ostatniego przejścia usunie niezapisany formularz decyzji. Kontynuować?')) return { error: 'Nie usunięto połączenia.' }
+    const result = saveConnectionChange(removeProcessConnection(steps, sourceId, index))
+    if (!result.error && source?.extraConnections?.length === 1) onBpmnDraftChange(sourceId, false)
+    return result
+  }
+  const saveBpmnDecision = (sourceId, question, mainLabel) => {
+    try { return saveConnectionChange(setProcessDecision(steps, sourceId, question, mainLabel)) }
+    catch (error) { return { error: error.message } }
+  }
 
   const addOrUpdateStep = () => {
     if (!stepDraft.name.trim()) {
@@ -3822,6 +3851,9 @@ try {
   }
 
   const deleteStep = (stepId) => {
+    const affectedDrafts = steps.filter((step) => decisionDraftFlags[step.id] && (step.id === stepId || (Array.isArray(step.extraConnections) && step.extraConnections.length > 0 && step.extraConnections.every((link) => link.targetId === stepId))))
+    if (affectedDrafts.length && !window.confirm('Usunięcie kroku spowoduje utratę niezapisanej decyzji BPMN. Kontynuować?')) return
+    for (const affected of affectedDrafts) onBpmnDraftChange(affected.id, false)
     setSteps((currentSteps) => removeStepConnections(currentSteps, stepId))
     if (editingStepId === stepId) {
       cancelStepEdit()
@@ -3855,6 +3887,7 @@ try {
   }
 
   const saveAsIs = () => {
+    if (decisionDraftDirty) { setAsIsError('Najpierw zapisz lub cofnij zmiany w formularzu decyzji BPMN.'); return }
     setAsIsSaved(false)
     setAsIsSaveError(false)
     setAsIsError('')
@@ -4546,6 +4579,9 @@ try {
             onUseWorkshopFinding={useWorkshopFinding}
             onAddConnection={addConnection}
             onRemoveConnection={removeConnection}
+            onSaveBpmnDecision={saveBpmnDecision}
+            onBpmnDraftChange={onBpmnDraftChange}
+            bpmnDraftDirty={decisionDraftDirty}
             scope={formData}
             startMethod={startMethod}
             description={asIsDescription}
