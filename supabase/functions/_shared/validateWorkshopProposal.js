@@ -7,6 +7,7 @@ export function validateWorkshopProposal(proposal, transcript) {
     if (!Array.isArray(proposal[category])) { errors.push(`Brakuje listy: ${category}.`); continue }
     proposal[category].forEach((item, index) => {
       if (!item || typeof item.text !== 'string' || !item.text.trim()) { errors.push(`${category}[${index}]: brak treści.`); return }
+      if (item.reviewed !== undefined && typeof item.reviewed !== 'boolean') errors.push(`${category}[${index}]: nieprawidłowe oznaczenie sprawdzenia.`)
       if (!['supported', 'assumption', 'question'].includes(item.status)) { errors.push(`${category}[${index}]: nieprawidłowy status.`); return }
       if (item.status === 'supported' && (typeof item.evidence !== 'string' || !item.evidence.trim() || !transcript.includes(item.evidence))) {
         errors.push(`${category}[${index}]: brak dokładnego fragmentu źródłowego.`)

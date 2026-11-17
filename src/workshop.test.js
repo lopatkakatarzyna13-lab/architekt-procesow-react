@@ -38,6 +38,10 @@ describe('proposal validation', () => {
     const p = valid(); p.steps[0].evidence = 'Wysyłam dane'; delete p.roles
     expect(validateWorkshopProposal(p, transcript)).toHaveLength(2)
   })
+  it('rejects a malformed review marker', () => {
+    const p = valid(); p.steps[0].reviewed = 'true'
+    expect(validateWorkshopProposal(p, transcript)).not.toEqual([])
+  })
   it('requires a transcript and valid statuses', () => {
     expect(validateWorkshopProposal(valid(), '')).not.toEqual([])
     const p = valid(); p.questions[0].status = 'verified'

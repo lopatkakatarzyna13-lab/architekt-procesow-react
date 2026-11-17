@@ -66,6 +66,47 @@ describe('workshop review screen', () => {
     expect(screen.getByLabelText('Kroki — pozycja 1').value).toBe('Sprawdzenie danych')
   })
 
+  it('saves an explicit review decision and clears it when the text changes', async () => {
+    const user = userEvent.setup()
+    saveWorkshop(localStorage, PROCESS_A, 'HR używa SAP.')
+    saveWorkshopReview(localStorage, PROCESS_A, 'HR używa SAP.', {
+      steps: [], roles: [], decisions: [], questions: [{ text: 'Kto zatwierdza?', status: 'question' }],
+      systems: [{ text: 'SAP', status: 'assumption' }], exceptions: [],
+    })
+    const view = render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    const systemCheck = screen.getByRole('checkbox', { name: 'Sprawdzono treść — systemy, pozycja 1' })
+    const questionCheck = screen.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' })
+    expect(systemCheck.checked).toBe(false)
+    expect(questionCheck.checked).toBe(false)
+    await user.click(systemCheck)
+    await user.click(questionCheck)
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    view.unmount()
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    expect(screen.getByRole('checkbox', { name: 'Sprawdzono treść — systemy, pozycja 1' }).checked).toBe(true)
+    expect(screen.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }).checked).toBe(true)
+    await user.type(screen.getByLabelText('Systemy — pozycja 1'), ' HR')
+    expect(screen.getByRole('checkbox', { name: 'Sprawdzono treść — systemy, pozycja 1' }).checked).toBe(false)
+    expect(screen.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }).checked).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    cleanup()
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    expect(screen.getByRole('checkbox', { name: 'Sprawdzono treść — systemy, pozycja 1' }).checked).toBe(false)
+    expect(screen.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }).checked).toBe(true)
+  })
+
+  it('never trusts an AI response to mark its own proposal as checked', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ proposal: {
+      steps: [{ text: 'Sprawdzenie danych', status: 'supported', evidence: 'HR sprawdza dane.', reviewed: true }], roles: [], decisions: [], questions: [],
+    } }) })))
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'HR sprawdza dane.')
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    expect((await screen.findByRole('checkbox', { name: 'Sprawdzono treść — kroki, pozycja 1' })).checked).toBe(false)
+  })
+
   it('keeps unsaved review if the user cancels changing the transcript', async () => {
     const user = userEvent.setup()
     const dirtyRef = { current: false }
@@ -96,9 +137,9 @@ describe('workshop review screen', () => {
     await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
     const field = await screen.findByLabelText('Kroki — pozycja 1')
     const row = field.closest('li')
-    expect(within(row).getByText('Propozycja z cytatem do sprawdzenia')).toBeTruthy()
+    expect(within(row).getByText('Źródło propozycji: cytat z rozmowy')).toBeTruthy()
     await user.type(field, ' ręcznie')
-    expect(within(row).getByText('Do sprawdzenia')).toBeTruthy()
+    expect(within(row).getByText('Źródło propozycji: założenie lub wpis ręczny')).toBeTruthy()
     expect(within(row).getByText('Fragment rozmowy: HR sprawdza dane.')).toBeTruthy()
   })
   it('explains the AI usage limit and keeps manual workshop editing available', async () => {

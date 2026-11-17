@@ -8,6 +8,9 @@ import {
 const categories = { steps: 'Kroki', roles: 'Role', systems: 'Systemy', decisions: 'Decyzje', exceptions: 'Wyjątki', questions: 'Pytania' }
 const emptyReview = () => ({ steps: [], roles: [], systems: [], decisions: [], exceptions: [], questions: [] })
 const completeReview = (review) => review ? { ...emptyReview(), ...review } : null
+// The provider cannot mark its own suggestions as reviewed by the user.
+const unreviewedProposal = (proposal) => Object.fromEntries(Object.entries(completeReview(proposal)).map(([key, items]) =>
+  [key, Array.isArray(items) ? items.map((item) => ({ ...item, reviewed: false })) : items]))
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
 export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = false, onTransferSteps }) {
@@ -160,7 +163,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       }
       if (revision.current !== currentRevision) setAnalysisMessage('Transkrypcja lub propozycja zmieniła się podczas analizy. Uruchom analizę ponownie.')
       else if (validateWorkshopProposal(result.proposal, transcript).length) setAnalysisMessage('Odpowiedź nie przeszła kontroli źródeł. Spróbuj ponownie.')
-      else { setAnalysis(completeReview(result.proposal)); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
+      else { setAnalysis(unreviewedProposal(result.proposal)); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
     } catch (error) {
       if (activeAnalysis.current !== controller) return
       if (error.message === 'AI_LOGIN_REQUIRED') { setAnalysisMessage('Sesja wygasła. Zaloguj się ponownie.'); return }
@@ -181,7 +184,14 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   const editItem = (category, index, value) => {
     revision.current += 1
     if (category === 'steps') setSelectedSteps([])
-    setAnalysis((current) => ({ ...current, [category]: current[category].map((item, i) => i === index ? { ...item, text: value, status: item.status === 'supported' ? 'assumption' : item.status } : item) }))
+    setAnalysis((current) => ({ ...current, [category]: current[category].map((item, i) => i === index ? { ...item, text: value, reviewed: false, status: item.status === 'supported' ? 'assumption' : item.status } : item) }))
+    setReviewDirty(true)
+    dirtyRef.current = true
+    setAnalysisMessage('')
+  }
+  const setItemReviewed = (category, index, checked) => {
+    revision.current += 1
+    setAnalysis((current) => ({ ...current, [category]: current[category].map((item, i) => i === index ? { ...item, reviewed: checked } : item) }))
     setReviewDirty(true)
     dirtyRef.current = true
     setAnalysisMessage('')
@@ -265,7 +275,7 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
       {analysisMessage && <p role="status">{analysisMessage}</p>}
       {analysis && <div className="workshop-results">
         <h3>Propozycja do sprawdzenia</h3>
-        <p>Popraw lub dodaj ustalenia, w tym systemy i wyjątki. Systemy i wyjątki dodajesz ręcznie. Po edycji treści przez człowieka element jest oznaczony jako wymagający sprawdzenia. Zapisana propozycja pozostaje w tej przeglądarce.</p>
+        <p>Popraw lub dodaj ustalenia, w tym systemy i wyjątki. Systemy i wyjątki dodajesz ręcznie. Po sprawdzeniu zaznacz wybrane pozycje i zapisz propozycję. Zmiana treści cofa oznaczenie. Przy pytaniu oznaczenie dotyczy jego treści, a nie odpowiedzi. Zapis pozostaje w tej przeglądarce.</p>
         <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
         {Object.entries(categories).map(([key, title]) => <div key={key}>
           <h4>{title}</h4>
@@ -273,7 +283,8 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
             {key === 'steps' && canTransferSteps && <label><input type="checkbox" checked={selectedSteps.includes(index)} onChange={(event) => setSelectedSteps((current) => event.target.checked ? [...current, index] : current.filter((itemIndex) => itemIndex !== index))} /> Wybierz krok {index + 1} do przeniesienia</label>}
             <label htmlFor={`review-${key}-${index}`}>{title} — pozycja {index + 1}</label>
             <textarea id={`review-${key}-${index}`} rows="2" value={item.text} onChange={(event) => editItem(key, index, event.target.value)} />
-            <small>{item.status === 'supported' ? 'Propozycja z cytatem do sprawdzenia' : item.status === 'assumption' ? 'Do sprawdzenia' : 'Pytanie'}</small>
+            <small>{item.status === 'supported' ? 'Źródło propozycji: cytat z rozmowy' : item.status === 'assumption' ? 'Źródło propozycji: założenie lub wpis ręczny' : 'Rodzaj: pytanie'}</small>
+            <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => setItemReviewed(key, index, event.target.checked)} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
             {item.evidence && <blockquote>Fragment rozmowy: {item.evidence}</blockquote>}
             <button type="button" className="back-button" onClick={() => removeItem(key, index)}>Usuń pozycję {index + 1} — {title.toLowerCase()}</button>
           </li>)}</ul> : <p>Brak propozycji.</p>}
