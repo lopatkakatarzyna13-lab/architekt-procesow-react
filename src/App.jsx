@@ -2392,8 +2392,7 @@ function ToBeReport({ assumptions, steps, findings }) {
   )
 }
 
-function ProcessComparison({ startMethod, asIsSteps, toBeSteps, selectedCount }) {
-  const stepComparison = startMethod === 'steps' ? compareProcessSteps(asIsSteps, toBeSteps) : null
+function ProcessComparison({ startMethod, asIsSteps, toBeSteps, stepComparison, selectedCount }) {
   const items = [
     [
       'Kroki AS-IS',
@@ -3023,6 +3022,7 @@ function PrintReport({
   toBeAssumptions,
   selectedFindingIds,
   toBeSteps,
+  stepComparison,
   stakeholders,
   raci,
   generatedAt,
@@ -3058,6 +3058,7 @@ function PrintReport({
         startMethod={startMethod}
         asIsSteps={asIsSteps}
         toBeSteps={toBeSteps}
+        stepComparison={stepComparison}
         selectedCount={selectedFindingIds.length}
       />
       <section className="report-section print-maps-section">
@@ -3138,7 +3139,7 @@ function ReportScreen({
   findings,
   toBeAssumptions,
   selectedFindingIds,
-  toBeSteps,
+  toBeSteps: modeledSteps,
   stakeholders,
   stakeholderDraft,
   stakeholderError,
@@ -3159,6 +3160,14 @@ function ReportScreen({
   onExport,
   printGeneratedAt,
 }) {
+  const stepComparison = startMethod === 'steps' ? compareProcessSteps(asIsSteps, modeledSteps) : null
+  const changedStepIds = new Set(stepComparison?.changed.map(({ id }) => id))
+  const toBeSteps = modeledSteps.map((step) => (
+    step.stepType === 'Bez zmian' && changedStepIds.has(step.id)
+      ? { ...step, stepType: 'Zmieniony' }
+      : step
+  ))
+
   return (
     <section className="workspace report-workspace" aria-labelledby="report-title">
       <div className="analysis-intro">
@@ -3170,7 +3179,7 @@ function ReportScreen({
       <AsIsReport startMethod={startMethod} description={asIsDescription} steps={asIsSteps} />
       <AnalysisReport findings={findings} asIsSteps={asIsSteps} startMethod={startMethod} />
       <ToBeReport assumptions={toBeAssumptions} steps={toBeSteps} findings={findings} />
-      <ProcessComparison startMethod={startMethod} asIsSteps={asIsSteps} toBeSteps={toBeSteps} selectedCount={selectedFindingIds.length} />
+      <ProcessComparison startMethod={startMethod} asIsSteps={asIsSteps} toBeSteps={toBeSteps} stepComparison={stepComparison} selectedCount={selectedFindingIds.length} />
       <ProcessMapSection
         scope={scope}
         startMethod={startMethod}
@@ -3219,6 +3228,7 @@ function ReportScreen({
         toBeAssumptions={toBeAssumptions}
         selectedFindingIds={selectedFindingIds}
         toBeSteps={toBeSteps}
+        stepComparison={stepComparison}
         stakeholders={stakeholders}
         raci={raci}
         generatedAt={printGeneratedAt}

@@ -158,6 +158,13 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   render(<App />)
   expect(screen.getByText('Raport procesu został zapisany')).toBeTruthy()
   const report = screen.getByRole('heading', { name: 'Podsumuj proces i odpowiedzialności' }).closest('.report-workspace')
+  for (const counter of within(report).getAllByText('Zmienione kroki', { exact: true })) {
+    expect(counter.previousElementSibling.textContent).toBe('1')
+  }
+  const copiedStep = within(report).getAllByText(steps[0], { exact: true })
+    .map((item) => item.closest('.report-steps li')).filter((item) => item?.querySelector('.step-type'))
+  expect(copiedStep).toHaveLength(2)
+  expect(copiedStep.every((item) => within(item).getByText('Zmieniony'))).toBe(true)
   expect(within(report).getAllByText('Brak terminu przekazania').length).toBeGreaterThan(0)
   expect(within(report).getAllByText('Ustalić termin przekazania').length).toBeGreaterThan(0)
   expect(within(report).getAllByText('Odpowiedzialność: nie określono → Zespół kontroli').length).toBeGreaterThan(0)

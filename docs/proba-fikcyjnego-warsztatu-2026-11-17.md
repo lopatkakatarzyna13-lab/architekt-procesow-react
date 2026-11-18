@@ -22,4 +22,7 @@ Punkt wyjścia `4ec8193`. Przykład HR obejmuje kontrolę kompletności dokument
 
 - Po odświeżeniu karta wracała do poprzednio zapamiętanego ekranu, zwykle AS-IS. Aplikacja zapisuje teraz bieżący etap od AS-IS do raportu dla tej karty. Scenariusz sprawdza odświeżenie TO-BE i zapisanego raportu z macierzą RACI.
 - Zapis etapu mógł pominąć wpis w otwartym formularzu kroku, ustalenia lub interesariusza. Zapis i przejście dalej wymagają dokończenia formularza. Eksport PDF również sprawdza formularz interesariusza.
+- Raport dla `4ec8193` wykazał zmianę osoby odpowiedzialnej i jednocześnie policzył zero zmienionych kroków. Raport i widok wydruku oznaczają teraz powiązany krok jako zmieniony, gdy porównanie wykrywa różnicę w nazwie, odpowiedzialności lub systemie, a zapisany typ kroku to „Bez zmian”.
 - Próba w Chromium obejmuje archiwizację i otwarcie z „Moich procesów”, odczyt eksportu BPMN i sprawdzenie tekstu wygenerowanego PDF. Odpowiedź AI pochodzi z fikcyjnej odpowiedzi zapisanej w teście.
+
+[GitHub Actions dla `4ec8193`](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44301033471) potwierdza przejście od fikcyjnych ustaleń do PDF. Obejrzano wszystkie osiem stron A4 z tamtego przebiegu. Sprawdzono, że raport zawiera obie mapy, zmianę odpowiedzialności i macierz RACI. Sprawdzenie nowego PDF wymaga uruchomienia rozszerzonego scenariusza w Chromium dla wersji z poprawkami.

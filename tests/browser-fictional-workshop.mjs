@@ -342,6 +342,8 @@ try {
   await page.getByRole('button', { name: 'Otwórz proces' }).click()
   await page.getByText('Raport procesu został zapisany').waitFor()
   const report = page.locator('.report-workspace')
+  const changedCounts = report.locator('.comparison-grid > div').filter({ hasText: 'Zmienione kroki' }).locator('strong')
+  assert.deepEqual(await changedCounts.allTextContents(), ['1', '1'], 'screen and print must count the changed owner')
   await report.getByText('Brak terminu przekazania', { exact: true }).first().waitFor()
   await report.getByText('Ustalić przewidywalny termin przekazania', { exact: true }).first().waitFor()
   for (const step of proposal.steps) await report.getByText(step.text, { exact: true }).first().waitFor()
@@ -357,6 +359,9 @@ try {
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
+  const pdfLayout = execFileSync('pdftotext', ['-layout', '-', '-'], { input: pdf, encoding: 'utf8' })
+  assert.match(pdfLayout, /^[ \t]*1[ \t]+1[ \t]+0[ \t]*\r?\n[ \t]*Zmienione kroki[ \t]+Bez zmian/m,
+    'PDF must show one changed step, one unchanged step and no automation candidates')
   assert.ok(!pdfText.includes('Piątek, godzina 13:00'), 'local workshop answers should stay out of the PDF')
   assert.ok(!pdfText.includes('Koordynatorka fikcyjnego wdrożenia'), 'local workshop follow-up details should stay out of the PDF')
   for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Uzgodnić ścieżkę kompletowania dokumentów', 'Wybrane ustalenia bez powiązanego kroku TO-BE', 'Odpowiedzialność: HR → Zespół kontroli TO-BE', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
