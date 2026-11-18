@@ -1668,18 +1668,31 @@ function ToBeAssumptions({ assumptions, error, onChange }) {
   )
 }
 
+function getToBeStepsByFinding(steps) {
+  const byFinding = new Map()
+  for (const step of steps) {
+    if (!step.findingId) continue
+    const linked = byFinding.get(step.findingId) ?? []
+    linked.push(step.name)
+    byFinding.set(step.findingId, linked)
+  }
+  return byFinding
+}
+
 function IncludedFindings({
   findings,
   selectedIds,
-  steps,
+  asIsSteps,
+  toBeSteps,
   startMethod,
   onToggle,
 }) {
+  const stepsByFinding = getToBeStepsByFinding(toBeSteps)
   const locationLabel = (finding) => {
     if (!finding.location) return 'Nie wskazano miejsca'
     if (startMethod !== 'steps') return finding.location
-    const index = steps.findIndex((step) => step.id === finding.location)
-    return index >= 0 ? `${index + 1}. ${steps[index].name}` : 'Krok niedostępny'
+    const index = asIsSteps.findIndex((step) => step.id === finding.location)
+    return index >= 0 ? `${index + 1}. ${asIsSteps[index].name}` : 'Krok niedostępny'
   }
 
   return (
@@ -1694,6 +1707,7 @@ function IncludedFindings({
       <div className="to-be-findings-list">
         {findings.map((finding) => {
           const checked = selectedIds.includes(finding.id)
+          const linkedSteps = stepsByFinding.get(finding.id)
           return (
             <label className={`to-be-finding ${checked ? 'selected' : ''}`} key={finding.id}>
               <input
@@ -1712,6 +1726,8 @@ function IncludedFindings({
                 <strong>{finding.name}</strong>
                 <small>Gdzie: {locationLabel(finding)}</small>
                 {finding.improvement && <p>Pomysł: {finding.improvement}</p>}
+                {linkedSteps && <small>Powiązane kroki TO-BE: {linkedSteps.join(', ')}</small>}
+                {checked && !linkedSteps && <small>Brak powiązanego kroku TO-BE</small>}
                 <em>Uwzględnij w procesie TO-BE</em>
               </span>
             </label>
@@ -2078,7 +2094,8 @@ function ToBeScreen({
       <IncludedFindings
         findings={findings}
         selectedIds={selectedFindingIds}
-        steps={asIsSteps}
+        asIsSteps={asIsSteps}
+        toBeSteps={steps}
         startMethod={startMethod}
         onToggle={onToggleFinding}
       />
@@ -3021,13 +3038,17 @@ function PrintReport({
 }
 
 function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
+  const stepsByFinding = getToBeStepsByFinding(toBeSteps)
+  const selectedIds = new Set(selectedFindingIds)
+  const missingSteps = findings.filter(({ id }) => selectedIds.has(id) && !stepsByFinding.has(id))
   const groups = [
     ['Kroki możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').map((step) => step.name), 'Nie wskazano kroków możliwych do automatyzacji'],
     ['Ustalenia o wysokim wpływie', findings.filter((item) => item.impactLevel === 'Wysoki').map((item) => item.name), 'Nie zidentyfikowano ustaleń o wysokim wpływie'],
     ['Wąskie gardła', findings.filter((item) => item.category === 'Wąskie gardło').map((item) => item.name), 'Nie zidentyfikowano wąskich gardeł'],
     ['Ryzyka', findings.filter((item) => item.category === 'Ryzyko lub możliwość błędu').map((item) => item.name), 'Nie zidentyfikowano ryzyk'],
     ['Niejasne odpowiedzialności', findings.filter((item) => item.category === 'Niejasna odpowiedzialność').map((item) => item.name), 'Nie zidentyfikowano niejasnych odpowiedzialności'],
-    ['Ustalenia nieuwzględnione w TO-BE', findings.filter((item) => !selectedFindingIds.includes(item.id)).map((item) => item.name), 'Wszystkie ustalenia uwzględniono w TO-BE'],
+    ['Wybrane ustalenia bez powiązanego kroku TO-BE', missingSteps.map(({ name }) => name), 'Każde wybrane ustalenie ma powiązany krok TO-BE'],
+    ['Ustalenia nieuwzględnione w TO-BE', findings.filter((item) => !selectedIds.has(item.id)).map((item) => item.name), 'Wszystkie ustalenia uwzględniono w TO-BE'],
   ]
 
   return (

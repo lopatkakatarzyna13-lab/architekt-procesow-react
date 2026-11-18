@@ -19,3 +19,5 @@ Przed kolejnym spotkaniem możesz włączyć „Pokaż tylko otwarte pytania”.
 Po sprawdzeniu wyjątku w warsztacie zapisz propozycję. W analizie procesu wybierz pozycję z pola „Sprawdzony wyjątek z warsztatu” i kliknij „Wstaw wyjątek do formularza”. Tekst wypełnia nazwę obserwacji. Wybierz kategorię, dodaj opis skutku i pomysł usprawnienia, a potem dodaj ustalenie i zapisz analizę. Zastąpienie już rozpoczętego formularza wymaga potwierdzenia.
 
 W TO-BE wybierz zapisaną obserwację w polu „Powiązane usprawnienie”. Jeśli w analizie zapisano pomysł, przycisk „Użyj pomysłu jako nazwy kroku” wstawi go do formularza. Nazwę możesz dopracować przed dodaniem kroku, zachowując jego powiązanie z obserwacją.
+
+Przy ustaleniu w TO-BE widać powiązane kroki. Wybrane ustalenie bez kroku jest oznaczone na liście i pojawia się w rekomendacjach raportu. Takie powiązanie pokazuje, gdzie w projekcie zaplanowano odpowiedź na obserwację.

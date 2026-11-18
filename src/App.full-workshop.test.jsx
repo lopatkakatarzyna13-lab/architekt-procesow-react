@@ -97,6 +97,10 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   await user.clear(screen.getByLabelText(`Pytanie decyzji — ${steps[1]}`))
   await user.type(screen.getByLabelText(`Pytanie decyzji — ${steps[1]}`), 'Czy dane TO-BE są kompletne?')
   await user.click(screen.getByRole('button', { name: `Zapisz decyzję BPMN — ${steps[1]}` }))
+  const missingFinding = screen.getByRole('checkbox', { name: /Brak załącznika/ }).closest('label')
+  const linkedFinding = screen.getByRole('checkbox', { name: /Brak terminu przekazania/ }).closest('label')
+  expect(within(missingFinding).getByText('Brak powiązanego kroku TO-BE')).toBeTruthy()
+  expect(within(linkedFinding).getByText('Brak powiązanego kroku TO-BE')).toBeTruthy()
   const stepName = screen.getByLabelText(/Nazwa kroku/)
   const link = screen.getByLabelText('Powiązane usprawnienie')
   const finding = within(link).getByRole('option', { name: 'Brak terminu przekazania' })
@@ -112,6 +116,12 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   expect(stepName.value).toBe('Ustalić wspólny termin')
   expect(owner.value).toBe('Zespół HR')
   await user.click(screen.getByRole('button', { name: 'Dodaj krok', exact: true }))
+  expect(within(linkedFinding).getByText('Powiązane kroki TO-BE: Ustalić wspólny termin')).toBeTruthy()
+  expect(within(linkedFinding).queryByText('Brak powiązanego kroku TO-BE')).toBeNull()
+  const includeMissing = within(missingFinding).getByRole('checkbox')
+  await user.click(includeMissing)
+  expect(within(missingFinding).queryByText('Brak powiązanego kroku TO-BE')).toBeNull()
+  await user.click(includeMissing)
   await user.click(screen.getByRole('button', { name: 'Zapisz proces TO-BE' }))
   const asIs = JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps
   const toBe = JSON.parse(localStorage.getItem('architekt-procesow:to-be')).steps
@@ -131,6 +141,10 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   const report = screen.getByRole('heading', { name: 'Podsumuj proces i odpowiedzialności' }).closest('.report-workspace')
   expect(within(report).getAllByText('Brak terminu przekazania').length).toBeGreaterThan(0)
   expect(within(report).getAllByText('Ustalić termin przekazania').length).toBeGreaterThan(0)
+  const gapHeadings = within(report).getAllByRole('heading', { name: 'Wybrane ustalenia bez powiązanego kroku TO-BE' })
+  for (const heading of gapHeadings) {
+    expect(within(heading.closest('article')).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Brak załącznika'])
+  }
   await user.click(screen.getByRole('button', { name: 'Eksportuj do PDF' }))
   await vi.waitFor(() => expect(print).toHaveBeenCalledOnce())
 }, 20000)
