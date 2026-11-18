@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { getBpmnMessages } from './bpmnMessages'
 
-export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemove, onDraftChange }) {
+export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemove, onDraftChange, variant = 'AS-IS' }) {
   const [stepId, setStepId] = useState('')
   const [primary, setPrimary] = useState('')
   const [external, setExternal] = useState('')
@@ -18,7 +18,7 @@ export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemov
     const result = onAdd(stepId, primary, external, direction, label, externalStepId)
     if (result?.error) { setMessage(result.error); return }
     reset()
-    setMessage('Dodano wiadomość w wersji roboczej. Zapisz proces AS-IS.')
+    setMessage(`Dodano wiadomość w wersji roboczej. Zapisz proces ${variant}.`)
   }
   if (!steps.length) return null
   return <section className="step-connections" aria-labelledby="bpmn-messages-title">
@@ -47,7 +47,7 @@ export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemov
     {message && <p role="status">{message}</p>}
     {list.length > 0 && <ul>{list.map((item) => <li key={`${item.stepId}-${item.index}`}>
       <span>{steps.find((step) => step.id === item.stepId)?.name}: {item.direction === 'outgoing' ? item.primary : item.external} → {item.direction === 'outgoing' ? item.external : item.primary} — {item.label}{item.externalStepId ? ` (działanie zewnętrzne: ${externalSteps.find((step) => step.id === item.externalStepId)?.name || 'brak'})` : ''}</span>{' '}
-      <button type="button" className="back-button" aria-label={`Usuń wiadomość ${item.label} — ${steps.find((step) => step.id === item.stepId)?.name}`} onClick={() => { const result = onRemove(item.stepId, item.index); setMessage(result?.error || 'Usunięto wiadomość. Zapisz proces AS-IS.') }}>Usuń wiadomość</button>
+      <button type="button" className="back-button" aria-label={`Usuń wiadomość ${item.label} — ${steps.find((step) => step.id === item.stepId)?.name}`} onClick={() => { const result = onRemove(item.stepId, item.index); setMessage(result?.error || `Usunięto wiadomość. Zapisz proces ${variant}.`) }}>Usuń wiadomość</button>
     </li>)}</ul>}
   </section>
 }

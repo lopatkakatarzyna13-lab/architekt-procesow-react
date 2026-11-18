@@ -114,6 +114,25 @@ try {
   await page.getByRole('button', { name: 'Zapisz decyzję BPMN — Przygotowanie dokumentów' }).click()
   await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
 
+  await page.getByLabel('Tor BPMN — krok 1: Sprawdzenie kompletności danych').fill('Kadry TO-BE')
+  await page.getByRole('button', { name: 'Zapisz tor — krok 1: Sprawdzenie kompletności danych' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+  assert.equal(await toBeExport.isDisabled(), true, 'a partially assigned set of lanes must block export')
+  await page.getByLabel('Tor BPMN — krok 2: Przygotowanie dokumentów').fill('Administracja TO-BE')
+  await page.getByRole('button', { name: 'Zapisz tor — krok 2: Przygotowanie dokumentów' }).click()
+  await page.getByLabel('Nazwa działania').fill('Sprawdzenie pakietu TO-BE')
+  await page.getByRole('button', { name: 'Dodaj działanie zewnętrzne' }).click()
+  await page.getByLabel('Krok w Twoim procesie').selectOption({ label: '2. Przygotowanie dokumentów' })
+  await page.getByLabel('Nazwa basenu Twojego procesu').fill('Firma TO-BE')
+  await page.getByLabel('Nazwa basenu zewnętrznego').fill('Biuro TO-BE')
+  await page.getByLabel('Kierunek wiadomości').selectOption('outgoing')
+  await page.getByLabel('Działanie uczestnika zewnętrznego (opcjonalnie)').selectOption({ label: 'Sprawdzenie pakietu TO-BE' })
+  await page.getByLabel('Co jest przekazywane?').fill('Pakiet dokumentów TO-BE')
+  await page.getByRole('button', { name: 'Dodaj wiadomość BPMN' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+  await page.evaluate(() => sessionStorage.setItem('architekt-procesow-screen-to-open', 'to-be'))
+  await page.reload()
+
   await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
   await page.getByRole('img', { name: 'Podgląd zapisanego diagramu BPMN TO-BE' }).locator('[data-element-id="Task_1"]').waitFor({ state: 'visible' })
   const [toBeDownload] = await Promise.all([page.waitForEvent('download'), toBeExport.click()])
@@ -126,7 +145,12 @@ try {
   assert.ok(toBeProcess.flowElements.some((item) => item.$type === 'bpmn:ExclusiveGateway' && item.name === 'Czy dokumenty są zgodne?'))
   assert.ok(toBeProcess.flowElements.some((item) => item.$type === 'bpmn:SequenceFlow' && item.name === 'TO-BE: popraw niezgodności'))
   assert.ok(!toBeProcess.flowElements.some((item) => item.name === 'Brak danych — wróć do kontroli'))
-  assert.equal(toBeModel.rootElement.rootElements.some((item) => item.$type === 'bpmn:Collaboration'), false)
+  const collaboration = toBeModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+  assert.deepEqual(collaboration.participants.map(({ name }) => name), ['Firma TO-BE', 'Biuro TO-BE'])
+  assert.deepEqual(toBeProcess.laneSets[0].lanes.map(({ name }) => name), ['Kadry TO-BE', 'Administracja TO-BE'])
+  assert.deepEqual(collaboration.messageFlows.map(({ name, sourceRef, targetRef }) => [name, sourceRef.name, targetRef.name]), [
+    ['Pakiet dokumentów TO-BE', 'Przygotowanie dokumentów', 'Sprawdzenie pakietu TO-BE'],
+  ])
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', toBePath], { stdio: 'inherit' })
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Poprawiony cel zmiany')
   assert.equal(await toBeExport.isDisabled(), true, 'changing TO-BE must disable export until saved')
@@ -158,7 +182,7 @@ try {
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')

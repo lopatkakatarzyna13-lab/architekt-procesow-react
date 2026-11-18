@@ -35,7 +35,7 @@ import BpmnMessages from './BpmnMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
-import { getToBeBpmnError, toBeBpmnScope } from './toBeBpmn'
+import { toBeBpmnScope } from './toBeBpmn'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -220,6 +220,7 @@ function loadSavedToBe() {
       steps: Array.isArray(savedToBe.steps)
         ? savedToBe.steps.map((step) => ({ ...emptyToBeStep, ...step }))
         : [],
+      externalSteps: Array.isArray(savedToBe.externalSteps) ? savedToBe.externalSteps : [],
       copiedFromAsIs: Boolean(savedToBe.copiedFromAsIs),
       isSaved: Boolean(savedToBe.savedAt),
     }
@@ -1984,13 +1985,18 @@ function ToBeScreen({
   onAddConnection,
   onRemoveConnection,
   onSaveBpmnDecision,
+  externalSteps,
+  onSaveBpmnLane,
+  onExternalStepsChange,
+  onAddBpmnMessage,
+  onRemoveBpmnMessage,
   onBack,
   onSave,
   onContinue,
 }) {
-  const [decisionDrafts, setDecisionDrafts] = useState({})
-  const decisionDirty = Object.values(decisionDrafts).some(Boolean)
-  const markDecisionDraft = (id, dirty) => setDecisionDrafts((current) => ({ ...current, [id]: dirty }))
+  const [bpmnDrafts, setBpmnDrafts] = useState({})
+  const bpmnDraftDirty = Object.values(bpmnDrafts).some(Boolean)
+  const markBpmnDraft = (id, dirty) => setBpmnDrafts((current) => ({ ...current, [id]: dirty }))
   return (
     <section className="workspace to-be-workspace" aria-labelledby="to-be-title">
       <div className="analysis-intro">
@@ -2039,13 +2045,16 @@ function ToBeScreen({
         error={toBeError}
         onEdit={onEditStep}
         onDelete={onDeleteStep}
-        deleteDisabled={decisionDirty}
+        deleteDisabled={bpmnDraftDirty}
         onMove={onMoveStep}
       />
       <ToBeSummary steps={steps} selectedCount={selectedFindingIds.length} />
-      {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onRemove={(...args) => decisionDirty ? { error: 'Najpierw zapisz zmiany w decyzji BPMN.' } : onRemoveConnection(...args)} />}
-      <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markDecisionDraft} />
-      <BpmnExport steps={steps} scope={scope} saved={saved && !decisionDirty} variant="to-be" />
+      {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
+      <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
+      <BpmnLanes steps={steps} variant="TO-BE" onSave={onSaveBpmnLane} onDraftChange={markBpmnDraft} />
+      {steps.length > 0 && <BpmnExternalSteps steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
+      <BpmnMessages steps={steps} externalSteps={externalSteps} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
+      <BpmnExport steps={steps} externalSteps={externalSteps} scope={scope} saved={saved && !bpmnDraftDirty} variant="to-be" />
 
       {saved && (
         <div className="save-message success-message" role="status">
@@ -2067,15 +2076,15 @@ function ToBeScreen({
       )}
 
       <div className="form-actions">
-        <button className="back-button" type="button" onClick={onBack} disabled={decisionDirty}>
+        <button className="back-button" type="button" onClick={onBack} disabled={bpmnDraftDirty}>
           <span aria-hidden="true">←</span>
           Wróć do analizy
         </button>
-        <button className="save-button" type="button" onClick={onSave} disabled={decisionDirty}>
+        <button className="save-button" type="button" onClick={onSave} disabled={bpmnDraftDirty}>
           Zapisz proces TO-BE
           <span aria-hidden="true">✓</span>
         </button>
-        {saved && !decisionDirty && assumptions.changeGoal.trim() && steps.length > 0 && (
+        {saved && !bpmnDraftDirty && assumptions.changeGoal.trim() && steps.length > 0 && (
           <button className="continue-button" type="button" onClick={onContinue}>
             Przejdź do raportu
             <span aria-hidden="true">→</span>
@@ -2870,6 +2879,7 @@ function PrintReport({
   asIsDescription,
   asIsSteps,
   externalSteps,
+  toBeExternalSteps,
   printBpmn,
   findings,
   toBeAssumptions,
@@ -2927,7 +2937,7 @@ function PrintReport({
           findings={findings}
           unavailable={startMethod !== 'steps'}
         />
-        <PrintBpmnDetails steps={toBeSteps} externalSteps={[]} variant="TO-BE" svg={printBpmn.toBeSvg} error={printBpmn.toBeError} />
+        <PrintBpmnDetails steps={toBeSteps} externalSteps={toBeExternalSteps} variant="TO-BE" svg={printBpmn.toBeSvg} error={printBpmn.toBeError} />
         <PrintProcessMap
           title="Uproszczony przebieg TO-BE"
           steps={toBeSteps}
@@ -2978,6 +2988,7 @@ function ReportScreen({
   asIsDescription,
   asIsSteps,
   externalSteps,
+  toBeExternalSteps,
   printBpmn,
   printPreparing,
   findings,
@@ -3056,6 +3067,7 @@ function ReportScreen({
         asIsDescription={asIsDescription}
         asIsSteps={asIsSteps}
         externalSteps={externalSteps}
+        toBeExternalSteps={toBeExternalSteps}
         printBpmn={printBpmn}
         findings={findings}
         toBeAssumptions={toBeAssumptions}
@@ -3251,6 +3263,7 @@ function App() {
     ),
   )
   const [toBeSteps, setToBeSteps] = useState(savedToBe.steps)
+  const [toBeExternalSteps, setToBeExternalSteps] = useState(savedToBe.externalSteps ?? [])
   const [toBeStepDraft, setToBeStepDraft] = useState(emptyToBeStep)
   const [editingToBeStepId, setEditingToBeStepId] = useState(null)
   const [toBeAssumptionError, setToBeAssumptionError] = useState('')
@@ -3647,6 +3660,7 @@ const openSavedProcess = (process) => {
     ),
   )
   setToBeSteps(nextToBe.steps)
+  setToBeExternalSteps(nextToBe.externalSteps ?? [])
   setToBeSaved(nextToBe.isSaved)
   setCopiedFromAsIs(nextToBe.copiedFromAsIs)
   setStakeholders(
@@ -4341,6 +4355,7 @@ try {
           assumptions: toBeAssumptions,
           selectedFindingIds,
           steps: toBeSteps,
+          externalSteps: toBeExternalSteps,
           copiedFromAsIs,
           savedAt: new Date().toISOString(),
         }),
@@ -4557,12 +4572,12 @@ try {
         } catch { bpmn.error = 'nie udało się przygotować diagramu; sprawdź podgląd BPMN i spróbuj ponownie' }
       }
     }
-    const toBeError = getToBeBpmnError(toBeSteps)
+    const toBeError = getDecisionBpmnError(toBeSteps, toBeExternalSteps)
     if (toBeError) bpmn.toBeError = toBeError
     else {
       try {
         const { createPrintBpmn } = await import('./createPrintBpmn')
-        const svg = await createPrintBpmn({ steps: toBeSteps, externalSteps: [], scope: toBeBpmnScope(formData) })
+        const svg = await createPrintBpmn({ steps: toBeSteps, externalSteps: toBeExternalSteps, scope: toBeBpmnScope(formData) })
         const image = new Image()
         image.src = svg
         if (typeof image.decode === 'function') await image.decode()
@@ -4765,6 +4780,15 @@ try {
             onAddConnection={(...args) => changeToBeConnections(addProcessConnection, ...args)}
             onRemoveConnection={(...args) => changeToBeConnections(removeProcessConnection, ...args)}
             onSaveBpmnDecision={(...args) => changeToBeConnections(setProcessDecision, ...args)}
+            externalSteps={toBeExternalSteps}
+            onSaveBpmnLane={(...args) => changeToBeConnections(setProcessLane, ...args)}
+            onExternalStepsChange={(next) => {
+              setToBeExternalSteps(next)
+              setToBeSaved(false)
+              return {}
+            }}
+            onAddBpmnMessage={(...args) => changeToBeConnections(addBpmnMessage, ...args, toBeExternalSteps)}
+            onRemoveBpmnMessage={(...args) => changeToBeConnections(removeBpmnMessage, ...args)}
             onBack={showAnalysis}
             onSave={saveToBe}
             onContinue={continueToReport}
@@ -4776,6 +4800,7 @@ try {
             asIsDescription={asIsDescription}
             asIsSteps={steps}
             externalSteps={externalSteps}
+            toBeExternalSteps={toBeExternalSteps}
             printBpmn={printBpmn}
             printPreparing={printPreparing}
             findings={findings}
