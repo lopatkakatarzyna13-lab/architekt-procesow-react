@@ -11,3 +11,5 @@ W sekcji „Pytania” wpisz odpowiedź i zaznacz „Potwierdzono odpowiedź” 
 Przy pytaniu możesz też wskazać osobę lub zespół, który wróci z odpowiedzią, i uzgodniony termin. Oba pola są opcjonalne i zapisują się razem z propozycją. Zmiana osoby lub terminu zachowuje stan potwierdzenia odpowiedzi.
 
 Po sprawdzeniu treści otwartych pytań i zapisaniu propozycji przycisk „Pobierz otwarte pytania (.txt)” tworzy listę do wykorzystania po spotkaniu. Plik zawiera nazwę procesu, treść sprawdzonych otwartych pytań, przypisane osoby lub zespoły i terminy. Treść transkrypcji, cytaty i odpowiedzi robocze pozostają w warsztacie.
+
+Przed kolejnym spotkaniem możesz włączyć „Pokaż tylko otwarte pytania”. Otwarte pytania z terminem wcześniejszym niż bieżąca data urządzenia mają oznaczenie „Po terminie”. Pytania z terminem dzisiejszym są jeszcze w terminie. Filtr zmienia widok warsztatu.

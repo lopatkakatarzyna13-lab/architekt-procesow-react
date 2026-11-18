@@ -38,6 +38,12 @@ export function validateWorkshopReview(review, transcript) {
   return errors
 }
 
+export function getLocalWorkshopDate(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
 export function formatOpenWorkshopQuestions(questions, processName) {
   const items = questions.map(({ text, assignee, dueDate }, index) => [
     `${index + 1}. ${text.trim().replace(/\s+/g, ' ')}`,

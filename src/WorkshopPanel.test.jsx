@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import WorkshopPanel from './WorkshopPanel'
-import { saveWorkshop, saveWorkshopReview } from './workshop'
+import { getLocalWorkshopDate, saveWorkshop, saveWorkshopReview } from './workshop'
 
 const PROCESS_A = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const PROCESS_B = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
@@ -173,6 +173,35 @@ describe('workshop review screen', () => {
     await user.type(screen.getByLabelText('Odpowiedź — pytanie 1'), ' rano')
     expect(confirmation().checked).toBe(false)
     expect(screen.getByText(/Otwarte pytania: 2 z 2/)).toBeTruthy()
+  })
+
+  it('filters closed questions and marks only open questions with a past due date', async () => {
+    const user = userEvent.setup()
+    const today = getLocalWorkshopDate()
+    saveWorkshopReview(localStorage, PROCESS_A, '', {
+      steps: [], roles: [], decisions: [], questions: [
+        { text: 'Zamknięte?', status: 'question', dueDate: '2000-01-01', answer: 'Tak', answerConfirmed: true },
+        { text: 'Po terminie?', status: 'question', dueDate: '2000-01-01', answer: 'Wstępnie tak' },
+        { text: 'Termin dzisiaj?', status: 'question', dueDate: today },
+        { text: 'Bez daty?', status: 'question' },
+      ],
+    })
+    const dirtyRef = { current: false }
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={dirtyRef} />)
+    const toggle = screen.getByRole('checkbox', { name: 'Pokaż tylko otwarte pytania' })
+    expect(screen.getByText(/Po terminie: 1/)).toBeTruthy()
+    expect(screen.getAllByText('Po terminie')).toHaveLength(1)
+    await user.click(toggle)
+    expect(dirtyRef.current).toBe(false)
+    expect(screen.queryByRole('textbox', { name: 'Pytania — pozycja 1' })).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Pytania — pozycja 2' }).value).toBe('Po terminie?')
+    await user.click(screen.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 2' }))
+    expect(screen.queryByRole('textbox', { name: 'Pytania — pozycja 2' })).toBeNull()
+    expect(screen.queryByText('Po terminie')).toBeNull()
+    expect(document.activeElement).toBe(toggle)
+    await user.click(toggle)
+    expect(screen.getByRole('textbox', { name: 'Pytania — pozycja 1' }).value).toBe('Zamknięte?')
+    expect(screen.getByRole('textbox', { name: 'Pytania — pozycja 2' }).value).toBe('Po terminie?')
   })
 
   it('keeps a saved answer if the user declines to replace the workshop review', async () => {

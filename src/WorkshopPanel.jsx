@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
 import {
-  deleteWorkshop, formatOpenWorkshopQuestions, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
+  deleteWorkshop, formatOpenWorkshopQuestions, getLocalWorkshopDate, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
   MAX_WORKSHOP_ANSWER_LENGTH, MAX_WORKSHOP_ASSIGNEE_LENGTH,
   saveWorkshop, saveWorkshopReview, validateWorkshopProposal, validateWorkshopReview,
 } from './workshop'
@@ -41,6 +41,8 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   const [storageUncertain, setStorageUncertain] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [selectedSteps, setSelectedSteps] = useState([])
+  const [onlyOpenQuestions, setOnlyOpenQuestions] = useState(false)
+  const openQuestionFilter = useRef(null)
   const revision = useRef(0)
   const activeAnalysis = useRef(null)
   const dirty = transcript !== savedTranscript
@@ -278,6 +280,9 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   }
 
   const openQuestions = analysis?.questions.filter((item) => !item.answerConfirmed) ?? []
+  const today = getLocalWorkshopDate()
+  const isOverdue = ({ answerConfirmed, dueDate }) => !answerConfirmed && Boolean(dueDate) && dueDate < today
+  const overdueCount = openQuestions.filter(isOverdue).length
   const exportableQuestions = openQuestions.filter((item) => item.reviewed)
   const canDownloadQuestions = exportableQuestions.length > 0 && !dirty && !reviewDirty && !analyzing
 
@@ -351,14 +356,19 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
           {key === 'questions' && analysis.questions.length > 0 && <>
             <p role="status">
               Otwarte pytania: {openQuestions.length} z {analysis.questions.length}.
-              Potwierdź odpowiedź po jej uzgodnieniu. Zmiana pytania lub odpowiedzi ponownie otwiera pytanie.
+              {overdueCount > 0 && <> Po terminie: {overdueCount}.</>}
+              {' '}Potwierdź odpowiedź po jej uzgodnieniu. Zmiana pytania lub odpowiedzi ponownie otwiera pytanie.
             </p>
+            <label><input type="checkbox" ref={openQuestionFilter} checked={onlyOpenQuestions}
+              onChange={(event) => setOnlyOpenQuestions(event.target.checked)} /> Pokaż tylko otwarte pytania</label>
+            {onlyOpenQuestions && openQuestions.length === 0 && <p>Brak otwartych pytań.</p>}
             {openQuestions.length > 0 && <div className="workshop-actions">
               <button type="button" className="back-button" disabled={!canDownloadQuestions} onClick={downloadQuestions}>Pobierz otwarte pytania (.txt)</button>
               <span>Plik zawiera pytania oznaczone „Sprawdzono treść”. Przed pobraniem zapisz propozycję.</span>
             </div>}
           </>}
-          {analysis[key].length ? <ul>{analysis[key].map((item, index) => <li key={`${key}-${index}`}>
+          {analysis[key].length > 0 && !(key === 'questions' && onlyOpenQuestions && !openQuestions.length) && <ul>{analysis[key].map((item, index) => (
+            key === 'questions' && onlyOpenQuestions && item.answerConfirmed ? null : <li key={`${key}-${index}`}>
             {key === 'steps' && canTransferSteps && <label><input type="checkbox" checked={selectedSteps.includes(index)} onChange={(event) => setSelectedSteps((current) => event.target.checked ? [...current, index] : current.filter((itemIndex) => itemIndex !== index))} /> Wybierz krok {index + 1} do przeniesienia</label>}
             <label htmlFor={`review-${key}-${index}`}>{title} — pozycja {index + 1}</label>
             <textarea id={`review-${key}-${index}`} rows="2" value={item.text} onChange={(event) => editItem(key, index, event.target.value)} />
@@ -379,6 +389,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
                     value={item.dueDate ?? ''} onChange={(event) => updateItem(key, index, (current) => ({
                       ...current, dueDate: event.target.value,
                     }))} />
+                  {isOverdue(item) && <p>Po terminie</p>}
                 </div>
               </div>
               <label htmlFor={`review-answer-${index}`}>Odpowiedź — pytanie {index + 1}</label>
@@ -387,12 +398,17 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
                   ...current, answer: event.target.value, answerConfirmed: false,
                 }))} />
               <label><input type="checkbox" checked={item.answerConfirmed === true} disabled={!item.text.trim() || !item.answer?.trim()}
-                onChange={(event) => updateItem(key, index, (current) => ({ ...current, answerConfirmed: event.target.checked }))} /> Potwierdzono odpowiedź — pytanie {index + 1}</label>
+                onChange={(event) => {
+                  const checked = event.target.checked
+                  if (checked && onlyOpenQuestions) openQuestionFilter.current?.focus()
+                  updateItem(key, index, (current) => ({ ...current, answerConfirmed: checked }))
+                }} /> Potwierdzono odpowiedź — pytanie {index + 1}</label>
             </>}
             {canTransferSteps && onUseFinding && ['roles', 'systems', 'decisions', 'exceptions'].includes(key) && <button type="button" className="back-button" disabled={dirty || reviewDirty || !item.reviewed} onClick={() => insertFinding(key, item)}>Wstaw {({ roles: 'rolę', systems: 'system', decisions: 'decyzję', exceptions: 'wyjątek' })[key]} do formularza kroku — pozycja {index + 1}</button>}
             {item.evidence && <blockquote>Fragment rozmowy: {item.evidence}</blockquote>}
             <button type="button" className="back-button" onClick={() => removeItem(key, index)}>Usuń pozycję {index + 1} — {title.toLowerCase()}</button>
-          </li>)}</ul> : <p>Brak propozycji.</p>}
+          </li>))}</ul>}
+          {analysis[key].length === 0 && <p>Brak propozycji.</p>}
           <button type="button" className="back-button" onClick={() => addItem(key)}>Dodaj: {title.toLowerCase()}</button>
         </div>)}
         <div className="workshop-actions"><button type="button" className="save-button" disabled={!reviewDirty || Boolean(reviewLoadError)} onClick={saveReview}>Zapisz propozycję</button></div>
