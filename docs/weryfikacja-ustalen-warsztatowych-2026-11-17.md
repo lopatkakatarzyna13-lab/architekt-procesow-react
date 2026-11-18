@@ -21,3 +21,5 @@ Po sprawdzeniu wyjątku w warsztacie zapisz propozycję. W analizie procesu wybi
 W TO-BE wybierz zapisaną obserwację w polu „Powiązane usprawnienie”. Jeśli w analizie zapisano pomysł, przycisk „Użyj pomysłu jako nazwy kroku” wstawi go do formularza. Nazwę możesz dopracować przed dodaniem kroku, zachowując jego powiązanie z obserwacją.
 
 Przy ustaleniu w TO-BE widać powiązane kroki. Wybrane ustalenie bez kroku jest oznaczone na liście i pojawia się w rekomendacjach raportu. Takie powiązanie pokazuje, gdzie w projekcie zaplanowano odpowiedź na obserwację.
+
+Jeśli krok TO-BE odpowiada na kilka ustaleń, rozwiń „Dodatkowe ustalenia” w formularzu kroku i zaznacz odpowiednie pozycje. Wszystkie powiązania są widoczne w zapisanym kroku, przy ustaleniach i w raporcie.

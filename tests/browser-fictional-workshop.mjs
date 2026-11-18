@@ -196,9 +196,16 @@ try {
     await copyPage.getByLabel('Powiązane usprawnienie', { exact: true }).selectOption({ label: 'Brak fikcyjnego dokumentu' })
     await copyPage.getByRole('button', { name: 'Użyj pomysłu jako nazwy kroku', exact: true }).click()
     assert.equal(await copyPage.getByLabel(/Nazwa kroku/).inputValue(), 'Uzgodnić ścieżkę kompletowania dokumentów')
+    await copyPage.getByText('Dodatkowe ustalenia', { exact: true }).click()
+    await copyPage.getByRole('checkbox', { name: 'Brak terminu przekazania', exact: true }).check()
     await copyPage.getByRole('button', { name: 'Dodaj krok', exact: true }).click()
-    await copyPage.getByText('Powiązane kroki TO-BE: Uzgodnić ścieżkę kompletowania dokumentów', { exact: true }).waitFor()
     await copyPage.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+    await copyPage.getByText('Proces TO-BE został zapisany', { exact: true }).waitFor()
+    await copyPage.reload()
+    for (const name of ['Brak fikcyjnego dokumentu', 'Brak terminu przekazania']) {
+      await copyPage.locator('label.to-be-finding').filter({ hasText: name })
+        .getByText('Powiązane kroki TO-BE: Uzgodnić ścieżkę kompletowania dokumentów', { exact: true }).waitFor()
+    }
     const [bpmnCopy] = await Promise.all([
       copyPage.waitForEvent('download'),
       copyPage.getByRole('button', { name: 'Pobierz BPMN 2.0' }).click(),

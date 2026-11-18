@@ -126,6 +126,7 @@ const emptyToBeStep = {
   result: '',
   stepType: 'Nowy',
   findingId: '',
+  additionalFindingIds: [],
   automatable: 'Nie',
 }
 
@@ -1668,15 +1669,25 @@ function ToBeAssumptions({ assumptions, error, onChange }) {
   )
 }
 
+function getToBeFindingIds(step) {
+  const additional = Array.isArray(step.additionalFindingIds) ? step.additionalFindingIds : []
+  return [...new Set([step.findingId, ...additional].filter((id) => typeof id === 'string' && id))]
+}
+
 function getToBeStepsByFinding(steps) {
   const byFinding = new Map()
   for (const step of steps) {
-    if (!step.findingId) continue
-    const linked = byFinding.get(step.findingId) ?? []
-    linked.push(step.name)
-    byFinding.set(step.findingId, linked)
+    for (const id of getToBeFindingIds(step)) {
+      const linked = byFinding.get(id) ?? []
+      linked.push(step.name)
+      byFinding.set(id, linked)
+    }
   }
   return byFinding
+}
+
+function getLinkedToBeFindings(step, findingsById) {
+  return getToBeFindingIds(step).map((id) => findingsById.get(id)).filter(Boolean)
 }
 
 function IncludedFindings({
@@ -1753,7 +1764,9 @@ function ToBeStepEditor({
   onCancel,
   onCopy,
   onUseImprovement,
+  onToggleAdditionalFinding,
 }) {
+  const additionalOptions = findings.filter(({ id }) => id !== draft.findingId)
   const idea = findings.find((finding) => finding.id === draft.findingId)?.improvement
   const improvement = typeof idea === 'string' ? idea.trim().replace(/\s+/g, ' ') : ''
   const useImprovement = () => {
@@ -1867,6 +1880,15 @@ function ToBeStepEditor({
               <button type="button" className="back-button" disabled={improvement === draft.name.trim()}
                 onClick={useImprovement}>Użyj pomysłu jako nazwy kroku</button>
             </div>}
+            {additionalOptions.length > 0 && <details>
+              <summary>Dodatkowe ustalenia</summary>
+              <div className="step-side-fields">
+                {additionalOptions.map(({ id, name }) => <label key={id}>
+                  <input type="checkbox" checked={draft.additionalFindingIds.includes(id)}
+                    onChange={() => onToggleAdditionalFinding(id)} /> {name}
+                </label>)}
+              </div>
+            </details>}
           </div>
           <SelectField
             id="toBeStepAutomatable"
@@ -1903,8 +1925,7 @@ function ToBeStepsList({
   deleteDisabled,
   onMove,
 }) {
-  const findingName = (findingId) =>
-    findings.find((finding) => finding.id === findingId)?.name
+  const findingsById = new Map(findings.map((finding) => [finding.id, finding]))
 
   return (
     <section className="to-be-section to-be-list-section" aria-labelledby="to-be-list-title">
@@ -1949,9 +1970,9 @@ function ToBeStepsList({
                   {step.owner && <span>Rola: {step.owner}</span>}
                   {step.system && <span>Narzędzie: {step.system}</span>}
                   {step.result && <span>Rezultat: {step.result}</span>}
-                  {step.findingId && findingName(step.findingId) && (
-                    <span>Usprawnienie: {findingName(step.findingId)}</span>
-                  )}
+                  {getLinkedToBeFindings(step, findingsById).map(({ id, name }) => (
+                    <span key={id}>Usprawnienie: {name}</span>
+                  ))}
                 </div>
               </div>
               <div className="step-actions">
@@ -2048,6 +2069,7 @@ function ToBeScreen({
   onToggleFinding,
   onStepChange,
   onUseImprovement,
+  onToggleAdditionalFinding,
   onAddStep,
   onEditStep,
   onDeleteStep,
@@ -2111,6 +2133,7 @@ function ToBeScreen({
         copyError={copyError}
         onChange={onStepChange}
         onUseImprovement={onUseImprovement}
+        onToggleAdditionalFinding={onToggleAdditionalFinding}
         onAdd={onAddStep}
         onCancel={onCancelEdit}
         onCopy={onCopySteps}
@@ -2226,7 +2249,7 @@ function ProcessReportSummary({
 }
 
 function ReadOnlyStepList({ steps, findings = [], toBe = false }) {
-  const findingName = (id) => findings.find((item) => item.id === id)?.name
+  const findingsById = new Map(findings.map((finding) => [finding.id, finding]))
 
   return (
     <ol className="report-steps">
@@ -2250,9 +2273,9 @@ function ReadOnlyStepList({ steps, findings = [], toBe = false }) {
               {step.owner && <span><small>Rola</small>{step.owner}</span>}
               {step.system && <span><small>Narzędzie</small>{step.system}</span>}
               {step.result && <span><small>Rezultat</small>{step.result}</span>}
-              {toBe && step.findingId && findingName(step.findingId) && (
-                <span><small>Powiązane usprawnienie</small>{findingName(step.findingId)}</span>
-              )}
+              {toBe && getLinkedToBeFindings(step, findingsById).map(({ id, name }) => (
+                <span key={id}><small>Powiązane usprawnienie</small>{name}</span>
+              ))}
             </div>
           </div>
         </li>
@@ -4315,13 +4338,25 @@ try {
   }
 
   const updateToBeStepField = (field, value) => {
-    setToBeStepDraft((current) => ({ ...current, [field]: value }))
+    setToBeStepDraft((current) => ({
+      ...current,
+      [field]: typeof value === 'function' ? value(current[field]) : value,
+      ...(field === 'findingId' && {
+        additionalFindingIds: current.additionalFindingIds.filter((id) => id !== value),
+      }),
+    }))
     if (field === 'name') {
       setToBeStepError('')
     }
     setToBeSaved(false)
     setToBeSaveError(false)
     setCopyMessage('')
+  }
+
+  const toggleAdditionalToBeFinding = (findingId) => {
+    updateToBeStepField('additionalFindingIds', (ids) => ids.includes(findingId)
+      ? ids.filter((id) => id !== findingId)
+      : [...ids, findingId])
   }
 
   const cancelToBeStepEdit = () => {
@@ -4369,6 +4404,7 @@ try {
       result: step.result,
       stepType: step.stepType,
       findingId: step.findingId,
+      additionalFindingIds: getToBeFindingIds(step).filter((id) => id !== step.findingId),
       automatable: step.automatable,
     })
     setEditingToBeStepId(step.id)
@@ -4916,6 +4952,7 @@ try {
             onToggleFinding={toggleToBeFinding}
             onStepChange={handleToBeStepChange}
             onUseImprovement={(name) => updateToBeStepField('name', name)}
+            onToggleAdditionalFinding={toggleAdditionalToBeFinding}
             onAddStep={addOrUpdateToBeStep}
             onEditStep={editToBeStep}
             onDeleteStep={deleteToBeStep}
