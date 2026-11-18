@@ -89,6 +89,7 @@ jobs:
           node tests/browser-offline.mjs
           node tests/browser-delete-process.mjs
           FICTIONAL_PDF_PATH="$RUNNER_TEMP/fictional-report.pdf" BPMN_SCREENSHOT_PATH="$RUNNER_TEMP/bpmn-preview.png" node tests/browser-fictional-workshop.mjs
+          REFERRAL_PDF_PATH="$RUNNER_TEMP/referral-workshop-report.pdf" node tests/browser-referral-workshop.mjs
       - name: Save fictional report for visual review
         uses: actions/upload-artifact@v4
         with:
@@ -96,6 +97,7 @@ jobs:
           path: |
             ${{ runner.temp }}/fictional-report.pdf
             ${{ runner.temp }}/bpmn-preview.png
+            ${{ runner.temp }}/referral-workshop-report.pdf
           retention-days: 1
 
 
