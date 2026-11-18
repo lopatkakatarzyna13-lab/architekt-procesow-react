@@ -1074,9 +1074,9 @@ function AsIsScreen({
         <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
         <BpmnDecisions steps={steps} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
         <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
-        <BpmnExternalSteps steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
+        <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
         <BpmnMessages steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
-        <BpmnExternalMessages steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={onBpmnDraftChange} variant="AS-IS" />
+        <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={onBpmnDraftChange} variant="AS-IS" />
         <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>
       ) : (
@@ -2060,9 +2060,9 @@ function ToBeScreen({
       {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
       <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
       <BpmnLanes steps={steps} variant="TO-BE" onSave={onSaveBpmnLane} onDraftChange={markBpmnDraft} />
-      {steps.length > 0 && <BpmnExternalSteps steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
+      {steps.length > 0 && <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
       <BpmnMessages steps={steps} externalSteps={externalSteps} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
-      <BpmnExternalMessages steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={markBpmnDraft} variant="TO-BE" />
+      <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={markBpmnDraft} variant="TO-BE" />
       <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} variant="to-be" />
 
       {saved && (

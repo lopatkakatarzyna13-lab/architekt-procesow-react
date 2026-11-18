@@ -172,24 +172,37 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     const externalMessageEdges = externalLinks.map((link, index) => {
       const source = poolByName.get(link.source)
       const target = poolByName.get(link.target)
+      const sourceTask = externalTaskById.get(link.sourceActionId)
+      const targetTask = externalTaskById.get(link.targetActionId)
       const messageFlow = moddle.create('bpmn:MessageFlow', {
         id: `ExternalMessageFlow_${index + 1}`,
         name: link.label.trim(),
-        sourceRef: source.participant,
-        targetRef: target.participant,
+        sourceRef: sourceTask ?? source.participant,
+        targetRef: targetTask ?? target.participant,
       })
       collaboration.messageFlows.push(messageFlow)
       const portY = (pool) => {
         const incident = externalLinks.filter((item) => poolByName.get(item.source) === pool || poolByName.get(item.target) === pool)
         return pool.bounds.y + pool.bounds.height * (incident.indexOf(link) + 1) / (incident.length + 1)
       }
-      const sourceY = portY(source)
-      const targetY = portY(target)
       const poolRight = 10 + poolWidth
       const x = poolRight + 80 + messages.length * 14 + index * 200
+      const approach = (pool, otherPool, task, actionId) => {
+        if (!task) return [{ x: poolRight, y: portY(pool) }]
+        const box = externalTaskBoxes.get(task)
+        const facesDown = pool.index < otherPool.index
+        const incident = externalLinks.filter((item) => item.sourceActionId === actionId || item.targetActionId === actionId)
+        const offset = 60 * ((incident.indexOf(link) + 1) / (incident.length + 1) - 0.5)
+        const taskX = box.x + box.width / 2 + offset
+        const gapY = facesDown ? pool.bounds.y + pool.bounds.height + 22 : pool.bounds.y - 22
+        return [{ x: taskX, y: facesDown ? box.y + box.height : box.y }, { x: taskX, y: gapY }]
+      }
+      const sourcePoints = approach(source, target, sourceTask, link.sourceActionId)
+      const targetPoints = approach(target, source, targetTask, link.targetActionId)
+      const sourceY = sourcePoints.at(-1).y
+      const targetY = targetPoints.at(-1).y
       const waypoint = [
-        { x: poolRight, y: sourceY }, { x, y: sourceY },
-        { x, y: targetY }, { x: poolRight, y: targetY },
+        ...sourcePoints, { x, y: sourceY }, { x, y: targetY }, ...targetPoints.reverse(),
       ].map((point) => moddle.create('dc:Point', point))
       const label = moddle.create('bpmndi:BPMNLabel', {
         bounds: moddle.create('dc:Bounds', { x: x + 10, y: (sourceY + targetY) / 2 - 22, width: 180, height: 44 }),

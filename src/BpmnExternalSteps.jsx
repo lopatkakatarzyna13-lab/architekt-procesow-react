@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages'
 
-export default function BpmnExternalSteps({ steps, externalSteps, onChange, onDraftChange, variant = 'AS-IS' }) {
+export default function BpmnExternalSteps({ steps, externalSteps, externalLinks = [], onChange, onDraftChange, variant = 'AS-IS' }) {
   const [name, setName] = useState('')
   const [participant, setParticipant] = useState('')
   const [status, setStatus] = useState('')
   const messages = getBpmnMessages(steps)
   const pools = getExternalPools(messages)
+  const hasMessage = (id) => messages.some((message) => message.externalStepId === id) ||
+    externalLinks.some((link) => link.sourceActionId === id || link.targetActionId === id)
   const add = (event) => {
     event.preventDefault()
     const value = name.trim()
@@ -27,7 +29,7 @@ export default function BpmnExternalSteps({ steps, externalSteps, onChange, onDr
       {(name || participant) && <button type="button" className="back-button" onClick={() => { setName(''); setParticipant(''); onDraftChange('external-step-form', false) }}>Wyczyść działanie</button>}
     </form>
     {externalSteps.length > 0 && <ol>{externalSteps.map((item, index) => <li key={item.id}>{item.name}{' '}
-      {!messages.some((message) => message.externalStepId === item.id) && pools.length > 0 && (
+      {!hasMessage(item.id) && pools.length > 0 && (
         <label>Basen działania {item.name}{' '}
           <select value={getExternalActionPool(item, messages, pools)} onChange={(event) => {
             const participantName = pools.find(([key]) => key === event.target.value)?.[1]
@@ -42,7 +44,7 @@ export default function BpmnExternalSteps({ steps, externalSteps, onChange, onDr
       )}
       <button type="button" className="back-button" disabled={index === 0} aria-label={`Przesuń działanie ${item.name} w górę`} onClick={() => { const next = [...externalSteps]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; const result = onChange(next); setStatus(result?.error || `Zmieniono kolejność. Zapisz proces ${variant}.`) }}>↑</button>{' '}
       <button type="button" className="back-button" disabled={index === externalSteps.length - 1} aria-label={`Przesuń działanie ${item.name} w dół`} onClick={() => { const next = [...externalSteps]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; const result = onChange(next); setStatus(result?.error || `Zmieniono kolejność. Zapisz proces ${variant}.`) }}>↓</button>{' '}
-      <button type="button" className="back-button" onClick={() => { if (messages.some((message) => message?.externalStepId === item.id)) { setStatus('Najpierw usuń wiadomości powiązane z tym działaniem.'); return }; const result = onChange(externalSteps.filter((step) => step.id !== item.id)); setStatus(result?.error || `Usunięto działanie. Zapisz proces ${variant}.`) }}>Usuń działanie {item.name}</button>
+      <button type="button" className="back-button" onClick={() => { if (hasMessage(item.id)) { setStatus('Najpierw usuń wiadomości powiązane z tym działaniem.'); return }; const result = onChange(externalSteps.filter((step) => step.id !== item.id)); setStatus(result?.error || `Usunięto działanie. Zapisz proces ${variant}.`) }}>Usuń działanie {item.name}</button>
     </li>)}</ol>}
     {status && <p role="status">{status}</p>}
   </section>

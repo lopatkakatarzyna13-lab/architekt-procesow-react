@@ -32,15 +32,18 @@ export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = 
   const pools = getExternalPools(messages)
   const poolKeys = new Set(pools.map(([key]) => key))
   if (!Array.isArray(externalLinks)) return 'Sprawdź przekazania między basenami zewnętrznymi.'
+  const actionPools = new Map(externalSteps.map((action) => [action.id, getExternalActionPool(action, messages, pools)]))
   const linkKeys = new Set()
   for (const link of externalLinks) {
     if (!link || !poolKeys.has(link.source) || !poolKeys.has(link.target) || link.source === link.target) return 'Przekazanie musi wskazywać dwa różne, istniejące baseny zewnętrzne.'
     if (typeof link.label !== 'string' || !link.label.trim() || link.label.trim().length > 100) return 'Uzupełnij nazwę przekazania między basenami.'
-    const key = JSON.stringify([link.source, link.target, link.label.trim().toLocaleLowerCase('pl')])
+    for (const [actionId, pool] of [[link.sourceActionId, link.source], [link.targetActionId, link.target]]) {
+      if (actionId !== undefined && (typeof actionId !== 'string' || actionPools.get(actionId) !== pool)) return 'Przekazanie wskazuje brakujące działanie lub działanie z innego basenu.'
+    }
+    const key = JSON.stringify([link.source, link.target, link.sourceActionId, link.targetActionId, link.label.trim().toLocaleLowerCase('pl')])
     if (linkKeys.has(key)) return 'Usuń powtórzone przekazanie między basenami.'
     linkKeys.add(key)
   }
-  const actionPools = new Map(externalSteps.map((action) => [action.id, getExternalActionPool(action, messages, pools)]))
   for (const message of messages) {
     if (message.externalStepId && actionPools.get(message.externalStepId) !== message.external.trim().toLocaleLowerCase('pl')) return 'Wiadomość wskazuje działanie z innego basenu.'
   }

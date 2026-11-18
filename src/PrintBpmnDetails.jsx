@@ -4,6 +4,7 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
   const messages = getBpmnMessages(steps)
   const pools = getExternalPools(messages)
   const poolNames = new Map(pools)
+  const endpoint = (pool, id) => [poolNames.get(pool) ?? pool, externalSteps.find((step) => step.id === id)?.name].filter(Boolean).join(' / ')
   const extra = steps.flatMap((step) => (step.extraConnections || []).map((link) => ({ from: step.name, to: steps.find((item) => item.id === link.targetId)?.name || 'Nieznany krok', label: link.label })))
   const decisions = steps.filter((step) => step.extraConnections?.length && step.bpmnDecision)
   return <div className="print-bpmn-details">
@@ -20,8 +21,8 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
     })}</ul></>}
     {externalLinks.length > 0 && <>
       <h4>Przekazania między uczestnikami zewnętrznymi</h4>
-      <ul>{externalLinks.map(({ source, target, label }, index) => (
-        <li key={index}>{poolNames.get(source) ?? source} → {poolNames.get(target) ?? target} — {label}</li>
+      <ul>{externalLinks.map(({ source, target, sourceActionId, targetActionId, label }, index) => (
+        <li key={index}>{endpoint(source, sourceActionId)} → {endpoint(target, targetActionId)} — {label}</li>
       ))}</ul>
     </>}
     {externalSteps.length > 0 && <><h4>Działania uczestników zewnętrznych</h4>{pools.map(([key, name]) => {
