@@ -1,14 +1,31 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
+import { BpmnModdle } from 'bpmn-moddle'
 import { chromium } from 'playwright'
 
-const title = 'Skierowanie na badania wstępne – próba'
+const branched = process.env.REFERRAL_WITH_POOLS === '1'
+const title = branched ? 'Skierowanie na badania wstępne – decyzja i baseny' : 'Skierowanie na badania wstępne – próba'
+const managerTask = 'Kierownik przekazuje zgłoszenie lub uzupełnia dane stanowiska'
+const managerFormTask = 'Kierownik przekazuje zgłoszenie lub uzupełnia dane w formularzu'
+const manager = 'Kierownik'
+const organization = 'Organizacja'
+const recipient = 'Osoba przyjmowana'
+const decision = 'Czy dane są kompletne?'
+const returnPath = 'Nie: HR prosi kierownika o uzupełnienie'
+const message = 'Skierowanie na badania wstępne'
 const asIs = [
+  ...(branched ? [managerTask] : []),
   'HR sprawdza, czy kierownik podał stanowisko i opisał warunki pracy',
   'HR przygotowuje skierowanie po otrzymaniu kompletu informacji.',
   'HR wysyła skierowanie mailem do osoby przyjmowanej.',
 ]
-const toBe = ['HR weryfikuje zgłoszenie przesłane przez formularz', ...asIs.slice(1)]
+const checkIndex = branched ? 1 : 0
+const toBe = [
+  ...(branched ? [managerFormTask] : []),
+  'HR weryfikuje zgłoszenie przesłane przez formularz',
+  ...asIs.slice(checkIndex + 1),
+]
 const issue = 'Brak opisu warunków pracy wydłuża przygotowanie skierowania.'
 const exception = 'Gdy brakuje opisu warunków pracy, HR prosi kierownika o uzupełnienie i czeka na odpowiedź.'
 const improvement = 'Kierownik zgłasza nową osobę na formularzu z obowiązkowym polem „Warunki pracy”.'
@@ -29,12 +46,47 @@ try {
   const check = (name) => page.getByRole('checkbox', { name, exact: true }).check()
   const open = () => page.goto('http://127.0.0.1:5173/')
 
+  const verifyModel = async (firstTask, checkTask, label) => {
+    const [download] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
+    const path = await download.path()
+    execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path], { stdio: 'inherit' })
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(await readFile(path, 'utf8'))
+    assert.deepEqual(warnings, [], label)
+    const collaboration = rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+    assert.deepEqual(collaboration.participants.map((item) => item.name), [organization, recipient])
+    const process = collaboration.participants[0].processRef
+    const tasks = process.flowElements.filter((item) => item.$type === 'bpmn:Task')
+    const lanes = process.laneSets[0].lanes
+    const start = process.flowElements.find((item) => item.$type === 'bpmn:StartEvent')
+    assert.deepEqual(lanes.map((lane) => lane.name), [manager, 'HR'])
+    assert.ok(lanes[0].flowNodeRef.includes(start))
+    assert.equal(tasks[0].name, firstTask)
+    assert.ok(lanes[0].flowNodeRef.includes(tasks[0]))
+    assert.ok(lanes[1].flowNodeRef.includes(tasks[1]))
+    assert.equal(tasks[1].name, checkTask)
+    const gateway = process.flowElements.find((item) => item.name === decision)
+    assert.equal(gateway.incoming[0].sourceRef, tasks[1])
+    const yes = gateway.outgoing.find((item) => item.name === 'Tak')
+    const no = gateway.outgoing.find((item) => item.name === returnPath)
+    assert.equal(yes.targetRef, tasks[2])
+    assert.equal(no.targetRef, start.outgoing[0].targetRef)
+    assert.equal(no.targetRef.outgoing[0].targetRef, tasks[0])
+    assert.equal(tasks[0].outgoing[0].targetRef, tasks[1])
+    assert.equal(collaboration.messageFlows.length, 1)
+    const handoff = collaboration.messageFlows[0]
+    assert.equal(handoff.name, message)
+    assert.equal(handoff.sourceRef, tasks.at(-1))
+    assert.equal(handoff.targetRef, collaboration.participants[1])
+  }
+
   await open()
   await page.getByRole('button', { name: /Tryb ekspercki/ }).click()
   await page.getByRole('button', { name: /Dodaj kroki samodzielnie/ }).click()
   await label(/Nazwa procesu/).fill(title)
   await label(/Cel procesu/).fill('Przekazać osobie przyjmowanej kompletne skierowanie, aby mogła umówić badania wstępne.')
-  await label(/Co rozpoczyna proces/).fill('HR otrzymuje od kierownika potwierdzenie przyjęcia nowej osoby.')
+  await label(/Co rozpoczyna proces/).fill(branched
+    ? 'Kierownik potwierdza przyjęcie nowej osoby.'
+    : 'HR otrzymuje od kierownika potwierdzenie przyjęcia nowej osoby.')
   await label(/Co kończy proces/).fill('HR przekazuje skierowanie osobie przyjmowanej.')
   await button('Zapisz zakres i przejdź dalej').click()
   await button('Opracuj ręcznie').click()
@@ -66,14 +118,35 @@ try {
   await button('Zapisz propozycję').click()
   for (const index of asIs.keys()) await check(`Wybierz krok ${index + 1} do przeniesienia`)
   await button('Przenieś wybrane kroki do AS-IS').click()
+  if (branched) {
+    for (const [index, step] of asIs.entries()) {
+      const numbered = `krok ${index + 1}: ${step}`
+      await label(`Tor BPMN — ${numbered}`).fill(index === 0 ? manager : 'HR')
+      await button(`Zapisz tor — ${numbered}`).click()
+    }
+    await choose('Od kroku', `2. ${asIs[1]}`)
+    await choose('Do kroku', `1. ${asIs[0]}`)
+    await label('Kiedy następuje przejście?').fill(returnPath)
+    await button('Dodaj połączenie').click()
+    await label(`Pytanie decyzji — ${asIs[1]}`).fill(decision)
+    await label(`Kiedy kontynuować podstawową ścieżkę — ${asIs[1]}`).fill('Tak')
+    await button(`Zapisz decyzję BPMN — ${asIs[1]}`).click()
+    await choose('Krok w Twoim procesie', `${asIs.length}. ${asIs.at(-1)}`)
+    await label('Nazwa basenu Twojego procesu').fill(organization)
+    await label('Nazwa basenu zewnętrznego').fill(recipient)
+    await label('Kierunek wiadomości').selectOption('outgoing')
+    await label('Co jest przekazywane?').fill(message)
+    await button('Dodaj wiadomość BPMN').click()
+  }
   await button('Zapisz proces AS-IS').click()
+  if (branched) await verifyModel(asIs[0], asIs[1], 'AS-IS')
   await button('Przejdź do analizy').click()
 
   await choose('Sprawdzony wyjątek z warsztatu', exception)
   await button('Wstaw wyjątek do formularza').click()
   await choose(/Kategoria/, 'Wąskie gardło')
   await label(/Nazwa problemu lub obserwacji/).fill(issue)
-  await choose('Gdzie występuje?', `1. ${asIs[0]}`)
+  await choose('Gdzie występuje?', `${checkIndex + 1}. ${asIs[checkIndex]}`)
   await label('Opis obecnej sytuacji').fill(exception)
   await label('Wstępny pomysł usprawnienia').fill(improvement)
   await button('Dodaj ustalenie').click()
@@ -81,17 +154,29 @@ try {
   await button('Przejdź do TO-BE').click()
 
   await label(/Cel projektowanej zmiany/).fill('Ograniczyć liczbę zgłoszeń, które HR musi odsyłać do uzupełnienia')
-  await button('Skopiuj kroki z AS-IS').click()
-  await button('Edytuj krok').first().click()
-  await label(/Nazwa kroku/).fill(toBe[0])
+  await button(branched ? 'Skopiuj mapę BPMN z AS-IS' : 'Skopiuj kroki z AS-IS').click()
+  if (branched) {
+    await button('Edytuj krok').first().click()
+    await label(/Nazwa kroku/).fill(toBe[0])
+    await button('Zapisz zmiany').click()
+  }
+  await button('Edytuj krok').nth(checkIndex).click()
+  await label(/Nazwa kroku/).fill(toBe[checkIndex])
   await choose('Powiązane usprawnienie', issue)
   await button('Zapisz zmiany').click()
   await button('Zapisz proces TO-BE').click()
+  if (branched) await verifyModel(toBe[0], toBe[1], 'TO-BE')
   await button('Przejdź do raportu').click()
 
   await label(/Nazwa osoby, roli lub zespołu/).fill(assignee)
   await button('Dodaj interesariusza').click()
-  for (const step of toBe) await label(`${step}: ${assignee}`).selectOption('RA')
+  if (branched) {
+    await label(/Nazwa osoby, roli lub zespołu/).fill(manager)
+    await button('Dodaj interesariusza').click()
+  }
+  for (const [index, step] of toBe.entries()) {
+    await label(`${step}: ${branched && index === 0 ? manager : assignee}`).selectOption('RA')
+  }
   await button('Zapisz raport').click()
   await check(question)
   await page.evaluate(() => {
@@ -120,16 +205,18 @@ try {
         svg.remove()
       }
     }, names)
-    assert.deepEqual(result, [true, true, true], `all task labels must fit inside ${selector}`)
+    assert.deepEqual(result, names.map(() => true), `all task labels must fit inside ${selector}`)
   }
 
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true, ...(output ? { path: output } : {}) })
   const text = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).replace(/\s+/g, ' ')
-  for (const expected of [title, ...asIs, ...toBe, issue, question, assignee, '20.11.2026', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE']) {
+  const branchDetails = branched ? [decision, returnPath, organization, recipient, 'Dodatkowe przejścia', 'Baseny i wiadomości'] : []
+  for (const expected of [title, ...asIs, ...toBe, issue, question, assignee, '20.11.2026', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', ...branchDetails]) {
     assert.ok(text.includes(expected), `PDF should include: ${expected}`)
   }
   console.log('PASS: referral workshop restored in a fresh tab; all AS-IS and TO-BE tasks fit; PDF contains the selected open question')
+  if (branched) console.log('PASS: manager starts both maps; BPMN validates with two pools, two lanes, return path and referral handoff')
 } finally {
   await browser.close()
 }
