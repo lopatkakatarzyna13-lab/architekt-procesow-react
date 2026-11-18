@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
 import {
-  deleteWorkshop, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
+  deleteWorkshop, formatOpenWorkshopQuestions, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
   MAX_WORKSHOP_ANSWER_LENGTH, MAX_WORKSHOP_ASSIGNEE_LENGTH,
   saveWorkshop, saveWorkshopReview, validateWorkshopProposal, validateWorkshopReview,
 } from './workshop'
@@ -14,7 +14,7 @@ const unreviewedProposal = (proposal) => Object.fromEntries(Object.keys(categori
   [key, (proposal[key] ?? []).map(({ text, status, evidence }) => ({ text, status, evidence, reviewed: false }))]))
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
-export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = false, onTransferSteps, onUseFinding }) {
+export default function WorkshopPanel({ processId, processName, dirtyRef, canTransferSteps = false, onTransferSteps, onUseFinding }) {
   const [initial] = useState(() => {
     let data
     try { data = loadWorkshop(localStorage, processId) }
@@ -255,6 +255,29 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
     setAnalysisMessage(`Dodano kroków: ${result.added}. Pominięto istniejących lub powtórzonych: ${result.skipped}. Sprawdź listę kroków poniżej i zapisz proces AS-IS.`)
   }
 
+  const openQuestions = analysis?.questions.filter((item) => !item.answerConfirmed) ?? []
+  const exportableQuestions = openQuestions.filter((item) => item.reviewed)
+  const canDownloadQuestions = exportableQuestions.length > 0 && !dirty && !reviewDirty && !analyzing
+
+  const downloadQuestions = () => {
+    if (!canDownloadQuestions) return
+    const link = document.createElement('a')
+    let url
+    try {
+      const text = formatOpenWorkshopQuestions(exportableQuestions, processName)
+      url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
+      link.href = url
+      link.download = 'otwarte-pytania.txt'
+      document.body.appendChild(link)
+      link.click()
+    } catch {
+      setAnalysisMessage('Nie udało się przygotować listy pytań do pobrania.')
+    } finally {
+      link.remove()
+      if (url) window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+  }
+
   if (storageUncertain) return (
     <section className="workshop-panel" aria-labelledby="workshop-storage-error">
       <h2 id="workshop-storage-error">Nie można potwierdzić stanu zapisu</h2>
@@ -303,10 +326,16 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
         <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
         {Object.entries(categories).map(([key, title]) => <div key={key}>
           <h4>{title}</h4>
-          {key === 'questions' && analysis.questions.length > 0 && <p role="status">
-            Otwarte pytania: {analysis.questions.filter((item) => !item.answerConfirmed).length} z {analysis.questions.length}.
-            Potwierdź odpowiedź po jej uzgodnieniu. Zmiana pytania lub odpowiedzi ponownie otwiera pytanie.
-          </p>}
+          {key === 'questions' && analysis.questions.length > 0 && <>
+            <p role="status">
+              Otwarte pytania: {openQuestions.length} z {analysis.questions.length}.
+              Potwierdź odpowiedź po jej uzgodnieniu. Zmiana pytania lub odpowiedzi ponownie otwiera pytanie.
+            </p>
+            {openQuestions.length > 0 && <div className="workshop-actions">
+              <button type="button" className="back-button" disabled={!canDownloadQuestions} onClick={downloadQuestions}>Pobierz otwarte pytania (.txt)</button>
+              <span>Plik zawiera pytania oznaczone „Sprawdzono treść”. Przed pobraniem zapisz propozycję.</span>
+            </div>}
+          </>}
           {analysis[key].length ? <ul>{analysis[key].map((item, index) => <li key={`${key}-${index}`}>
             {key === 'steps' && canTransferSteps && <label><input type="checkbox" checked={selectedSteps.includes(index)} onChange={(event) => setSelectedSteps((current) => event.target.checked ? [...current, index] : current.filter((itemIndex) => itemIndex !== index))} /> Wybierz krok {index + 1} do przeniesienia</label>}
             <label htmlFor={`review-${key}-${index}`}>{title} — pozycja {index + 1}</label>

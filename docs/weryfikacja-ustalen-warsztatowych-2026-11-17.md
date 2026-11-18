@@ -9,3 +9,5 @@ Do zamknięcia etapu pozostaje świadome wykorzystanie pozostałych ustaleń w p
 W sekcji „Pytania” wpisz odpowiedź i zaznacz „Potwierdzono odpowiedź” po jej uzgodnieniu. Licznik otwartych pytań uwzględnia także pytania z odpowiedzią roboczą. Edycja pytania lub odpowiedzi otwiera je ponownie, zachowując treść odpowiedzi do ponownego sprawdzenia. „Zapisz propozycję” zapisuje pytania, odpowiedzi i potwierdzenia w tej przeglądarce dla bieżącego procesu. Odpowiedzi pozostają w panelu warsztatu. Zastąpienie propozycji zawierającej odpowiedzi wymaga potwierdzenia.
 
 Przy pytaniu możesz też wskazać osobę lub zespół, który wróci z odpowiedzią, i uzgodniony termin. Oba pola są opcjonalne i zapisują się razem z propozycją. Zmiana osoby lub terminu zachowuje stan potwierdzenia odpowiedzi.
+
+Po sprawdzeniu treści otwartych pytań i zapisaniu propozycji przycisk „Pobierz otwarte pytania (.txt)” tworzy listę do wykorzystania po spotkaniu. Plik zawiera nazwę procesu, treść sprawdzonych otwartych pytań, przypisane osoby lub zespoły i terminy. Treść transkrypcji, cytaty i odpowiedzi robocze pozostają w warsztacie.

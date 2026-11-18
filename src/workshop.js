@@ -38,6 +38,16 @@ export function validateWorkshopReview(review, transcript) {
   return errors
 }
 
+export function formatOpenWorkshopQuestions(questions, processName) {
+  const items = questions.map(({ text, assignee, dueDate }, index) => [
+    `${index + 1}. ${text.trim().replace(/\s+/g, ' ')}`,
+    `   Osoba lub zespół: ${assignee?.trim() || 'do ustalenia'}`,
+    `   Termin: ${dueDate ? dueDate.split('-').reverse().join('.') : 'do ustalenia'}`,
+  ].join('\n'))
+  const heading = processName?.trim() ? `Otwarte pytania — ${processName.trim()}` : 'Otwarte pytania'
+  return `${[heading, ...items].join('\n\n')}\n`
+}
+
 function keyFor(processId) {
   if (!isValidProcessId(processId)) throw new TypeError('Nieprawidłowy identyfikator procesu.')
   return `${KEY_PREFIX}${processId.toLowerCase()}`

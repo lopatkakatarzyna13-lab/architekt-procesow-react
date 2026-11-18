@@ -1055,7 +1055,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} />}
 
       {isStepsVariant ? (
         <>

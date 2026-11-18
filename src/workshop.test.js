@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendWorkshopSteps, deleteWorkshop, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH, saveWorkshop, saveWorkshopReview, validateWorkshopProposal } from './workshop'
+import { appendWorkshopSteps, deleteWorkshop, formatOpenWorkshopQuestions, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH, saveWorkshop, saveWorkshopReview, validateWorkshopProposal } from './workshop'
 
 const A = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const B = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
@@ -107,6 +107,13 @@ describe('review persistence', () => {
     expect(() => saveWorkshopReview(failing, A, transcript, review())).toThrow('quota')
     expect(loadWorkshopReview(s, A, transcript).review).toEqual(review())
   })
+})
+
+it('formats a question without an assignee or deadline for the workshop summary', () => {
+  expect(formatOpenWorkshopQuestions([{ text: 'Kto kończy\n proces?' }], '')).toBe([
+    'Otwarte pytania', '', '1. Kto kończy proces?',
+    '   Osoba lub zespół: do ustalenia', '   Termin: do ustalenia', '',
+  ].join('\n'))
 })
 
 describe('transfer of selected steps', () => {

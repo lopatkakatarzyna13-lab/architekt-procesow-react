@@ -123,6 +123,22 @@ try {
   assert.equal(await page.getByLabel('Termin odpowiedzi — pytanie 1', { exact: true }).inputValue(), '')
 
   await page.getByText(/Otwarte pytania: 1 z 2/).waitFor()
+  const openQuestionsDownload = page.getByRole('button', { name: 'Pobierz otwarte pytania (.txt)', exact: true })
+  assert.equal(await openQuestionsDownload.isDisabled(), true)
+  await page.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 2', exact: true }).check()
+  await page.getByRole('textbox', { name: 'Odpowiedź — pytanie 2', exact: true }).fill('Robocza odpowiedź do sprawdzenia')
+  await page.getByRole('button', { name: 'Dodaj: pytania', exact: true }).click()
+  await page.getByLabel('Pytania — pozycja 3', { exact: true }).fill('Pytanie jeszcze niesprawdzone')
+  assert.equal(await openQuestionsDownload.isDisabled(), true)
+  await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
+  const [questionsFile] = await Promise.all([page.waitForEvent('download'), openQuestionsDownload.click()])
+  assert.equal(questionsFile.suggestedFilename(), 'otwarte-pytania.txt')
+  assert.equal(await readFile(await questionsFile.path(), 'utf8'), [
+    'Otwarte pytania — Fikcyjny obieg dokumentów', '',
+    '1. Kto zastępuje osobę przekazującą?',
+    '   Osoba lub zespół: Koordynatorka fikcyjnego wdrożenia',
+    '   Termin: 29.02.2028', '',
+  ].join('\n'))
   assert.equal(calls, 1)
   await page.getByRole('button', { name: 'Przejdź do analizy' }).click()
   await page.getByLabel(/Kategoria/).selectOption({ label: 'Wąskie gardło' })
