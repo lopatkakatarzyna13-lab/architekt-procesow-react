@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getBpmnMessages } from './bpmnMessages'
+import { getBpmnMessages, getExternalPools } from './bpmnMessages'
 
 export default function BpmnPreview({ steps, externalSteps = [], scope, variant = 'as-is' }) {
   const canvasRef = useRef(null)
@@ -11,7 +11,7 @@ export default function BpmnPreview({ steps, externalSteps = [], scope, variant 
   const targets = [
     ...(messages.length ? [
       { id: 'Participant_Main', name: `Basen: ${messages[0].primary}` },
-      { id: 'Participant_External_1', name: `Basen: ${messages[0].external}` },
+      ...getExternalPools(messages).map(([, name], index) => ({ id: `Participant_External_${index + 1}`, name: `Basen: ${name}` })),
     ] : []),
     ...steps.map((step, index) => ({ id: `Task_${index + 1}`, name: `Krok procesu ${index + 1}: ${step.name}` })),
     ...externalSteps.map((step, index) => ({ id: `ExternalTask_${index + 1}`, name: `Działanie zewnętrzne ${index + 1}: ${step.name}` })),

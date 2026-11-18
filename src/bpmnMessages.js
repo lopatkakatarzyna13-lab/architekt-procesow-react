@@ -5,6 +5,16 @@ export function getBpmnMessages(steps) {
     .map((message, index) => ({ ...(message || {}), stepId: step.id, index })))
 }
 
+export function getExternalPools(messages) {
+  return [...new Map(messages.filter(({ external }) => typeof external === 'string' && external.trim()).map(({ external }) => [norm(external), external.trim()])).entries()]
+}
+
+export function getExternalActionPool(action, messages, pools = getExternalPools(messages)) {
+  if (action.participant) return norm(action.participant)
+  const linked = messages.find((message) => message.externalStepId === action.id && typeof message.external === 'string')
+  return linked ? norm(linked.external) : pools.length === 1 ? pools[0][0] : ''
+}
+
 export function addBpmnMessage(steps, stepId, mainParticipant, externalParticipant, direction, label, externalStepId = '', externalSteps = []) {
   if (externalStepId && !externalSteps.some((item) => item.id === externalStepId)) throw new Error('Wybierz istniejące działanie zewnętrzne.')
   const step = steps.find((item) => item.id === stepId)
@@ -16,7 +26,11 @@ export function addBpmnMessage(steps, stepId, mainParticipant, externalParticipa
   if (steps.some((item) => item.bpmnMessages !== undefined && !Array.isArray(item.bpmnMessages))) throw new Error('Zapis wiadomości jest nieprawidłowy; nie dodano nowej pozycji.')
   const messages = getBpmnMessages(steps)
   if (messages.some((item) => typeof item.primary !== 'string' || typeof item.external !== 'string' || typeof item.label !== 'string')) throw new Error('Zapis wiadomości jest nieprawidłowy; nie dodano nowej pozycji.')
-  if (messages.some((item) => norm(item.external) !== norm(external))) throw new Error('Na razie można użyć tylko jednego zewnętrznego basenu w procesie.')
+  const action = externalSteps.find((item) => item.id === externalStepId)
+  if (action && ((action.participant && norm(action.participant) !== norm(external)) ||
+    messages.some((item) => item.externalStepId === action.id && norm(item.external) !== norm(external)))) {
+    throw new Error('Wybierz działanie należące do basenu wskazanego w wiadomości.')
+  }
   if (messages.some((item) => norm(item.primary) !== norm(primary))) throw new Error('Nazwa basenu własnego procesu musi być taka sama we wszystkich wiadomościach.')
   if (messages.some((item) => item.stepId === stepId && norm(item.external) === norm(external) && item.direction === direction && norm(item.label) === norm(name))) throw new Error('Taka wiadomość już istnieje dla tego kroku.')
   const old = Array.isArray(step.bpmnMessages) ? step.bpmnMessages : []

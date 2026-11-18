@@ -1,5 +1,5 @@
 import { createLinearBpmn, getLinearBpmnError } from './bpmnExport.js'
-import { getBpmnMessages } from './bpmnMessages.js'
+import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
 
 import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 export { getDecisionBpmnError } from './bpmnDecisionValidation.js'
@@ -91,20 +91,32 @@ export async function createDecisionBpmn({ steps, externalSteps = [], processNam
   let planeRoot = process
   if (hasCollaboration) {
     const primary = moddle.create('bpmn:Participant', { id: 'Participant_Main', name: messages[0].primary.trim(), processRef: process })
-    const externalNames = [...new Map(messages.map((message) => [message.external.trim().toLocaleLowerCase('pl'), message.external.trim()])).entries()]
-    const participants = externalNames.map(([, name], index) => moddle.create('bpmn:Participant', { id: `Participant_External_${index + 1}`, name }))
-    const participantByName = new Map(externalNames.map(([key], index) => [key, participants[index]]))
-    const externalProcess = externalSteps.length ? moddle.create('bpmn:Process', { id: 'Process_External', name: externalNames[0][1], isExecutable: false, flowElements: [] }) : null
-    const externalTasks = externalSteps.map((step, index) => moddle.create('bpmn:Task', { id: `ExternalTask_${index + 1}`, name: step.name.trim() }))
-    if (externalProcess) participants[0].processRef = externalProcess
-    const externalFlows = externalTasks.slice(1).map((task, index) => {
-      const previous = externalTasks[index]
-      const flow = moddle.create('bpmn:SequenceFlow', { id: `ExternalFlow_${index + 1}`, sourceRef: previous, targetRef: task })
-      previous.outgoing = [...(previous.outgoing || []), flow]; task.incoming = [...(task.incoming || []), flow]
-      return flow
+    const externalNames = getExternalPools(messages)
+    const activitiesByPool = new Map(externalNames.map(([key]) => [key, []]))
+    const externalTaskById = new Map()
+    externalSteps.forEach((step, index) => {
+      const task = moddle.create('bpmn:Task', { id: `ExternalTask_${index + 1}`, name: step.name.trim() })
+      externalTaskById.set(step.id, task)
+      activitiesByPool.get(getExternalActionPool(step, messages, externalNames)).push(task)
     })
-    if (externalProcess) externalProcess.flowElements = [...externalTasks, ...externalFlows]
-    const externalTaskById = new Map(externalSteps.map((step, index) => [step.id, externalTasks[index]]))
+    let flowIndex = 0
+    const pools = externalNames.map(([key, name], index) => {
+      const tasks = activitiesByPool.get(key)
+      const flows = tasks.slice(1).map((target, i) => {
+        const source = tasks[i]
+        const flow = moddle.create('bpmn:SequenceFlow', { id: `ExternalFlow_${++flowIndex}`, sourceRef: source, targetRef: target })
+        source.outgoing = [flow]
+        target.incoming = [flow]
+        return flow
+      })
+      const processRef = tasks.length ? moddle.create('bpmn:Process', {
+        id: `Process_External_${index + 1}`, name, isExecutable: false, flowElements: [...tasks, ...flows],
+      }) : undefined
+      const participant = moddle.create('bpmn:Participant', { id: `Participant_External_${index + 1}`, name, ...(processRef ? { processRef } : {}) })
+      return { participant, processRef, tasks, flows }
+    })
+    const poolByName = new Map(externalNames.map(([key], index) => [key, pools[index]]))
+    const participants = pools.map(({ participant }) => participant)
     const collaboration = moddle.create('bpmn:Collaboration', { id: 'Collaboration_1', participants: [primary, ...participants], messageFlows: [] })
     const mainHeight = hasLanes ? laneNames.length * laneHeight : 320
     const mainShape = moddle.create('bpmndi:BPMNShape', { id: 'ParticipantShape_Main', bpmnElement: primary, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: 10, y: 10, width: poolWidth, height: mainHeight }) })
@@ -112,40 +124,53 @@ export async function createDecisionBpmn({ steps, externalSteps = [], processNam
     const labelHeights = messages.map((message) => Math.max(44, Math.ceil(message.label.trim().length / 18) * 16 + 16))
     const rowTops = labelHeights.map((_, index) => labelHeights.slice(0, index).reduce((sum, height) => sum + height + 26, 0))
     const messageGap = 80 + labelHeights.reduce((sum, height) => sum + height + 26, 0)
-    const externalBoxes = participants.map((participant, index) => ({ x: 10, y: 10 + mainHeight + messageGap + index * 110, width: poolWidth, height: externalProcess ? 180 : 70, participant }))
-    const externalShapes = externalBoxes.map((box, index) => moddle.create('bpmndi:BPMNShape', { id: `ParticipantShape_External_${index + 1}`, bpmnElement: box.participant, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: box.x, y: box.y, width: box.width, height: box.height }) }))
-    const externalTaskBoxes = externalTasks.map((task, index) => ({ x: 100 + index * 220, y: externalBoxes[0].y + 50, width: 100, height: 80, task }))
-    const externalTaskShapes = externalTaskBoxes.map((box, index) => moddle.create('bpmndi:BPMNShape', { id: `ExternalTaskShape_${index + 1}`, bpmnElement: box.task, bounds: moddle.create('dc:Bounds', { x: box.x, y: box.y, width: box.width, height: box.height }) }))
-    const externalFlowEdges = externalFlows.map((flow, index) => {
-      const a = externalTaskBoxes[index]; const b = externalTaskBoxes[index + 1]
+    let nextPoolY = 10 + mainHeight + messageGap
+    const externalTaskBoxes = new Map()
+    const externalShapes = pools.map((pool, index) => {
+      const bounds = { x: 10, y: nextPoolY, width: poolWidth, height: pool.tasks.length ? 180 : 70 }
+      pool.bounds = bounds
+      pool.index = index
+      nextPoolY += bounds.height + 60
+      pool.tasks.forEach((task, i) => externalTaskBoxes.set(task, { x: 100 + i * 220, y: bounds.y + 50, width: 100, height: 80 }))
+      return moddle.create('bpmndi:BPMNShape', { id: `ParticipantShape_External_${index + 1}`, bpmnElement: pool.participant, isHorizontal: true, bounds: moddle.create('dc:Bounds', bounds) })
+    })
+    const externalTaskShapes = [...externalTaskBoxes].map(([task, bounds], index) => moddle.create('bpmndi:BPMNShape', { id: `ExternalTaskShape_${index + 1}`, bpmnElement: task, bounds: moddle.create('dc:Bounds', bounds) }))
+    const externalFlowEdges = pools.flatMap(({ flows }) => flows).map((flow, index) => {
+      const a = externalTaskBoxes.get(flow.sourceRef)
+      const b = externalTaskBoxes.get(flow.targetRef)
       return moddle.create('bpmndi:BPMNEdge', { id: `ExternalFlowEdge_${index + 1}`, bpmnElement: flow, waypoint: [{ x: a.x + a.width, y: a.y + a.height / 2 }, { x: b.x, y: b.y + b.height / 2 }].map((point) => moddle.create('dc:Point', point)) })
     })
     const messageEdges = messages.map((message, index) => {
       const task = tasks[indexes.get(message.stepId)]
-      const external = participantByName.get(message.external.trim().toLocaleLowerCase('pl'))
+      const pool = poolByName.get(message.external.trim().toLocaleLowerCase('pl'))
+      const external = pool.participant
       const externalTarget = message.externalStepId ? externalTaskById.get(message.externalStepId) : external
       const messageFlow = moddle.create('bpmn:MessageFlow', { id: `MessageFlow_${index + 1}`, name: message.label.trim(), sourceRef: message.direction === 'outgoing' ? task : externalTarget, targetRef: message.direction === 'outgoing' ? externalTarget : task })
       collaboration.messageFlows.push(messageFlow)
-      const taskBox = boxes.get(task); const externalBox = externalBoxes.find((box) => box.participant === external)
+      const taskBox = boxes.get(task); const externalBox = pool.bounds
       const sameTask = messages.filter((item) => item.stepId === message.stepId)
       const localIndex = sameTask.indexOf(message)
       const offset = sameTask.length > 1 ? (localIndex / (sameTask.length - 1) - 0.5) * 60 : 0
       const x = taskBox.x + taskBox.width / 2 + offset
       const taskPoint = { x, y: taskBox.y + taskBox.height }
-      const externalTaskBox = externalTaskBoxes.find((box) => box.task === externalTarget)
+      const externalTaskBox = externalTaskBoxes.get(externalTarget)
       const sameTarget = externalTaskBox ? messages.filter((item) => item.externalStepId === message.externalStepId) : []
       const targetOffset = sameTarget.length > 1 ? (sameTarget.indexOf(message) / (sameTarget.length - 1) - 0.5) * 60 : 0
       const poolPoint = externalTaskBox ? { x: externalTaskBox.x + externalTaskBox.width / 2 + targetOffset, y: externalTaskBox.y } : { x: Math.min(poolWidth - 30, x + 120), y: externalBox.y }
       const labelY = 10 + mainHeight + 17 + rowTops[index]
       const middleY = labelY + labelHeights[index] + 4
-      const forward = x === poolPoint.x ? [taskPoint, poolPoint] : [taskPoint, { x, y: middleY }, { x: poolPoint.x, y: middleY }, poolPoint]
+      const bypassX = poolWidth + 36 + index * 14
+      const approachY = externalBox.y - 24
+      const forward = pool.index > 0
+        ? [taskPoint, { x, y: middleY }, { x: bypassX, y: middleY }, { x: bypassX, y: approachY }, { x: poolPoint.x, y: approachY }, poolPoint]
+        : x === poolPoint.x ? [taskPoint, poolPoint] : [taskPoint, { x, y: middleY }, { x: poolPoint.x, y: middleY }, poolPoint]
       const points = message.direction === 'outgoing' ? forward : [...forward].reverse()
       const labelX = Math.max(12, Math.min(poolWidth - 170, x === poolPoint.x ? x + 8 : (x + poolPoint.x) / 2 - 90))
       const label = moddle.create('bpmndi:BPMNLabel', { bounds: moddle.create('dc:Bounds', { x: labelX, y: labelY, width: 180, height: labelHeights[index] }) })
       return moddle.create('bpmndi:BPMNEdge', { id: `MessageEdge_${index + 1}`, bpmnElement: messageFlow, waypoint: points.map((point) => moddle.create('dc:Point', point)), label })
     })
     planeRoot = collaboration
-    rootElements = [process, ...(externalProcess ? [externalProcess] : []), collaboration]
+    rootElements = [process, ...pools.flatMap(({ processRef }) => processRef ? [processRef] : []), collaboration]
     planeElement = [mainShape, ...laneShapes, ...externalShapes, ...shapes, ...externalTaskShapes, ...edges, ...externalFlowEdges, ...messageEdges]
   }
   const plane = moddle.create('bpmndi:BPMNPlane', { id: 'Plane_1', bpmnElement: planeRoot, planeElement })

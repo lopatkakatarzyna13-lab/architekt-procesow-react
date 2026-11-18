@@ -142,11 +142,25 @@ describe('explicit BPMN decisions', () => {
       if (index) expect(box.y).toBeGreaterThan(boxes[index - 1].y + boxes[index - 1].height)
     }
   })
-  it('blocks malformed messages and multiple external pools', () => {
+  it('exports separate participants and blocks a message to an action in the wrong pool', async () => {
     const input = steps()
     input[0].bpmnMessages = [{ primary: 'Firma', external: 'Biuro', direction: 'outgoing', label: 'Dane' }]
     input[1].bpmnMessages = [{ primary: 'Firma', external: 'Bank', direction: 'incoming', label: 'Dokument' }]
-    expect(getDecisionBpmnError(input)).toMatch(/jednego zewnętrznego basenu/)
+    const externalSteps = [
+      { id: 'office-action', name: 'Sprawdzenie dokumentów', participant: 'Biuro' },
+      { id: 'bank-action', name: 'Zwrot potwierdzenia', participant: 'Bank' },
+    ]
+    input[1].bpmnMessages[0].externalStepId = 'bank-action'
+    const xml = await createDecisionBpmn({ steps: input, externalSteps })
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+    expect(warnings).toEqual([])
+    const collaboration = rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+    expect(collaboration.participants.slice(1).map(({ name, processRef }) => [
+      name, processRef.flowElements.map((item) => item.name),
+    ])).toEqual([['Biuro', ['Sprawdzenie dokumentów']], ['Bank', ['Zwrot potwierdzenia']]])
+    expect(collaboration.messageFlows[1].sourceRef.name).toBe('Zwrot potwierdzenia')
+    input[1].bpmnMessages[0].externalStepId = 'office-action'
+    expect(getDecisionBpmnError(input, externalSteps)).toMatch(/innego basenu/)
     input[1].bpmnMessages = [null]
     expect(getDecisionBpmnError(input)).toMatch(/Nieprawidłowe dane wiadomości/)
   })

@@ -23,7 +23,7 @@ export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemov
   if (!steps.length) return null
   return <section className="step-connections" aria-labelledby="bpmn-messages-title">
     <h2 id="bpmn-messages-title">Baseny i przekazanie wiadomości</h2>
-    <p>Określ nazwę basenu swojego procesu, zewnętrznego uczestnika i krok wysyłający lub odbierający wiadomość. Na razie dostępny jest jeden basen zewnętrzny, z opcjonalną listą jego działań. Nazwa własnego basenu musi być taka sama we wszystkich wiadomościach.</p>
+    <p>Określ nazwę basenu swojego procesu, zewnętrznego uczestnika i krok wysyłający lub odbierający wiadomość. Dla każdego uczestnika użyj osobnej nazwy basenu. Możesz wskazać działanie w wybranym basenie. Nazwa własnego basenu musi być taka sama we wszystkich wiadomościach.</p>
     <form onSubmit={submit}>
       <label htmlFor="message-step">Krok w Twoim procesie</label>
       <select id="message-step" value={stepId} required onChange={(event) => { const v = event.target.value; setStepId(v); update({ stepId: v, primary, external, direction, label }) }}>

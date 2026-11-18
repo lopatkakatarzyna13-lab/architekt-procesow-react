@@ -11,13 +11,14 @@ describe('BPMN collaboration messages', () => {
     expect(getBpmnMessages(result).map((m) => m.direction)).toEqual(['outgoing', 'incoming'])
     expect(getBpmnMessages(removeBpmnMessage(result, 'a', 0))).toHaveLength(1)
   })
-  it('rejects unconfirmed, duplicated, same-participant and unsupported extra pools', () => {
+  it('rejects unconfirmed, duplicated, and same-participant messages', () => {
     const steps = initial()
     expect(() => addBpmnMessage(steps, 'a', 'Firma', 'firma', 'outgoing', 'Dane')).toThrow()
     expect(() => addBpmnMessage(steps, 'a', 'Firma', 'Biuro', '', 'Dane')).toThrow()
     const result = addBpmnMessage(steps, 'a', 'Firma', 'Biuro', 'outgoing', 'Dane')
     expect(() => addBpmnMessage(result, 'a', 'Firma', 'Biuro', 'outgoing', 'Dane')).toThrow()
     expect(() => addBpmnMessage(result, 'b', 'Inna firma', 'Biuro', 'incoming', 'Dokument')).toThrow()
-    expect(() => addBpmnMessage(result, 'b', 'Firma', 'Bank', 'incoming', 'Dokument')).toThrow()
+    const withBank = addBpmnMessage(result, 'b', 'Firma', 'Bank', 'incoming', 'Dokument')
+    expect(getBpmnMessages(withBank).map(({ external }) => external)).toEqual(['Biuro', 'Bank'])
   })
 })
