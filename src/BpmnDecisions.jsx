@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function DecisionForm({ step, onSave, onDraftChange }) {
+function DecisionForm({ step, onSave, onDraftChange, variant }) {
   const [question, setQuestion] = useState(step.bpmnDecision?.question || '')
   const [mainLabel, setMainLabel] = useState(step.bpmnDecision?.mainLabel || '')
   const [message, setMessage] = useState('')
@@ -8,7 +8,7 @@ function DecisionForm({ step, onSave, onDraftChange }) {
     event.preventDefault()
     const result = onSave(step.id, question, mainLabel)
     if (!result?.error) { setQuestion(question.trim()); setMainLabel(mainLabel.trim()); onDraftChange(step.id, false) }
-    setMessage(result?.error || 'Zapisano ustawienia bramki w wersji roboczej. Zapisz proces AS-IS.')
+    setMessage(result?.error || `Zapisano ustawienia bramki. Zapisz proces ${variant}.`)
   }}>
     <h3>Decyzja po kroku: {step.name}</h3>
     <p>Podaj pytanie oraz warunek przejścia do kolejnego kroku z listy. Opisy pozostałych przejść pochodzą z dodanych połączeń. Przyjmij, że możliwy jest wybór jednej ścieżki.</p>
@@ -22,12 +22,12 @@ function DecisionForm({ step, onSave, onDraftChange }) {
   </form>
 }
 
-export default function BpmnDecisions({ steps, onSave, onDraftChange }) {
+export default function BpmnDecisions({ steps, onSave, onDraftChange, variant = 'AS-IS' }) {
   const sources = steps.filter((step) => Array.isArray(step.extraConnections) && step.extraConnections.length > 0)
   if (!sources.length) return null
   return <section className="step-connections" aria-labelledby="bpmn-decisions-title">
     <h2 id="bpmn-decisions-title">Decyzje do eksportu BPMN</h2>
     <p>Dla każdego kroku z dodatkową ścieżką określ, kiedy wybrać przebieg podstawowy. Aplikacja utworzy bramkę wyboru jednej ścieżki; sprawdź, czy to odpowiada procesowi. Opisy warunków są tekstem, nie regułami automatycznymi.</p>
-    {sources.map((step) => <DecisionForm key={step.id} step={step} onSave={onSave} onDraftChange={onDraftChange} />)}
+    {sources.map((step) => <DecisionForm key={step.id} step={step} variant={variant} onSave={onSave} onDraftChange={onDraftChange} />)}
   </section>
 }

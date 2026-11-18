@@ -1828,6 +1828,7 @@ function ToBeStepsList({
   error,
   onEdit,
   onDelete,
+  deleteDisabled,
   onMove,
 }) {
   const findingName = (findingId) =>
@@ -1905,6 +1906,7 @@ function ToBeStepsList({
                   className="delete-step"
                   type="button"
                   onClick={() => onDelete(step.id)}
+                  disabled={deleteDisabled}
                   aria-label="Usuń krok"
                 >
                   ×
@@ -1979,10 +1981,16 @@ function ToBeScreen({
   onMoveStep,
   onCancelEdit,
   onCopySteps,
+  onAddConnection,
+  onRemoveConnection,
+  onSaveBpmnDecision,
   onBack,
   onSave,
   onContinue,
 }) {
+  const [decisionDrafts, setDecisionDrafts] = useState({})
+  const decisionDirty = Object.values(decisionDrafts).some(Boolean)
+  const markDecisionDraft = (id, dirty) => setDecisionDrafts((current) => ({ ...current, [id]: dirty }))
   return (
     <section className="workspace to-be-workspace" aria-labelledby="to-be-title">
       <div className="analysis-intro">
@@ -2031,10 +2039,13 @@ function ToBeScreen({
         error={toBeError}
         onEdit={onEditStep}
         onDelete={onDeleteStep}
+        deleteDisabled={decisionDirty}
         onMove={onMoveStep}
       />
       <ToBeSummary steps={steps} selectedCount={selectedFindingIds.length} />
-      <BpmnExport steps={steps} scope={scope} saved={saved} variant="to-be" />
+      {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onRemove={(...args) => decisionDirty ? { error: 'Najpierw zapisz zmiany w decyzji BPMN.' } : onRemoveConnection(...args)} />}
+      <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markDecisionDraft} />
+      <BpmnExport steps={steps} scope={scope} saved={saved && !decisionDirty} variant="to-be" />
 
       {saved && (
         <div className="save-message success-message" role="status">
@@ -2056,15 +2067,15 @@ function ToBeScreen({
       )}
 
       <div className="form-actions">
-        <button className="back-button" type="button" onClick={onBack}>
+        <button className="back-button" type="button" onClick={onBack} disabled={decisionDirty}>
           <span aria-hidden="true">←</span>
           Wróć do analizy
         </button>
-        <button className="save-button" type="button" onClick={onSave}>
+        <button className="save-button" type="button" onClick={onSave} disabled={decisionDirty}>
           Zapisz proces TO-BE
           <span aria-hidden="true">✓</span>
         </button>
-        {saved && assumptions.changeGoal.trim() && steps.length > 0 && (
+        {saved && !decisionDirty && assumptions.changeGoal.trim() && steps.length > 0 && (
           <button className="continue-button" type="button" onClick={onContinue}>
             Przejdź do raportu
             <span aria-hidden="true">→</span>
@@ -2405,8 +2416,8 @@ function createProcessFlow(steps, scope, variant, findings) {
     focusable: false,
     deletable: false,
   }))
-  if (variant === 'as-is') {
-    for (const connection of getProcessConnections(steps)) edges.push({
+  for (const connection of getProcessConnections(steps)) {
+    edges.push({
       id: `extra-${connection.sourceId}-${connection.index}`,
       source: `${variant}-step-${connection.sourceId}`,
       target: `${variant}-step-${connection.targetId}`,
@@ -2507,7 +2518,7 @@ function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings 
         </div>
       ) : (
         <>
-          {mapVariant === 'as-is' && <p>Linia ciągła pokazuje kolejność kroków, a przerywana — dodane przejście. Układ nie jest formalnym modelem BPMN.</p>}
+          {getProcessConnections(selectedSteps).length > 0 && <p>Linia ciągła pokazuje kolejność kroków, a przerywana — dodane przejście.</p>}
           {mapVariant === 'to-be' && (
             <div className="map-legend" aria-label="Legenda mapy TO-BE">
               <span className="legend-new">Nowy</span>
@@ -2916,11 +2927,7 @@ function PrintReport({
           findings={findings}
           unavailable={startMethod !== 'steps'}
         />
-        <div className="print-bpmn-details">
-          <h3>Mapa BPMN TO-BE — przebieg liniowy</h3>
-          <p>Kolejność odpowiada zapisanej liście kroków TO-BE. Początek i koniec mają ogólne nazwy. Decyzje, dodatkowe przejścia, tory, baseny i wiadomości nie są przenoszone automatycznie z AS-IS.</p>
-          {printBpmn.toBeSvg ? <img className="print-bpmn-image print-tobe-bpmn" src={printBpmn.toBeSvg} alt="Mapa BPMN procesu TO-BE" /> : <p>Nie zamieszczono diagramu BPMN TO-BE: {printBpmn.toBeError || 'model nie jest dostępny'}.</p>}
-        </div>
+        <PrintBpmnDetails steps={toBeSteps} externalSteps={[]} variant="TO-BE" svg={printBpmn.toBeSvg} error={printBpmn.toBeError} />
         <PrintProcessMap
           title="Uproszczony przebieg TO-BE"
           steps={toBeSteps}
@@ -4200,7 +4207,7 @@ try {
       setToBeSteps((currentSteps) =>
         currentSteps.map((step) =>
           step.id === editingToBeStepId
-            ? { ...toBeStepDraft, id: editingToBeStepId }
+            ? { ...step, ...toBeStepDraft, id: editingToBeStepId }
             : step,
         ),
       )
@@ -4237,7 +4244,7 @@ try {
 
   const deleteToBeStep = (stepId) => {
     setToBeSteps((currentSteps) =>
-      currentSteps.filter((step) => step.id !== stepId),
+      removeStepConnections(currentSteps, stepId),
     )
     if (editingToBeStepId === stepId) {
       cancelToBeStepEdit()
@@ -4293,6 +4300,16 @@ try {
     setCopyMessage('copied')
     setToBeError('')
     setToBeSaved(false)
+  }
+
+  const changeToBeConnections = (change, ...args) => {
+    try {
+      setToBeSteps(change(toBeSteps, ...args))
+      setToBeSaved(false)
+      return {}
+    } catch (error) {
+      return { error: error.message }
+    }
   }
 
   const saveToBe = () => {
@@ -4745,6 +4762,9 @@ try {
             onMoveStep={moveToBeStep}
             onCancelEdit={cancelToBeStepEdit}
             onCopySteps={copyAsIsSteps}
+            onAddConnection={(...args) => changeToBeConnections(addProcessConnection, ...args)}
+            onRemoveConnection={(...args) => changeToBeConnections(removeProcessConnection, ...args)}
+            onSaveBpmnDecision={(...args) => changeToBeConnections(setProcessDecision, ...args)}
             onBack={showAnalysis}
             onSave={saveToBe}
             onContinue={continueToReport}

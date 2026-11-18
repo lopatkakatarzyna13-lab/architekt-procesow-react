@@ -103,6 +103,17 @@ try {
   await page.getByRole('button', { name: 'Skopiuj kroki z AS-IS' }).click()
   await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
   const toBeExport = page.getByRole('button', { name: 'Pobierz BPMN 2.0' })
+  await page.getByLabel('Od kroku').selectOption({ label: '2. Przygotowanie dokumentów' })
+  await page.getByLabel('Do kroku').selectOption({ label: '1. Sprawdzenie kompletności danych' })
+  await page.getByLabel('Kiedy następuje przejście?').fill('TO-BE: popraw niezgodności')
+  await page.getByRole('button', { name: 'Dodaj połączenie' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+  assert.equal(await toBeExport.isDisabled(), true, 'a TO-BE branch requires an explicit decision')
+  await page.getByLabel('Pytanie decyzji — Przygotowanie dokumentów').fill('Czy dokumenty są zgodne?')
+  await page.getByLabel('Kiedy kontynuować podstawową ścieżkę — Przygotowanie dokumentów').fill('Dokumenty zgodne')
+  await page.getByRole('button', { name: 'Zapisz decyzję BPMN — Przygotowanie dokumentów' }).click()
+  await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+
   await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
   await page.getByRole('img', { name: 'Podgląd zapisanego diagramu BPMN TO-BE' }).locator('[data-element-id="Task_1"]').waitFor({ state: 'visible' })
   const [toBeDownload] = await Promise.all([page.waitForEvent('download'), toBeExport.click()])
@@ -112,7 +123,9 @@ try {
   assert.deepEqual(toBeModel.warnings, [])
   const toBeProcess = toBeModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Process')
   assert.deepEqual(toBeProcess.flowElements.filter((item) => item.$type === 'bpmn:Task').map((item) => item.name), proposal.steps.map((item) => item.text))
-  assert.equal(toBeProcess.flowElements.filter((item) => item.$type === 'bpmn:ExclusiveGateway').length, 0)
+  assert.ok(toBeProcess.flowElements.some((item) => item.$type === 'bpmn:ExclusiveGateway' && item.name === 'Czy dokumenty są zgodne?'))
+  assert.ok(toBeProcess.flowElements.some((item) => item.$type === 'bpmn:SequenceFlow' && item.name === 'TO-BE: popraw niezgodności'))
+  assert.ok(!toBeProcess.flowElements.some((item) => item.name === 'Brak danych — wróć do kontroli'))
   assert.equal(toBeModel.rootElement.rootElements.some((item) => item.$type === 'bpmn:Collaboration'), false)
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', toBePath], { stdio: 'inherit' })
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Poprawiony cel zmiany')
@@ -145,7 +158,7 @@ try {
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')
