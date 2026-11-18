@@ -36,7 +36,7 @@ import BpmnExternalMessages from './BpmnExternalMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
-import { toBeBpmnScope } from './toBeBpmn'
+import { copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -1696,6 +1696,7 @@ function ToBeStepEditor({
   editingId,
   startMethod,
   hasSteps,
+  hasExternalParticipants,
   copyMessage,
   copyError,
   onChange,
@@ -1720,24 +1721,21 @@ function ToBeStepEditor({
             <p>Proces docelowy zawsze budujemy jako uporządkowaną listę kroków.</p>
           </div>
         </div>
-        {startMethod === 'steps' && (
-          <button
-            className="copy-steps-button"
-            type="button"
-            onClick={onCopy}
-            disabled={hasSteps}
-            title={hasSteps ? 'Lista TO-BE zawiera już kroki' : undefined}
-          >
-            <span aria-hidden="true">⧉</span>
+        {startMethod === 'steps' && <div className="bpmn-actions">
+          <button className="copy-steps-button" type="button" onClick={() => onCopy()} disabled={hasSteps}>
             Skopiuj kroki z AS-IS
           </button>
-        )}
+          <button className="copy-steps-button" type="button" onClick={() => onCopy({ includeBpmn: true })}
+            disabled={hasSteps || hasExternalParticipants}>
+            Skopiuj mapę BPMN z AS-IS
+          </button>
+        </div>}
       </div>
 
       {copyMessage && (
         <div className="inline-message copied-message" role="status">
           <span aria-hidden="true">✓</span>
-          Kroki AS-IS zostały skopiowane do procesu TO-BE.
+          {copyMessage}
         </div>
       )}
       {copyError && (
@@ -2041,6 +2039,7 @@ function ToBeScreen({
         editingId={editingStepId}
         startMethod={startMethod}
         hasSteps={steps.length > 0}
+        hasExternalParticipants={externalSteps.length > 0 || externalLinks.length > 0}
         copyMessage={copyMessage}
         copyError={copyError}
         onChange={onStepChange}
@@ -4317,7 +4316,7 @@ try {
     setToBeSaved(false)
   }
 
-  const copyAsIsSteps = () => {
+  const copyAsIsSteps = ({ includeBpmn = false } = {}) => {
     setCopyMessage('')
     setCopyError('')
 
@@ -4325,6 +4324,10 @@ try {
       setCopyError(
         'Lista TO-BE zawiera już kroki. Usuń je, jeśli chcesz rozpocząć od ponownego kopiowania.',
       )
+      return
+    }
+    if (includeBpmn && (toBeExternalSteps.length || toBeExternalLinks.length)) {
+      setCopyError('TO-BE zawiera już dane uczestników zewnętrznych.')
       return
     }
     if (steps.length === 0) {
@@ -4342,9 +4345,23 @@ try {
       stepType: 'Bez zmian',
       id: `as-is-copy-${step.id}-${index}`,
     }))
-    setToBeSteps(copiedSteps)
+    if (includeBpmn) {
+      try {
+        const copy = copyAsIsBpmn(steps, externalSteps, externalLinks, copiedSteps)
+        setToBeSteps(copy.steps)
+        setToBeExternalSteps(copy.externalSteps)
+        setToBeExternalLinks(copy.externalLinks)
+      } catch (error) {
+        setCopyError(`Popraw mapę AS-IS przed skopiowaniem. ${error.message}`)
+        return
+      }
+    } else {
+      setToBeSteps(copiedSteps)
+    }
     setCopiedFromAsIs(true)
-    setCopyMessage('copied')
+    setCopyMessage(includeBpmn
+      ? 'Mapa BPMN AS-IS została skopiowana. Sprawdź ją, dostosuj i zapisz proces TO-BE.'
+      : 'Kroki AS-IS zostały skopiowane do procesu TO-BE.')
     setToBeError('')
     setToBeSaved(false)
   }

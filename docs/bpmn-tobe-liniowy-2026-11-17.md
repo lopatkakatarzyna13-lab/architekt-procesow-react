@@ -1,5 +1,9 @@
-# Pierwszy wariant BPMN TO-BE
+# Mapa BPMN TO-BE
 
-Zapisana lista kroków TO-BE może być pokazana, pobrana jako `proces-tobe.bpmn` i dołączona do raportu PDF. Model przedstawia kroki w kolejności listy, ze zdarzeniami o ogólnych nazwach „Początek” i „Koniec”. Nie przenosi z AS-IS decyzji, dodatkowych przejść, torów, basenów ani wiadomości; nie przenosi również opisów, ról i systemów jako elementów BPMN. Nie jest wykonywalny. Po zmianie TO-BE podgląd znika, a eksport wymaga ponownego zapisu.
+Zapisana mapa TO-BE jest dostępna w podglądzie, w pliku `proces-tobe.bpmn` i w raporcie PDF. Model przedstawia kroki, zdarzenia „Początek” i „Koniec” oraz zapisane rozgałęzienia, tory i komunikację między uczestnikami. Po zmianie mapy eksport wymaga ponownego zapisu.
 
-To wariant liniowy, a nie pełny edytor BPMN TO-BE. Jeżeli w zapisanych danych pojawi się nieobsługiwana struktura BPMN, eksport jest blokowany zamiast ją po cichu pomijać. PDF opisuje ten zakres i wskazuje, jeśli diagramu nie udało się utworzyć. Przyszłe prace obejmują świadome określanie decyzji, powrotów i współpracy zewnętrznej w procesie docelowym oraz ich niezależną weryfikację. Zgodność XSD nie potwierdza poprawności biznesowej.
+## Kopia mapy na początek projektu TO-BE
+
+Przy pustej mapie TO-BE przycisk „Skopiuj mapę BPMN z AS-IS” przenosi kroki, decyzje, dodatkowe przejścia, tory, uczestników i wiadomości. Jeżeli model AS-IS wymaga poprawek, aplikacja wskazuje błąd przed kopiowaniem. Zmiany w kopii zapisują się w TO-BE. Do rozpoczęcia od samych kroków służy osobny przycisk „Skopiuj kroki z AS-IS”.
+
+Przed przekazaniem mapy sprawdź biznesowe znaczenie kroków, warunków i wiadomości. Walidacja pliku BPMN sprawdza strukturę modelu.

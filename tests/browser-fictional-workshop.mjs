@@ -163,6 +163,35 @@ try {
   await page.getByRole('button', { name: 'Dodaj ustalenie' }).click()
   await page.getByRole('button', { name: 'Zapisz analizę' }).click()
   await page.getByRole('button', { name: 'Przejdź do TO-BE' }).click()
+
+  const copyPage = await browser.newPage()
+  try {
+    const original = await page.evaluate(() => Object.entries(localStorage))
+    await copyPage.addInitScript((entries) => {
+      if (sessionStorage.getItem('architekt-procesow-screen-to-open')) return
+      for (const [key, value] of entries) localStorage.setItem(key, value)
+      sessionStorage.setItem('architekt-procesow-screen-to-open', 'to-be')
+    }, original)
+    await copyPage.goto('http://127.0.0.1:5173/')
+    await copyPage.getByLabel(/Cel projektowanej zmiany/).fill('Zweryfikować kopię mapy')
+    const copyMap = copyPage.getByRole('button', { name: 'Skopiuj mapę BPMN z AS-IS', exact: true })
+    await copyMap.click()
+    assert.equal(await copyMap.isDisabled(), true)
+    await copyPage.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+    const [bpmnCopy] = await Promise.all([
+      copyPage.waitForEvent('download'),
+      copyPage.getByRole('button', { name: 'Pobierz BPMN 2.0' }).click(),
+    ])
+    const copiedModel = await new BpmnModdle().fromXML(await readFile(await bpmnCopy.path(), 'utf8'))
+    assert.deepEqual(copiedModel.warnings, [])
+    const copiedProcess = copiedModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Process')
+    const copiedCollaboration = copiedModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+    assert.ok(copiedProcess.flowElements.some((item) => item.$type === 'bpmn:ExclusiveGateway' && item.name === 'Czy dane są kompletne?'))
+    assert.ok(copiedCollaboration.messageFlows.some((flow) => flow.name === 'Fikcyjne dane do weryfikacji'))
+  } finally {
+    await copyPage.close()
+  }
+
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Ustalić przewidywalny termin przekazania')
   await page.getByRole('button', { name: 'Skopiuj kroki z AS-IS' }).click()
   await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
