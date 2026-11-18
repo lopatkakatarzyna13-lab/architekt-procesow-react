@@ -1029,6 +1029,8 @@ function AsIsScreen({
   onContinue,
 }) {
   const isStepsVariant = startMethod === 'steps'
+  const [workshopDecisionSource, setWorkshopDecisionSource] = useState(null)
+  const workshopDecisions = workshopDecisionSource?.processId === processId ? workshopDecisionSource?.decisions : undefined
 
   return (
     <section className="workspace as-is-workspace" aria-labelledby="as-is-title">
@@ -1055,7 +1057,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
 
       {isStepsVariant ? (
         <>
@@ -1072,7 +1074,7 @@ function AsIsScreen({
           onCancelEdit={onCancelEdit}
         />
         <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
-        <BpmnDecisions steps={steps} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
+        <BpmnDecisions steps={steps} workshopDecisions={workshopDecisions} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
         <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
         <BpmnMessages steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />

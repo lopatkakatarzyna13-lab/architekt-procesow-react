@@ -15,7 +15,10 @@ const proposal = {
     { text: 'Przygotowanie dokumentów', status: 'supported', evidence: 'biuro przygotowuje dokumenty.' },
   ],
   roles: [{ text: 'HR', status: 'supported', evidence: 'HR' }],
-  decisions: [{ text: 'Czy dane są kompletne?', status: 'assumption', evidence: '' }],
+  decisions: [
+    { text: 'Czy dane są kompletne?', status: 'assumption', evidence: '' },
+    { text: 'Decyzja jeszcze niesprawdzona', status: 'assumption', evidence: '' },
+  ],
   questions: [
     { text: 'Jaki jest termin przekazania?', status: 'question', evidence: '' },
     { text: 'Kto zastępuje osobę przekazującą?', status: 'question', evidence: '' },
@@ -76,7 +79,20 @@ try {
   await page.getByLabel('Do kroku').selectOption({ label: '1. Sprawdzenie kompletności danych' })
   await page.getByLabel('Kiedy następuje przejście?').fill('Brak danych — wróć do kontroli')
   await page.getByRole('button', { name: 'Dodaj połączenie' }).click()
-  await page.getByLabel('Pytanie decyzji — Przygotowanie dokumentów').fill('Czy dane są kompletne?')
+  const checkedDecision = page.getByRole('checkbox', { name: 'Sprawdzono treść — decyzje, pozycja 1', exact: true })
+  const workshopDecision = page.getByLabel('Sprawdzona decyzja z warsztatu — Przygotowanie dokumentów', { exact: true })
+  await checkedDecision.uncheck()
+  await workshopDecision.waitFor({ state: 'hidden' })
+  await checkedDecision.check()
+  await workshopDecision.waitFor({ state: 'hidden' })
+  await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
+  await workshopDecision.waitFor({ state: 'visible' })
+  assert.deepEqual(await workshopDecision.locator('option').allTextContents(), ['Wybierz decyzję', 'Czy dane są kompletne?'])
+  await workshopDecision.selectOption('Czy dane są kompletne?')
+  await page.getByRole('button', { name: 'Wstaw pytanie z warsztatu — Przygotowanie dokumentów', exact: true }).click()
+  assert.equal(await page.getByLabel('Pytanie decyzji — Przygotowanie dokumentów', { exact: true }).inputValue(), 'Czy dane są kompletne?')
+  assert.equal(await page.getByLabel('Kiedy kontynuować podstawową ścieżkę — Przygotowanie dokumentów').inputValue(), '')
+  assert.equal(await page.getByRole('button', { name: 'Pobierz BPMN 2.0' }).isDisabled(), true)
   await page.getByLabel('Kiedy kontynuować podstawową ścieżkę — Przygotowanie dokumentów').fill('Dane kompletne')
   await page.getByRole('button', { name: 'Zapisz decyzję BPMN — Przygotowanie dokumentów' }).click()
   await page.getByLabel('Nazwa działania').fill('Weryfikacja dokumentów przez biuro')

@@ -14,7 +14,7 @@ const unreviewedProposal = (proposal) => Object.fromEntries(Object.keys(categori
   [key, (proposal[key] ?? []).map(({ text, status, evidence }) => ({ text, status, evidence, reviewed: false }))]))
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
-export default function WorkshopPanel({ processId, processName, dirtyRef, canTransferSteps = false, onTransferSteps, onUseFinding }) {
+export default function WorkshopPanel({ processId, processName, dirtyRef, canTransferSteps = false, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
   const [initial] = useState(() => {
     let data
     try { data = loadWorkshop(localStorage, processId) }
@@ -49,6 +49,15 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
     const { data } = workshopAiClient.auth.onAuthStateChange((_event, session) => setAiSession(session))
     return () => data.subscription.unsubscribe()
   }, [])
+  useEffect(() => {
+    if (!onDecisionSourceChange) return
+    const eligible = canTransferSteps && analysis && !dirty && !reviewDirty && !analyzing && !storageUncertain
+    const decisions = eligible
+      ? analysis.decisions.filter((item) => item.reviewed === true).map((item) => item.text.trim().replace(/\s+/g, ' '))
+      : []
+    onDecisionSourceChange({ processId, decisions: [...new Set(decisions)] })
+  }, [analysis, analyzing, canTransferSteps, dirty, onDecisionSourceChange, processId, reviewDirty, storageUncertain])
+
   useEffect(() => () => { dirtyRef.current = false }, [dirtyRef])
   useEffect(() => () => { activeAnalysis.current?.abort(); activeAnalysis.current = null }, [])
   const signInAi = async (event) => {
