@@ -148,6 +148,21 @@ try {
   await page.evaluate(() => sessionStorage.setItem('architekt-procesow-screen-to-open', 'to-be'))
   await page.reload()
 
+  await page.getByRole('button', { name: 'Edytuj przekazanie', exact: true }).click()
+  await page.getByLabel('Nazwa wiadomości między basenami').fill('Zmiana do anulowania')
+  await page.getByRole('button', { name: 'Anuluj edycję przekazania' }).click()
+  await page.getByRole('button', { name: 'Edytuj przekazanie', exact: true }).click()
+  assert.equal(await page.getByLabel('Nazwa wiadomości między basenami').inputValue(), 'Dyspozycja płatności')
+  await page.getByLabel('Basen nadawcy').selectOption({ label: 'Bank TO-BE' })
+  await page.getByLabel('Basen odbiorcy').selectOption({ label: 'Biuro TO-BE' })
+  await page.getByLabel('Działanie nadawcy').selectOption({ label: 'Realizacja płatności TO-BE' })
+  await page.getByLabel('Działanie odbiorcy').selectOption({ label: 'Sprawdzenie pakietu TO-BE' })
+  await page.getByLabel('Nazwa wiadomości między basenami').fill('Zwrot potwierdzenia płatności')
+  await page.getByRole('button', { name: 'Zapisz zmiany przekazania' }).click()
+  assert.equal(await page.getByRole('button', { name: 'Edytuj przekazanie', exact: true }).count(), 1)
+  await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+  await page.reload()
+
   await page.getByRole('button', { name: 'Pokaż podgląd BPMN' }).click()
   await page.getByRole('img', { name: 'Podgląd zapisanego diagramu BPMN TO-BE' }).locator('[data-element-id="Task_1"]').waitFor({ state: 'visible' })
   const [toBeDownload] = await Promise.all([page.waitForEvent('download'), toBeExport.click()])
@@ -166,7 +181,7 @@ try {
   assert.deepEqual(collaboration.messageFlows.map(({ name, sourceRef, targetRef }) => [name, sourceRef.name, targetRef.name]), [
     ['Pakiet dokumentów TO-BE', 'Przygotowanie dokumentów', 'Sprawdzenie pakietu TO-BE'],
     ['Potwierdzenie bankowe TO-BE', 'Bank TO-BE', 'Przygotowanie dokumentów'],
-    ['Dyspozycja płatności', 'Sprawdzenie pakietu TO-BE', 'Realizacja płatności TO-BE'],
+    ['Zwrot potwierdzenia płatności', 'Realizacja płatności TO-BE', 'Sprawdzenie pakietu TO-BE'],
   ])
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', toBePath], { stdio: 'inherit' })
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Poprawiony cel zmiany')
@@ -199,7 +214,7 @@ try {
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Biuro TO-BE / Sprawdzenie pakietu TO-BE → Bank TO-BE / Realizacja płatności TO-BE — Dyspozycja płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')
