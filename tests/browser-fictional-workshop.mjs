@@ -223,6 +223,9 @@ try {
 
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Ustalić przewidywalny termin przekazania')
   await page.getByRole('button', { name: 'Skopiuj kroki z AS-IS' }).click()
+  await page.getByRole('button', { name: 'Edytuj krok', exact: true }).first().click()
+  await page.getByLabel('Osoba lub rola odpowiedzialna', { exact: true }).fill('Zespół kontroli TO-BE')
+  await page.getByRole('button', { name: 'Zapisz zmiany', exact: true }).click()
   await page.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
   const toBeExport = page.getByRole('button', { name: 'Pobierz BPMN 2.0' })
   await page.getByLabel('Od kroku').selectOption({ label: '2. Przygotowanie dokumentów' })
@@ -338,7 +341,7 @@ try {
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
   assert.ok(!pdfText.includes('Piątek, godzina 13:00'), 'local workshop answers should stay out of the PDF')
   assert.ok(!pdfText.includes('Koordynatorka fikcyjnego wdrożenia'), 'local workshop follow-up details should stay out of the PDF')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Uzgodnić ścieżkę kompletowania dokumentów', 'Wybrane ustalenia bez powiązanego kroku TO-BE', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Uzgodnić ścieżkę kompletowania dokumentów', 'Wybrane ustalenia bez powiązanego kroku TO-BE', 'Odpowiedzialność: HR → Zespół kontroli TO-BE', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')

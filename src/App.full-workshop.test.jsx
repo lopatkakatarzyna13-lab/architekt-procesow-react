@@ -97,6 +97,11 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   await user.clear(screen.getByLabelText(`Pytanie decyzji — ${steps[1]}`))
   await user.type(screen.getByLabelText(`Pytanie decyzji — ${steps[1]}`), 'Czy dane TO-BE są kompletne?')
   await user.click(screen.getByRole('button', { name: `Zapisz decyzję BPMN — ${steps[1]}` }))
+  await user.click(screen.getAllByRole('button', { name: 'Edytuj krok', exact: true })[0])
+  const sourceOwner = screen.getByLabelText('Osoba lub rola odpowiedzialna')
+  await user.clear(sourceOwner)
+  await user.type(sourceOwner, 'Zespół kontroli')
+  await user.click(screen.getByRole('button', { name: 'Zapisz zmiany', exact: true }))
   const included = within(screen.getByRole('region', { name: 'Ustalenia do uwzględnienia' }))
   const missingFinding = included.getByRole('checkbox', { name: /Brak załącznika/ }).closest('label')
   const linkedFinding = included.getByRole('checkbox', { name: /Brak terminu przekazania/ }).closest('label')
@@ -130,6 +135,7 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   const toBe = JSON.parse(localStorage.getItem('architekt-procesow:to-be')).steps
   expect(toBe[1].extraConnections[0].targetId).toBe(toBe[0].id)
   expect(toBe[0].id).not.toBe(asIs[0].id)
+  expect(toBe[0].sourceAsIsStepId).toBe(asIs[0].id)
   expect(asIs[1].bpmnDecision.question).toBe('Czy dane są kompletne?')
   expect(toBe[1].bpmnDecision.question).toBe('Czy dane TO-BE są kompletne?')
   expect(toBe[2]).toMatchObject({
@@ -147,6 +153,9 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   const report = screen.getByRole('heading', { name: 'Podsumuj proces i odpowiedzialności' }).closest('.report-workspace')
   expect(within(report).getAllByText('Brak terminu przekazania').length).toBeGreaterThan(0)
   expect(within(report).getAllByText('Ustalić termin przekazania').length).toBeGreaterThan(0)
+  expect(within(report).getAllByText('Odpowiedzialność: nie określono → Zespół kontroli').length).toBeGreaterThan(0)
+  const addedSteps = within(report).getAllByRole('heading', { name: 'Kroki TO-BE bez powiązania z AS-IS' })
+  expect(within(addedSteps[0].closest('article')).getByText('Ustalić wspólny termin')).toBeTruthy()
   const gapHeadings = within(report).getAllByRole('heading', { name: 'Wybrane ustalenia bez powiązanego kroku TO-BE' })
   for (const heading of gapHeadings) {
     expect(within(heading.closest('article')).getByText('Każde wybrane ustalenie ma powiązany krok TO-BE')).toBeTruthy()

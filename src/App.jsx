@@ -20,6 +20,7 @@ import {
   saveCurrentProcessId,
 } from './processIdentity'
 import { buildProcessSnapshot } from './processSnapshot'
+import { compareProcessSteps } from './processStepComparison'
 import { getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
 import { deleteSavedProcess } from './deleteSavedProcess'
@@ -2386,6 +2387,7 @@ function ToBeReport({ assumptions, steps, findings }) {
 }
 
 function ProcessComparison({ startMethod, asIsSteps, toBeSteps, selectedCount }) {
+  const stepComparison = startMethod === 'steps' ? compareProcessSteps(asIsSteps, toBeSteps) : null
   const items = [
     [
       'Kroki AS-IS',
@@ -2413,6 +2415,33 @@ function ProcessComparison({ startMethod, asIsSteps, toBeSteps, selectedCount })
           <div key={label}><strong>{value}</strong><small>{label}</small></div>
         ))}
       </div>
+      {stepComparison && <>
+        <p>Porównanie nazw, odpowiedzialności i systemów opiera się na powiązaniach zachowanych przy kopiowaniu kroków.</p>
+        <div className="recommendation-grid">
+          <article>
+            <h3>Zmiany w powiązanych krokach</h3>
+            {stepComparison.changed.length ? <ul>{stepComparison.changed.map(({ id, name, differences }) => (
+              <li key={id}><strong>{name}</strong>
+                <ul>{differences.map(({ field, label, before, after }) => (
+                  <li key={field}>{label}: {before || 'nie określono'} → {after || 'nie określono'}</li>
+                ))}</ul>
+              </li>
+            ))}</ul> : <p>Brak zmian w porównywanych polach.</p>}
+          </article>
+          <article>
+            <h3>Kroki TO-BE bez powiązania z AS-IS</h3>
+            {stepComparison.unmatchedToBe.length ? <ul>{stepComparison.unmatchedToBe.map(({ id, name }) => (
+              <li key={id}>{name}</li>
+            ))}</ul> : <p>Wszystkie kroki TO-BE mają powiązanie.</p>}
+          </article>
+          <article>
+            <h3>Kroki AS-IS bez powiązania z TO-BE</h3>
+            {stepComparison.unmatchedAsIs.length ? <ul>{stepComparison.unmatchedAsIs.map(({ id, name }) => (
+              <li key={id}>{name}</li>
+            ))}</ul> : <p>Wszystkie kroki AS-IS mają powiązanie.</p>}
+          </article>
+        </div>
+      </>}
     </section>
   )
 }
@@ -4468,6 +4497,7 @@ try {
       result: step.result,
       stepType: 'Bez zmian',
       id: `as-is-copy-${step.id}-${index}`,
+      sourceAsIsStepId: step.id,
     }))
     if (includeBpmn) {
       try {
