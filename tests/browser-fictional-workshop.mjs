@@ -63,6 +63,11 @@ try {
   await page.getByText(/Otwarte pytania: 2 z 2/).waitFor()
   await confirmAnswer.check()
   await page.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }).check()
+  const followupOwner = page.getByLabel('Kto wróci z odpowiedzią — pytanie 2', { exact: true })
+  const followupDue = page.getByLabel('Termin odpowiedzi — pytanie 2', { exact: true })
+  await followupOwner.fill('Koordynatorka fikcyjnego wdrożenia')
+  await followupDue.fill('2028-02-29')
+  await page.getByText(/Otwarte pytania: 1 z 2/).waitFor()
   await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
   await page.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }).check()
   await page.getByRole('checkbox', { name: 'Wybierz krok 2 do przeniesienia' }).check()
@@ -113,6 +118,10 @@ try {
   assert.equal(await answer.inputValue(), 'Piątek, godzina 13:00')
   assert.equal(await confirmAnswer.isChecked(), true)
   assert.equal(await page.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 2' }).isChecked(), false)
+  assert.equal(await followupOwner.inputValue(), 'Koordynatorka fikcyjnego wdrożenia')
+  assert.equal(await followupDue.inputValue(), '2028-02-29')
+  assert.equal(await page.getByLabel('Termin odpowiedzi — pytanie 1', { exact: true }).inputValue(), '')
+
   await page.getByText(/Otwarte pytania: 1 z 2/).waitFor()
   assert.equal(calls, 1)
   await page.getByRole('button', { name: 'Przejdź do analizy' }).click()
@@ -238,6 +247,7 @@ try {
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
   assert.ok(!pdfText.includes('Piątek, godzina 13:00'), 'local workshop answers should stay out of the PDF')
+  assert.ok(!pdfText.includes('Koordynatorka fikcyjnego wdrożenia'), 'local workshop follow-up details should stay out of the PDF')
   for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }

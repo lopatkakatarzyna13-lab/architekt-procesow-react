@@ -16,6 +16,9 @@
 .workshop-panel p { line-height: 1.5; }
 .workshop-panel label { display: block; font-weight: 700; margin: 16px 0 8px; }
 .workshop-panel textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #b9b7d0; border-radius: 8px; font: inherit; resize: vertical; }
+.workshop-question-followup { display: flex; flex-wrap: wrap; column-gap: 16px; }
+.workshop-question-followup > div { flex: 1 1 220px; min-width: 0; }
+.workshop-question-followup input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #b9b7d0; border-radius: 8px; font: inherit; }
 .workshop-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
 
 .app-shell::before,

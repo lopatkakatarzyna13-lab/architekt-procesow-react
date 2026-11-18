@@ -100,13 +100,15 @@ describe('workshop review screen', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ proposal: {
       steps: [{ text: 'Sprawdzenie danych', status: 'supported', evidence: 'HR sprawdza dane.', reviewed: true }],
-      roles: [], decisions: [], questions: [{ text: 'Kto zatwierdza?', status: 'question', answer: 'AI', answerConfirmed: true }],
+      roles: [], decisions: [], questions: [{ text: 'Kto zatwierdza?', status: 'question', answer: 'AI', answerConfirmed: true, assignee: 'AI', dueDate: '2028-02-29' }],
     } }) })))
     render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
     await user.type(screen.getByLabelText('Tekst rozmowy'), 'HR sprawdza dane.')
     await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
     expect((await screen.findByRole('checkbox', { name: 'Sprawdzono treść — kroki, pozycja 1' })).checked).toBe(false)
     expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('')
+    expect(screen.getByLabelText('Kto wróci z odpowiedzią — pytanie 1').value).toBe('')
+    expect(screen.getByLabelText('Termin odpowiedzi — pytanie 1').value).toBe('')
     expect(screen.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 1' }).checked).toBe(false)
   })
 
@@ -125,6 +127,8 @@ describe('workshop review screen', () => {
     expect(confirmation().disabled).toBe(true)
     await user.type(screen.getByLabelText('Odpowiedź — pytanie 1'), 'W piątek')
     await user.click(confirmation())
+    await user.type(screen.getByLabelText('Kto wróci z odpowiedzią — pytanie 1'), 'Zespół HR')
+    expect(confirmation().checked).toBe(true)
     expect(screen.getByText(/Otwarte pytania: 1 z 2/)).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
     view.unmount()
@@ -133,6 +137,7 @@ describe('workshop review screen', () => {
     expect(confirmation().checked).toBe(true)
     expect(screen.getByText(/Otwarte pytania: 1 z 2/)).toBeTruthy()
     expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('W piątek')
+    expect(screen.getByLabelText('Kto wróci z odpowiedzią — pytanie 1').value).toBe('Zespół HR')
     await user.type(screen.getByLabelText('Pytania — pozycja 1'), ' dokładnie?')
     expect(confirmation().checked).toBe(false)
     expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('W piątek')

@@ -5,6 +5,13 @@ import { isValidProcessId } from './processIdentity.js'
 const KEY_PREFIX = 'architekt-procesow:workshop:'
 export const MAX_TRANSCRIPT_LENGTH = 100_000
 export const MAX_WORKSHOP_ANSWER_LENGTH = 2_000
+export const MAX_WORKSHOP_ASSIGNEE_LENGTH = 120
+
+function isWorkshopDueDate(value) {
+  if (typeof value !== 'string' || !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(value)
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
 
 export function validateWorkshopReview(review, transcript) {
   const errors = validateWorkshopProposal(review, transcript)
@@ -19,6 +26,13 @@ export function validateWorkshopReview(review, transcript) {
       (typeof question.answerConfirmed !== 'boolean' ||
         (question.answerConfirmed && (typeof question.answer !== 'string' || !question.answer.trim())))) {
       errors.push('Potwierdzenie wymaga treści odpowiedzi.')
+    }
+    if (question.assignee !== undefined &&
+      (typeof question.assignee !== 'string' || question.assignee.length > MAX_WORKSHOP_ASSIGNEE_LENGTH)) {
+      errors.push('Nieprawidłowa osoba lub zespół odpowiedzialny za odpowiedź.')
+    }
+    if (question.dueDate !== undefined && question.dueDate !== '' && !isWorkshopDueDate(question.dueDate)) {
+      errors.push('Wpisz poprawny termin odpowiedzi.')
     }
   }
   return errors

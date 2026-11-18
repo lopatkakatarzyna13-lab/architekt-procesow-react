@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
 import {
-  deleteWorkshop, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH, MAX_WORKSHOP_ANSWER_LENGTH,
+  deleteWorkshop, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
+  MAX_WORKSHOP_ANSWER_LENGTH, MAX_WORKSHOP_ASSIGNEE_LENGTH,
   saveWorkshop, saveWorkshopReview, validateWorkshopProposal, validateWorkshopReview,
 } from './workshop'
 
@@ -121,8 +122,8 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   }
 
   const replaceReview = () => {
-    if (analysis?.questions.some((item) => item.answer?.trim())) {
-      return window.confirm('Nowa propozycja zastąpi bieżące ustalenia, w tym odpowiedzi na pytania. Kontynuować?')
+    if (analysis?.questions.some(({ answer, assignee, dueDate }) => answer?.trim() || assignee?.trim() || dueDate)) {
+      return window.confirm('Nowa propozycja zastąpi bieżące ustalenia, w tym odpowiedzi na pytania, przypisane osoby i terminy. Kontynuować?')
     }
     return !reviewDirty || window.confirm('Masz niezapisaną propozycję. Czy chcesz ją zastąpić?')
   }
@@ -223,7 +224,10 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
   }
   const saveReview = () => {
     if (dirty) { setAnalysisMessage('Najpierw zapisz aktualną transkrypcję.'); return }
-    if (validateWorkshopReview(analysis, transcript).length) { setAnalysisMessage('Uzupełnij wszystkie dodane pozycje i sprawdź ich źródła.'); return }
+    if (validateWorkshopReview(analysis, transcript).length) {
+      setAnalysisMessage('Uzupełnij treść dodanych pozycji, sprawdź ich źródła i popraw ewentualne błędy w datach.')
+      return
+    }
     try {
       const existing = loadWorkshopReview(localStorage, processId, transcript)
       if (existing.stale && !window.confirm('Istnieje zapisana propozycja dla wcześniejszej wersji transkrypcji. Zastąpić ją?')) return
@@ -310,6 +314,22 @@ export default function WorkshopPanel({ processId, dirtyRef, canTransferSteps = 
             <small>{item.status === 'supported' ? 'Źródło propozycji: cytat z rozmowy' : item.status === 'assumption' ? 'Źródło propozycji: założenie lub wpis ręczny' : 'Rodzaj: pytanie'}</small>
             <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => updateItem(key, index, (current) => ({ ...current, reviewed: event.target.checked }))} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
             {key === 'questions' && <>
+              <div className="workshop-question-followup">
+                <div>
+                  <label htmlFor={`review-assignee-${index}`}>Kto wróci z odpowiedzią — pytanie {index + 1}</label>
+                  <input id={`review-assignee-${index}`} type="text" maxLength={MAX_WORKSHOP_ASSIGNEE_LENGTH}
+                    value={item.assignee ?? ''} onChange={(event) => updateItem(key, index, (current) => ({
+                      ...current, assignee: event.target.value,
+                    }))} />
+                </div>
+                <div>
+                  <label htmlFor={`review-due-date-${index}`}>Termin odpowiedzi — pytanie {index + 1}</label>
+                  <input id={`review-due-date-${index}`} type="date" max="9999-12-31"
+                    value={item.dueDate ?? ''} onChange={(event) => updateItem(key, index, (current) => ({
+                      ...current, dueDate: event.target.value,
+                    }))} />
+                </div>
+              </div>
               <label htmlFor={`review-answer-${index}`}>Odpowiedź — pytanie {index + 1}</label>
               <textarea id={`review-answer-${index}`} rows="2" maxLength={MAX_WORKSHOP_ANSWER_LENGTH}
                 value={item.answer ?? ''} onChange={(event) => updateItem(key, index, (current) => ({

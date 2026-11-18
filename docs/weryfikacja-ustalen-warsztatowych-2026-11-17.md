@@ -7,3 +7,5 @@ Do zamknięcia etapu pozostaje świadome wykorzystanie pozostałych ustaleń w p
 ## Odpowiedzi na pytania po warsztacie
 
 W sekcji „Pytania” wpisz odpowiedź i zaznacz „Potwierdzono odpowiedź” po jej uzgodnieniu. Licznik otwartych pytań uwzględnia także pytania z odpowiedzią roboczą. Edycja pytania lub odpowiedzi otwiera je ponownie, zachowując treść odpowiedzi do ponownego sprawdzenia. „Zapisz propozycję” zapisuje pytania, odpowiedzi i potwierdzenia w tej przeglądarce dla bieżącego procesu. Odpowiedzi pozostają w panelu warsztatu. Zastąpienie propozycji zawierającej odpowiedzi wymaga potwierdzenia.
+
+Przy pytaniu możesz też wskazać osobę lub zespół, który wróci z odpowiedzią, i uzgodniony termin. Oba pola są opcjonalne i zapisują się razem z propozycją. Zmiana osoby lub terminu zachowuje stan potwierdzenia odpowiedzi.

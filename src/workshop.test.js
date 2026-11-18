@@ -88,6 +88,18 @@ describe('review persistence', () => {
     }
     expect(loadWorkshopReview(s, A, transcript).review).toEqual(saved)
   })
+  it('rejects invalid owners and calendar dates before replacing a saved follow-up', () => {
+    const s = storage()
+    const question = { text: 'Kto zatwierdza?', status: 'question', assignee: 'Biuro Testowe', dueDate: '2028-02-29' }
+    const saved = { ...review(), questions: [question] }
+    saveWorkshopReview(s, A, transcript, saved)
+    for (const changes of [{ assignee: 42 }, { dueDate: '2027-02-29' }, { dueDate: '2028-04-31' }, { dueDate: '0000-01-01' }]) {
+      const invalid = { ...saved, questions: [{ ...question, ...changes }] }
+      expect(() => saveWorkshopReview(s, A, transcript, invalid)).toThrow()
+    }
+    expect(loadWorkshopReview(s, A, transcript).review).toEqual(saved)
+  })
+
   it('preserves data when saving fails', () => {
     const s = storage()
     saveWorkshopReview(s, A, transcript, review())
