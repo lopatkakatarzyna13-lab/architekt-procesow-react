@@ -1,8 +1,9 @@
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages'
 
-export default function PrintBpmnDetails({ steps, externalSteps, svg, error, variant = 'AS-IS' }) {
+export default function PrintBpmnDetails({ steps, externalSteps, externalLinks = [], svg, error, variant = 'AS-IS' }) {
   const messages = getBpmnMessages(steps)
   const pools = getExternalPools(messages)
+  const poolNames = new Map(pools)
   const extra = steps.flatMap((step) => (step.extraConnections || []).map((link) => ({ from: step.name, to: steps.find((item) => item.id === link.targetId)?.name || 'Nieznany krok', label: link.label })))
   const decisions = steps.filter((step) => step.extraConnections?.length && step.bpmnDecision)
   return <div className="print-bpmn-details">
@@ -17,6 +18,12 @@ export default function PrintBpmnDetails({ steps, externalSteps, svg, error, var
       const external = externalSteps.find((step) => step.id === message.externalStepId)?.name || message.external
       return <li key={`${message.stepId}-${message.index}`}>{message.direction === 'outgoing' ? own : external} → {message.direction === 'outgoing' ? external : own}: {message.label}</li>
     })}</ul></>}
+    {externalLinks.length > 0 && <>
+      <h4>Przekazania między uczestnikami zewnętrznymi</h4>
+      <ul>{externalLinks.map(({ source, target, label }, index) => (
+        <li key={index}>{poolNames.get(source) ?? source} → {poolNames.get(target) ?? target} — {label}</li>
+      ))}</ul>
+    </>}
     {externalSteps.length > 0 && <><h4>Działania uczestników zewnętrznych</h4>{pools.map(([key, name]) => {
       const actions = externalSteps.filter((action) => getExternalActionPool(action, messages, pools) === key)
       return actions.length > 0 && <div key={key}><p>{name}</p><ol>{actions.map((action) => <li key={action.id}>{action.name}</li>)}</ol></div>

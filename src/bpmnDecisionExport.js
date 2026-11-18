@@ -4,8 +4,8 @@ import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmn
 import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 export { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 
-export async function createDecisionBpmn({ steps, externalSteps = [], processName, startName, endName }) {
-  const error = getDecisionBpmnError(steps, externalSteps)
+export async function createDecisionBpmn({ steps, externalSteps = [], externalLinks = [], processName, startName, endName }) {
+  const error = getDecisionBpmnError(steps, externalSteps, externalLinks)
   if (error) throw new Error(error)
   const hasLanes = steps.some((step) => step.bpmnLane?.trim())
   const messages = getBpmnMessages(steps)
@@ -169,9 +169,36 @@ export async function createDecisionBpmn({ steps, externalSteps = [], processNam
       const label = moddle.create('bpmndi:BPMNLabel', { bounds: moddle.create('dc:Bounds', { x: labelX, y: labelY, width: 180, height: labelHeights[index] }) })
       return moddle.create('bpmndi:BPMNEdge', { id: `MessageEdge_${index + 1}`, bpmnElement: messageFlow, waypoint: points.map((point) => moddle.create('dc:Point', point)), label })
     })
+    const externalMessageEdges = externalLinks.map((link, index) => {
+      const source = poolByName.get(link.source)
+      const target = poolByName.get(link.target)
+      const messageFlow = moddle.create('bpmn:MessageFlow', {
+        id: `ExternalMessageFlow_${index + 1}`,
+        name: link.label.trim(),
+        sourceRef: source.participant,
+        targetRef: target.participant,
+      })
+      collaboration.messageFlows.push(messageFlow)
+      const portY = (pool) => {
+        const incident = externalLinks.filter((item) => poolByName.get(item.source) === pool || poolByName.get(item.target) === pool)
+        return pool.bounds.y + pool.bounds.height * (incident.indexOf(link) + 1) / (incident.length + 1)
+      }
+      const sourceY = portY(source)
+      const targetY = portY(target)
+      const poolRight = 10 + poolWidth
+      const x = poolRight + 80 + messages.length * 14 + index * 200
+      const waypoint = [
+        { x: poolRight, y: sourceY }, { x, y: sourceY },
+        { x, y: targetY }, { x: poolRight, y: targetY },
+      ].map((point) => moddle.create('dc:Point', point))
+      const label = moddle.create('bpmndi:BPMNLabel', {
+        bounds: moddle.create('dc:Bounds', { x: x + 10, y: (sourceY + targetY) / 2 - 22, width: 180, height: 44 }),
+      })
+      return moddle.create('bpmndi:BPMNEdge', { id: `ExternalMessageEdge_${index + 1}`, bpmnElement: messageFlow, waypoint, label })
+    })
     planeRoot = collaboration
     rootElements = [process, ...pools.flatMap(({ processRef }) => processRef ? [processRef] : []), collaboration]
-    planeElement = [mainShape, ...laneShapes, ...externalShapes, ...shapes, ...externalTaskShapes, ...edges, ...externalFlowEdges, ...messageEdges]
+    planeElement = [mainShape, ...laneShapes, ...externalShapes, ...shapes, ...externalTaskShapes, ...edges, ...externalFlowEdges, ...messageEdges, ...externalMessageEdges]
   }
   const plane = moddle.create('bpmndi:BPMNPlane', { id: 'Plane_1', bpmnElement: planeRoot, planeElement })
   const diagram = moddle.create('bpmndi:BPMNDiagram', { id: 'Diagram_1', plane })

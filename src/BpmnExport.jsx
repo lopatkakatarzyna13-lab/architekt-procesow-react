@@ -3,19 +3,19 @@ const BpmnPreview = lazy(() => import('./BpmnPreview'))
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { toBeBpmnScope } from './toBeBpmn'
 
-export default function BpmnExport({ steps, externalSteps = [], scope, saved, variant = 'as-is' }) {
+export default function BpmnExport({ steps, externalSteps = [], externalLinks = [], scope, saved, variant = 'as-is' }) {
   const [message, setMessage] = useState('')
   const [previewKey, setPreviewKey] = useState(null)
   const toBe = variant === 'to-be'
   const bpmnScope = toBe ? toBeBpmnScope(scope) : scope
-  const error = getDecisionBpmnError(steps, externalSteps)
-  const snapshot = JSON.stringify([steps, externalSteps, bpmnScope.processName, bpmnScope.processStart, bpmnScope.processEnd])
+  const error = getDecisionBpmnError(steps, externalSteps, externalLinks)
+  const snapshot = JSON.stringify([steps, externalSteps, externalLinks, bpmnScope.processName, bpmnScope.processStart, bpmnScope.processEnd])
   const previewVisible = saved && !error && previewKey === snapshot
   const exportFile = async () => {
     if (!saved || error) return
     try {
       const { createDecisionBpmn } = await import('./bpmnDecisionExport')
-      const xml = await createDecisionBpmn({ steps, externalSteps, processName: bpmnScope.processName, startName: bpmnScope.processStart, endName: bpmnScope.processEnd })
+      const xml = await createDecisionBpmn({ steps, externalSteps, externalLinks, processName: bpmnScope.processName, startName: bpmnScope.processStart, endName: bpmnScope.processEnd })
       const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
@@ -37,7 +37,7 @@ export default function BpmnExport({ steps, externalSteps = [], scope, saved, va
       <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={() => setPreviewKey(previewVisible ? null : snapshot)}>{previewVisible ? 'Ukryj podgląd BPMN' : 'Pokaż podgląd BPMN'}</button>
       <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={exportFile}>Pobierz BPMN 2.0</button>
     </div>
-    {previewVisible && <Suspense fallback={<p role="status">Przygotowuję podgląd BPMN…</p>}><BpmnPreview key={snapshot} steps={steps} externalSteps={externalSteps} scope={bpmnScope} variant={variant} /></Suspense>}
+    {previewVisible && <Suspense fallback={<p role="status">Przygotowuję podgląd BPMN…</p>}><BpmnPreview key={snapshot} steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={bpmnScope} variant={variant} /></Suspense>}
     {message && <p role="status">{message}</p>}
   </section>
 }

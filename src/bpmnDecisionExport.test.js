@@ -151,7 +151,10 @@ describe('explicit BPMN decisions', () => {
       { id: 'bank-action', name: 'Zwrot potwierdzenia', participant: 'Bank' },
     ]
     input[1].bpmnMessages[0].externalStepId = 'bank-action'
-    const xml = await createDecisionBpmn({ steps: input, externalSteps })
+    const externalLinks = [{ source: 'biuro', target: 'bank', label: 'Zlecenie' }]
+    expect(getDecisionBpmnError(input, externalSteps, [{ ...externalLinks[0], target: 'biuro' }])).toMatch(/dwa różne/)
+    expect(getDecisionBpmnError(input, externalSteps, [{ ...externalLinks[0], target: 'nieznany' }])).toMatch(/istniejące baseny/)
+    const xml = await createDecisionBpmn({ steps: input, externalSteps, externalLinks })
     const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
     expect(warnings).toEqual([])
     const collaboration = rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
@@ -159,6 +162,9 @@ describe('explicit BPMN decisions', () => {
       name, processRef.flowElements.map((item) => item.name),
     ])).toEqual([['Biuro', ['Sprawdzenie dokumentów']], ['Bank', ['Zwrot potwierdzenia']]])
     expect(collaboration.messageFlows[1].sourceRef.name).toBe('Zwrot potwierdzenia')
+    const directMessage = collaboration.messageFlows.find((flow) => flow.name === 'Zlecenie')
+    expect(directMessage.sourceRef).toBe(collaboration.participants[1])
+    expect(directMessage.targetRef).toBe(collaboration.participants[2])
     input[1].bpmnMessages[0].externalStepId = 'office-action'
     expect(getDecisionBpmnError(input, externalSteps)).toMatch(/innego basenu/)
     input[1].bpmnMessages = [null]

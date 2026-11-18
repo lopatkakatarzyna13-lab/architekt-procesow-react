@@ -1,6 +1,6 @@
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
 
-export function getDecisionBpmnError(steps, externalSteps = []) {
+export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = []) {
   if (!Array.isArray(steps) || !steps.length) return 'Dodaj i zapisz co najmniej jeden krok.'
   if (!Array.isArray(externalSteps) || externalSteps.some((step) => !step || typeof step.id !== 'string' || !step.id || typeof step.name !== 'string' || !step.name.trim() || step.name.trim().length > 100 || (step.participant !== undefined && (typeof step.participant !== 'string' || !step.participant.trim() || step.participant.trim().length > 100))) || new Set(externalSteps.map((step) => step.id)).size !== externalSteps.length) return 'Sprawdź listę działań zewnętrznych.'
   const externalIds = new Set(externalSteps.map((step) => step.id))
@@ -31,6 +31,15 @@ export function getDecisionBpmnError(steps, externalSteps = []) {
   const messages = getBpmnMessages(steps)
   const pools = getExternalPools(messages)
   const poolKeys = new Set(pools.map(([key]) => key))
+  if (!Array.isArray(externalLinks)) return 'Sprawdź przekazania między basenami zewnętrznymi.'
+  const linkKeys = new Set()
+  for (const link of externalLinks) {
+    if (!link || !poolKeys.has(link.source) || !poolKeys.has(link.target) || link.source === link.target) return 'Przekazanie musi wskazywać dwa różne, istniejące baseny zewnętrzne.'
+    if (typeof link.label !== 'string' || !link.label.trim() || link.label.trim().length > 100) return 'Uzupełnij nazwę przekazania między basenami.'
+    const key = JSON.stringify([link.source, link.target, link.label.trim().toLocaleLowerCase('pl')])
+    if (linkKeys.has(key)) return 'Usuń powtórzone przekazanie między basenami.'
+    linkKeys.add(key)
+  }
   const actionPools = new Map(externalSteps.map((action) => [action.id, getExternalActionPool(action, messages, pools)]))
   for (const message of messages) {
     if (message.externalStepId && actionPools.get(message.externalStepId) !== message.external.trim().toLocaleLowerCase('pl')) return 'Wiadomość wskazuje działanie z innego basenu.'

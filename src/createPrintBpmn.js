@@ -2,8 +2,8 @@ import { createDecisionBpmn } from './bpmnDecisionExport'
 
 // Build exactly the same BPMN model as the interactive preview. The temporary
 // container stays off-screen but measurable until SVG serialization completes.
-export async function createPrintBpmn({ steps, externalSteps, scope }) {
-  const xml = await createDecisionBpmn({ steps, externalSteps, processName: scope.processName, startName: scope.processStart, endName: scope.processEnd })
+export async function createPrintBpmn({ steps, externalSteps, externalLinks, scope }) {
+  const xml = await createDecisionBpmn({ steps, externalSteps, externalLinks, processName: scope.processName, startName: scope.processStart, endName: scope.processEnd })
   const { default: Viewer } = await import('bpmn-js/lib/Viewer')
   const container = document.createElement('div')
   Object.assign(container.style, { position: 'fixed', left: '-10000px', top: '0', width: '1200px', height: '800px' })

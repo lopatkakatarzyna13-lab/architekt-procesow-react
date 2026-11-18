@@ -32,6 +32,7 @@ import BpmnExport from './BpmnExport'
 import BpmnDecisions from './BpmnDecisions'
 import BpmnLanes from './BpmnLanes'
 import BpmnMessages from './BpmnMessages'
+import BpmnExternalMessages from './BpmnExternalMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
@@ -169,6 +170,7 @@ function loadSavedAsIs() {
       description: savedAsIs.description ?? '',
       steps: Array.isArray(savedAsIs.steps) ? savedAsIs.steps : [],
       externalSteps: Array.isArray(savedAsIs.externalSteps) ? savedAsIs.externalSteps : [],
+      externalLinks: Array.isArray(savedAsIs.externalLinks) ? savedAsIs.externalLinks : [],
       isSaved: Boolean(savedAsIs.savedAt),
     }
   } catch {
@@ -221,6 +223,7 @@ function loadSavedToBe() {
         ? savedToBe.steps.map((step) => ({ ...emptyToBeStep, ...step }))
         : [],
       externalSteps: Array.isArray(savedToBe.externalSteps) ? savedToBe.externalSteps : [],
+      externalLinks: Array.isArray(savedToBe.externalLinks) ? savedToBe.externalLinks : [],
       copiedFromAsIs: Boolean(savedToBe.copiedFromAsIs),
       isSaved: Boolean(savedToBe.savedAt),
     }
@@ -998,6 +1001,8 @@ function AsIsScreen({
   onAddBpmnMessage,
   onRemoveBpmnMessage,
   externalSteps,
+  externalLinks,
+  onExternalLinksChange,
   onExternalStepsChange,
   onBpmnDraftChange,
   bpmnDraftDirty,
@@ -1071,7 +1076,8 @@ function AsIsScreen({
         <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalSteps steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
         <BpmnMessages steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
-        <BpmnExport steps={steps} externalSteps={externalSteps} scope={scope} saved={saved && !bpmnDraftDirty} />
+        <BpmnExternalMessages steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={onBpmnDraftChange} variant="AS-IS" />
+        <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>
       ) : (
         <DescribeAsIs
@@ -1986,6 +1992,8 @@ function ToBeScreen({
   onRemoveConnection,
   onSaveBpmnDecision,
   externalSteps,
+  externalLinks,
+  onExternalLinksChange,
   onSaveBpmnLane,
   onExternalStepsChange,
   onAddBpmnMessage,
@@ -2054,7 +2062,8 @@ function ToBeScreen({
       <BpmnLanes steps={steps} variant="TO-BE" onSave={onSaveBpmnLane} onDraftChange={markBpmnDraft} />
       {steps.length > 0 && <BpmnExternalSteps steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
       <BpmnMessages steps={steps} externalSteps={externalSteps} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
-      <BpmnExport steps={steps} externalSteps={externalSteps} scope={scope} saved={saved && !bpmnDraftDirty} variant="to-be" />
+      <BpmnExternalMessages steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={markBpmnDraft} variant="TO-BE" />
+      <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} variant="to-be" />
 
       {saved && (
         <div className="save-message success-message" role="status">
@@ -2880,6 +2889,8 @@ function PrintReport({
   asIsSteps,
   externalSteps,
   toBeExternalSteps,
+  externalLinks,
+  toBeExternalLinks,
   printBpmn,
   findings,
   toBeAssumptions,
@@ -2928,7 +2939,7 @@ function PrintReport({
           title="Mapy procesu"
           description="Statyczny przebieg procesów AS-IS i TO-BE."
         />
-        {startMethod === 'steps' && <PrintBpmnDetails steps={asIsSteps} externalSteps={externalSteps} svg={printBpmn.svg} error={printBpmn.error} />}
+        {startMethod === 'steps' && <PrintBpmnDetails steps={asIsSteps} externalSteps={externalSteps} externalLinks={externalLinks} svg={printBpmn.svg} error={printBpmn.error} />}
         <PrintProcessMap
           title="Uproszczony przebieg podstawowy AS-IS"
           steps={asIsSteps}
@@ -2937,7 +2948,7 @@ function PrintReport({
           findings={findings}
           unavailable={startMethod !== 'steps'}
         />
-        <PrintBpmnDetails steps={toBeSteps} externalSteps={toBeExternalSteps} variant="TO-BE" svg={printBpmn.toBeSvg} error={printBpmn.toBeError} />
+        <PrintBpmnDetails steps={toBeSteps} externalSteps={toBeExternalSteps} externalLinks={toBeExternalLinks} variant="TO-BE" svg={printBpmn.toBeSvg} error={printBpmn.toBeError} />
         <PrintProcessMap
           title="Uproszczony przebieg TO-BE"
           steps={toBeSteps}
@@ -2989,6 +3000,8 @@ function ReportScreen({
   asIsSteps,
   externalSteps,
   toBeExternalSteps,
+  externalLinks,
+  toBeExternalLinks,
   printBpmn,
   printPreparing,
   findings,
@@ -3068,6 +3081,8 @@ function ReportScreen({
         asIsSteps={asIsSteps}
         externalSteps={externalSteps}
         toBeExternalSteps={toBeExternalSteps}
+        externalLinks={externalLinks}
+        toBeExternalLinks={toBeExternalLinks}
         printBpmn={printBpmn}
         findings={findings}
         toBeAssumptions={toBeAssumptions}
@@ -3238,6 +3253,7 @@ function App() {
   const [scopeSaveError, setScopeSaveError] = useState(false)
   const [asIsDescription, setAsIsDescription] = useState(savedAsIs.description)
   const [steps, setSteps] = useState(savedAsIs.steps)
+  const [externalLinks, setExternalLinks] = useState(savedAsIs.externalLinks ?? [])
   const [externalSteps, setExternalSteps] = useState(savedAsIs.externalSteps || [])
   const [stepDraft, setStepDraft] = useState(emptyStep)
   const [editingStepId, setEditingStepId] = useState(null)
@@ -3263,6 +3279,7 @@ function App() {
     ),
   )
   const [toBeSteps, setToBeSteps] = useState(savedToBe.steps)
+  const [toBeExternalLinks, setToBeExternalLinks] = useState(savedToBe.externalLinks ?? [])
   const [toBeExternalSteps, setToBeExternalSteps] = useState(savedToBe.externalSteps ?? [])
   const [toBeStepDraft, setToBeStepDraft] = useState(emptyToBeStep)
   const [editingToBeStepId, setEditingToBeStepId] = useState(null)
@@ -3650,6 +3667,7 @@ const openSavedProcess = (process) => {
   setAsIsDescription(nextAsIs.description)
   setSteps(nextAsIs.steps)
   setExternalSteps(nextAsIs.externalSteps || [])
+  setExternalLinks(nextAsIs.externalLinks ?? [])
   setAsIsSaved(nextAsIs.isSaved)
   setFindings(nextAnalysis.findings)
   setAnalysisSaved(nextAnalysis.isSaved)
@@ -3661,6 +3679,7 @@ const openSavedProcess = (process) => {
   )
   setToBeSteps(nextToBe.steps)
   setToBeExternalSteps(nextToBe.externalSteps ?? [])
+  setToBeExternalLinks(nextToBe.externalLinks ?? [])
   setToBeSaved(nextToBe.isSaved)
   setCopiedFromAsIs(nextToBe.copiedFromAsIs)
   setStakeholders(
@@ -3789,7 +3808,7 @@ const openSavedProcess = (process) => {
     try {
       const result = appendWorkshopSteps(steps, names, () => globalThis.crypto.randomUUID())
       if (result.added.length) {
-        localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: result.steps, externalSteps, startMethod, savedAt: null }))
+        localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: result.steps, externalSteps, externalLinks, startMethod, savedAt: null }))
         setSteps(result.steps)
         setAsIsSaved(false)
         setAsIsSaveError(false)
@@ -3822,7 +3841,7 @@ const openSavedProcess = (process) => {
 
   const saveConnectionChange = (nextSteps) => {
     try {
-      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: nextSteps, externalSteps, startMethod, savedAt: null }))
+      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: nextSteps, externalSteps, externalLinks, startMethod, savedAt: null }))
       setSteps(nextSteps)
       setAsIsSaved(false)
       setAsIsSaveError(false)
@@ -3854,10 +3873,20 @@ const openSavedProcess = (process) => {
   }
   const changeExternalSteps = (next) => {
     try {
-      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps: next, startMethod, savedAt: null }))
+      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps: next, externalLinks, startMethod, savedAt: null }))
       setExternalSteps(next); setAsIsSaved(false); setAsIsSaveError(false)
       return { ok: true }
     } catch { return { error: 'Nie udało się zapisać działań zewnętrznych.' } }
+  }
+  const changeExternalLinks = (next) => {
+    try {
+      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps, externalLinks: next, startMethod, savedAt: null }))
+      setExternalLinks(next)
+      setAsIsSaved(false)
+      return { ok: true }
+    } catch {
+      return { error: 'Nie udało się zapisać przekazań między basenami.' }
+    }
   }
   const removeMessage = (stepId, index) => saveConnectionChange(removeBpmnMessage(steps, stepId, index))
 
@@ -3891,6 +3920,7 @@ try {
           description: asIsDescription,
           steps: nextSteps,
           externalSteps,
+          externalLinks,
           startMethod,
           savedAt: null,
         }),
@@ -3985,6 +4015,7 @@ try {
           description: asIsDescription,
           steps,
           externalSteps,
+          externalLinks,
           startMethod,
           savedAt: new Date().toISOString(),
         }),
@@ -4356,6 +4387,7 @@ try {
           selectedFindingIds,
           steps: toBeSteps,
           externalSteps: toBeExternalSteps,
+          externalLinks: toBeExternalLinks,
           copiedFromAsIs,
           savedAt: new Date().toISOString(),
         }),
@@ -4559,12 +4591,12 @@ try {
     setPrintPreparing(true)
     let bpmn = { svg: '', error: '', toBeSvg: '', toBeError: '' }
     if (startMethod === 'steps') {
-      const error = getDecisionBpmnError(steps, externalSteps)
+      const error = getDecisionBpmnError(steps, externalSteps, externalLinks)
       if (error) bpmn.error = error
       else {
         try {
           const { createPrintBpmn } = await import('./createPrintBpmn')
-          const svg = await createPrintBpmn({ steps, externalSteps, scope: formData })
+          const svg = await createPrintBpmn({ steps, externalSteps, externalLinks, scope: formData })
           const image = new Image()
           image.src = svg
           if (typeof image.decode === 'function') await image.decode()
@@ -4572,12 +4604,12 @@ try {
         } catch { bpmn.error = 'nie udało się przygotować diagramu; sprawdź podgląd BPMN i spróbuj ponownie' }
       }
     }
-    const toBeError = getDecisionBpmnError(toBeSteps, toBeExternalSteps)
+    const toBeError = getDecisionBpmnError(toBeSteps, toBeExternalSteps, toBeExternalLinks)
     if (toBeError) bpmn.toBeError = toBeError
     else {
       try {
         const { createPrintBpmn } = await import('./createPrintBpmn')
-        const svg = await createPrintBpmn({ steps: toBeSteps, externalSteps: toBeExternalSteps, scope: toBeBpmnScope(formData) })
+        const svg = await createPrintBpmn({ steps: toBeSteps, externalSteps: toBeExternalSteps, externalLinks: toBeExternalLinks, scope: toBeBpmnScope(formData) })
         const image = new Image()
         image.src = svg
         if (typeof image.decode === 'function') await image.decode()
@@ -4703,6 +4735,8 @@ try {
             onSaveBpmnLane={saveBpmnLane}
             externalSteps={externalSteps}
             onExternalStepsChange={changeExternalSteps}
+            externalLinks={externalLinks}
+            onExternalLinksChange={changeExternalLinks}
             onAddBpmnMessage={addMessage}
             onRemoveBpmnMessage={removeMessage}
             onBpmnDraftChange={onBpmnDraftChange}
@@ -4781,6 +4815,12 @@ try {
             onRemoveConnection={(...args) => changeToBeConnections(removeProcessConnection, ...args)}
             onSaveBpmnDecision={(...args) => changeToBeConnections(setProcessDecision, ...args)}
             externalSteps={toBeExternalSteps}
+            externalLinks={toBeExternalLinks}
+            onExternalLinksChange={(next) => {
+              setToBeExternalLinks(next)
+              setToBeSaved(false)
+              return {}
+            }}
             onSaveBpmnLane={(...args) => changeToBeConnections(setProcessLane, ...args)}
             onExternalStepsChange={(next) => {
               setToBeExternalSteps(next)
@@ -4801,6 +4841,8 @@ try {
             asIsSteps={steps}
             externalSteps={externalSteps}
             toBeExternalSteps={toBeExternalSteps}
+            externalLinks={externalLinks}
+            toBeExternalLinks={toBeExternalLinks}
             printBpmn={printBpmn}
             printPreparing={printPreparing}
             findings={findings}
