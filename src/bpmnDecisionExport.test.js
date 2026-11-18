@@ -9,6 +9,23 @@ const steps = () => [
 ]
 
 describe('explicit BPMN decisions', () => {
+  it('keeps a split and its return path clear of an expanded report task', async () => {
+    const input = steps().map((step) => ({ ...step, bpmnLane: 'HR' }))
+    const xml = await createDecisionBpmn({
+      steps: input,
+      getTaskSize: (name) => name === 'Kontrola' ? { width: 152, height: 180 } : { width: 100, height: 80 },
+    })
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+    expect(warnings).toEqual([])
+    const elements = rootElement.diagrams[0].plane.planeElement
+    const item = (id) => elements.find(({ bpmnElement }) => bpmnElement.id === id)
+    const task = item('Task_2').bounds
+    expect(item('Decision_2').bounds.x).toBeGreaterThan(task.x + task.width)
+    expect(task.y + task.height).toBeLessThan(item('Lane_1').bounds.y + item('Lane_1').bounds.height)
+    const returnFlow = elements.find(({ bpmnElement }) => bpmnElement.name === 'Brak danych')
+    expect(returnFlow.waypoint[1].y).toBeLessThan(task.y)
+  })
+
   it('creates named exclusive split, merge and the requested return with diagram coordinates', async () => {
     const { rootElement, warnings } = await new BpmnModdle().fromXML(await createDecisionBpmn({ steps: steps(), processName: 'Fikcyjny proces' }))
     expect(warnings).toEqual([])

@@ -13,7 +13,9 @@ export function getLinearBpmnError(steps) {
   return ''
 }
 
-export async function createLinearBpmn({ steps, processName, startName, endName }) {
+export const defaultBpmnTaskSize = () => ({ width: 100, height: 80 })
+
+export async function createLinearBpmn({ steps, processName, startName, endName, getTaskSize = defaultBpmnTaskSize }) {
   const error = getLinearBpmnError(steps)
   if (error) throw new Error(error)
   const { BpmnModdle } = await import('bpmn-moddle')
@@ -30,11 +32,16 @@ export async function createLinearBpmn({ steps, processName, startName, endName 
     return flow
   })
   process.flowElements = [...nodes, ...flows]
-  const sizes = nodes.map((node, index) => ({ x: 60 + index * 180, y: node === start || node === end ? 112 : 90, width: node === start || node === end ? 36 : 100, height: node === start || node === end ? 36 : 80 }))
+  const taskSizes = tasks.map((task) => getTaskSize(task.name))
+  const centerY = Math.max(130, ...taskSizes.map(({ height }) => height / 2 + 30))
+  const sizes = nodes.map((node, index) => {
+    const size = node === start || node === end ? { width: 36, height: 36 } : taskSizes[index - 1]
+    return { x: 60 + index * 180, y: centerY - size.height / 2, ...size }
+  })
   const shapes = nodes.map((node, index) => moddle.create('bpmndi:BPMNShape', { id: `Shape_${index + 1}`, bpmnElement: node, bounds: moddle.create('dc:Bounds', sizes[index]) }))
   const edges = flows.map((flow, index) => moddle.create('bpmndi:BPMNEdge', {
     id: `Edge_${index + 1}`, bpmnElement: flow,
-    waypoint: [moddle.create('dc:Point', { x: sizes[index].x + sizes[index].width, y: 130 }), moddle.create('dc:Point', { x: sizes[index + 1].x, y: 130 })],
+    waypoint: [moddle.create('dc:Point', { x: sizes[index].x + sizes[index].width, y: centerY }), moddle.create('dc:Point', { x: sizes[index + 1].x, y: centerY })],
   }))
   const plane = moddle.create('bpmndi:BPMNPlane', { id: 'Plane_1', bpmnElement: process, planeElement: [...shapes, ...edges] })
   const diagram = moddle.create('bpmndi:BPMNDiagram', { id: 'Diagram_1', plane })

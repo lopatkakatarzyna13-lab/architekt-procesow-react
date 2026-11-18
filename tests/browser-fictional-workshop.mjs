@@ -358,6 +358,27 @@ try {
   assert.equal(await bpmnImage.count(), 1, 'report must include the BPMN diagram')
   assert.ok(await bpmnImage.evaluate((image) => image.complete && image.naturalWidth > 0), 'BPMN diagram must be decoded before print')
   assert.ok(await page.locator('.print-tobe-bpmn').evaluate((image) => image.complete && image.naturalWidth > 0), 'TO-BE BPMN diagram must be decoded before print')
+  const longLabelFits = await page.evaluate(async () => {
+    const { createPrintBpmn } = await import('/src/createPrintBpmn.js')
+    const name = 'HR sprawdza, czy kierownik podał stanowisko i opisał warunki pracy, weryfikuje kompletność informacji, potwierdza dane w formularzu i zapisuje wynik kontroli'
+    const uri = await createPrintBpmn({ steps: [{ id: 'review', name }], scope: { processName: 'Skierowanie na badania wstępne' } })
+    const svg = new DOMParser().parseFromString(decodeURIComponent(uri.split(',')[1]), 'image/svg+xml').documentElement
+    svg.style.position = 'fixed'
+    svg.style.left = '-10000px'
+    document.body.appendChild(svg)
+    try {
+      const task = svg.querySelector('[data-element-id="Task_1"]')
+      const label = task.querySelector('text')
+      const text = [...label.querySelectorAll('tspan')].map((line) => line.textContent.trim()).join(' ')
+      const bounds = label.getBBox()
+      const box = task.querySelector('rect').getBBox()
+      return text === name && bounds.x >= box.x && bounds.y >= box.y
+        && bounds.x + bounds.width <= box.x + box.width && bounds.y + bounds.height <= box.y + box.height
+    } finally {
+      svg.remove()
+    }
+  })
+  assert.ok(longLabelFits, 'the complete long task label must fit inside the SVG task')
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true, ...(process.env.FICTIONAL_PDF_PATH ? { path: process.env.FICTIONAL_PDF_PATH } : {}) })
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')

@@ -29,4 +29,18 @@ describe('linear BPMN export', () => {
     }
     expect(getLinearBpmnError(steps)).toBe('')
   })
+
+  it('keeps the flow attached when a report label requires a larger task', async () => {
+    const xml = await createLinearBpmn({
+      steps,
+      getTaskSize: () => ({ width: 152, height: 240 }),
+    })
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+    expect(warnings).toEqual([])
+    const elements = rootElement.diagrams[0].plane.planeElement
+    const bounds = elements.find(({ bpmnElement }) => bpmnElement.id === 'Task_1').bounds
+    const flow = elements.find(({ bpmnElement }) => bpmnElement.id === 'Flow_2')
+    expect(bounds).toMatchObject({ width: 152, height: 240 })
+    expect(flow.waypoint[0]).toMatchObject({ x: bounds.x + bounds.width, y: bounds.y + bounds.height / 2 })
+  })
 })
