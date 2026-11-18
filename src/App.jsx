@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -27,7 +27,7 @@ import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
-import { appendWorkshopSteps, loadWorkshop, loadWorkshopReview } from './workshop'
+import { appendWorkshopSteps, getWorkshopStorageKeys, loadWorkshop, loadWorkshopReview } from './workshop'
 import ProcessConnections from './ProcessConnections'
 import BpmnExport from './BpmnExport'
 import BpmnDecisions from './BpmnDecisions'
@@ -47,6 +47,8 @@ const ANALYSIS_STORAGE_KEY = 'architekt-procesow:analysis'
 const TO_BE_STORAGE_KEY = 'architekt-procesow:to-be'
 const REPORT_STORAGE_KEY = 'architekt-procesow:report'
 const PROCESSES_STORAGE_KEY = 'architekt-procesow:processes'
+const SCREEN_STORAGE_KEY = 'architekt-procesow-screen-to-open'
+const PROCESS_SCREENS = ['scope', 'as-is', 'analysis', 'to-be', 'report']
 const PROCESS_SECTION_STORAGE_KEYS = [
   STORAGE_KEY,
   AS_IS_STORAGE_KEY,
@@ -1065,7 +1067,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} autosaveDraft canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
 
       {isStepsVariant ? (
         <>
@@ -2698,6 +2700,7 @@ function StakeholdersSection({
   onEdit,
   onDelete,
   onCancel,
+  readOnly,
 }) {
   return (
     <section className="report-section stakeholder-section">
@@ -2706,7 +2709,7 @@ function StakeholdersSection({
         title="Interesariusze procesu"
         description="Osoby, role i zespoły zaangażowane w realizację oraz wynik procesu."
       />
-      <div className="finding-form-panel stakeholder-form">
+      {!readOnly && <div className="finding-form-panel stakeholder-form">
         <div className="form-grid">
           <FormField
             id="stakeholderName"
@@ -2730,7 +2733,7 @@ function StakeholdersSection({
             {editingId ? 'Zapisz zmiany' : 'Dodaj interesariusza'}
           </button>
         </div>
-      </div>
+      </div>}
       <div className="stakeholder-list">
         {stakeholders.map((item) => (
           <article key={item.id}>
@@ -2745,10 +2748,10 @@ function StakeholdersSection({
               {item.expectations && <p><strong>Oczekiwania:</strong> {item.expectations}</p>}
               {item.engagement && <p><strong>Zaangażowanie:</strong> {item.engagement}</p>}
             </div>
-            <div className="finding-actions">
+            {!readOnly && <div className="finding-actions">
               <button type="button" onClick={() => onEdit(item)}>✎ Edytuj</button>
               <button className="delete-finding" type="button" onClick={() => onDelete(item.id)}>× Usuń</button>
-            </div>
+            </div>}
           </article>
         ))}
       </div>
@@ -2756,7 +2759,7 @@ function StakeholdersSection({
   )
 }
 
-function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
+function RaciSection({ steps, stakeholders, raci, errors, onChange, readOnly }) {
   const options = [
     ['', '—'],
     ['R', 'R'],
@@ -2803,6 +2806,7 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
                           <select
                             className={`raci-select raci-${value.toLowerCase()}`}
                             value={value}
+                            disabled={readOnly}
                             onChange={(event) => onChange(step.id, item.id, event.target.value)}
                             aria-label={`${step.name}: ${item.name}`}
                             aria-describedby={errors[step.id]?.length ? `raci-errors-${step.id}` : undefined}
@@ -3162,6 +3166,7 @@ function WorkshopQuestionDetails({ question }) {
 
 function ReportScreen({
   processId,
+  completed,
   scope,
   startMethod,
   asIsDescription,
@@ -3193,6 +3198,7 @@ function ReportScreen({
   onRaciChange,
   onBack,
   onSave,
+  onFinish,
   onExport,
   printGeneratedAt,
 }) {
@@ -3246,8 +3252,9 @@ function ReportScreen({
         onEdit={onEditStakeholder}
         onDelete={onDeleteStakeholder}
         onCancel={onCancelStakeholder}
+        readOnly={completed}
       />
-      <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} onChange={onRaciChange} />
+      <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} onChange={onRaciChange} readOnly={completed} />
       <Recommendations findings={findings} toBeSteps={toBeSteps} selectedFindingIds={selectedFindingIds} />
       {(workshopQuestions.length > 0 || questionError) && (
         <section className="report-section report-workshop-questions">
@@ -3280,8 +3287,11 @@ function ReportScreen({
         W oknie drukowania wybierz drukarkę „Zapisz jako PDF”.
       </p>
       <div className="form-actions">
-        <button className="back-button" type="button" onClick={onBack}><span aria-hidden="true">←</span>Wróć do TO-BE</button>
-        <button className="save-button" type="button" onClick={onSave}>Zapisz raport<span aria-hidden="true">✓</span></button>
+        {!completed && <>
+          <button className="back-button" type="button" onClick={onBack}><span aria-hidden="true">←</span>Wróć do TO-BE</button>
+          <button className="save-button" type="button" onClick={onSave}>Zapisz raport<span aria-hidden="true">✓</span></button>
+          {saved && <button className="back-button" type="button" onClick={onFinish}>Zakończ wersję</button>}
+        </>}
         <button className="export-button" type="button" onClick={handleExport} disabled={printPreparing}>
           {printPreparing ? 'Przygotowuję PDF…' : 'Eksportuj do PDF'}
           <span aria-hidden="true">↗</span>
@@ -3310,7 +3320,19 @@ function ReportScreen({
     </section>
   )
 }
-function ProcessesScreen({ processes, onOpen, onDelete, currentId, onBack }) {
+function ProcessesScreen({ processes, onOpen, onDelete, onCreateVersion, currentId, onBack }) {
+  const series = new Map()
+  for (const process of processes.filter((item) => item && typeof item === 'object')) {
+    const key = process.seriesId ?? process.id
+    if (!series.has(key)) series.set(key, [])
+    series.get(key).push(process)
+  }
+  const groupedProcesses = [...series.values()].flat()
+  const latestCompletedIds = new Set([...series.values()].flatMap((versions) => {
+    const latest = versions.reduce((current, process) => process.status === 'completed'
+      && (current === null || (process.version ?? 1) > (current.version ?? 1)) ? process : current, null)
+    return latest ? [latest.id] : []
+  }))
   return (
     <section className="processes-screen">
       <div className="processes-header">
@@ -3326,19 +3348,21 @@ function ProcessesScreen({ processes, onOpen, onDelete, currentId, onBack }) {
         </button>
       </div>
 
-      {processes.length === 0 ? (
+      {groupedProcesses.length === 0 ? (
         <div className="processes-empty">
           <h3>Nie masz jeszcze zapisanych procesów</h3>
           <p>
-            Pierwszy proces pojawi się tutaj po wybraniu opcji „Nowy proces”.
+            Pierwszy szkic pojawi się tutaj po zapisaniu zakresu procesu.
           </p>
         </div>
       ) : (
         <div className="processes-list">
-          {processes.map((process) => (
+          {groupedProcesses.map((process) => (
             <article className="process-card" key={process.id}>
               <div>
                 <h3>{process.name}</h3>
+                {process.status && <p>Wersja {process.version ?? 1} · {process.status === 'completed' ? 'Zakończona' : 'W toku'}</p>}
+                {latestCompletedIds.has(process.id) && <small>Aktualna wersja</small>}
                 <p>
                   Zapisano:{' '}
                   {new Date(process.savedAt).toLocaleString('pl-PL')}
@@ -3352,6 +3376,9 @@ function ProcessesScreen({ processes, onOpen, onDelete, currentId, onBack }) {
               >
                 Otwórz proces
               </button>
+              {process.status === 'completed' && (
+                <button type="button" className="back-button" onClick={() => onCreateVersion(process)}>Utwórz nową wersję</button>
+              )}
               <button type="button" className="back-button" aria-label={`Usuń proces ${process.name}`} onClick={() => onDelete(process)}>
                 Usuń proces
               </button>
@@ -3373,6 +3400,16 @@ function loadSavedProcesses() {
     return { processes: savedProcesses, error: '' }
   } catch {
     return { processes: [], error: 'Nie można odczytać biblioteki procesów. Istniejący zapis nie został nadpisany. Wstrzymaj zapis do biblioteki i sprawdź dane.' }
+  }
+}
+
+function readProcessSections() {
+  return {
+    scope: localStorage.getItem(STORAGE_KEY),
+    asIs: localStorage.getItem(AS_IS_STORAGE_KEY),
+    analysis: localStorage.getItem(ANALYSIS_STORAGE_KEY),
+    toBe: localStorage.getItem(TO_BE_STORAGE_KEY),
+    report: localStorage.getItem(REPORT_STORAGE_KEY),
   }
 }
 
@@ -3423,6 +3460,11 @@ function App() {
   }
   const [initialLibrary] = useState(loadSavedProcesses)
   const [savedProcesses, setSavedProcesses] = useState(initialLibrary.processes)
+  const libraryRef = useRef(initialLibrary.processes)
+  const updateLibrary = (processes) => {
+    libraryRef.current = processes
+    setSavedProcesses(processes)
+  }
   const [processIdentityState, setProcessIdentityState] = useState(() => {
     try {
       return {
@@ -3445,10 +3487,26 @@ function App() {
   const [savedAnalysis] = useState(loadSavedAnalysis)
   const [savedToBe] = useState(loadSavedToBe)
   const [savedReport] = useState(loadSavedReport)
-  const [screen, setScreen] = useState(
-  () =>
-    sessionStorage.getItem('architekt-procesow-screen-to-open') || 'start'
-)
+  const [initialDraft] = useState(() => initialLibrary.processes.find((process) =>
+    isValidProcessId(process?.id) && process.id.toLowerCase() === processIdentityState.id?.toLowerCase())?.draft)
+  const [screen, setScreen] = useState(() => {
+    const draft = initialLibrary.processes.find((process) =>
+      isValidProcessId(process?.id) && process.id.toLowerCase() === processIdentityState.id?.toLowerCase())
+    try {
+      const remembered = sessionStorage.getItem(SCREEN_STORAGE_KEY)
+      if (remembered === 'processes') return remembered
+      if (draft?.status !== 'completed' && PROCESS_SCREENS.includes(remembered)) return remembered
+    } catch {
+      // Resume from the locally saved process when the tab state is unavailable.
+    }
+    if (!processIdentityState.id || !savedScope.data.processName.trim()) return 'start'
+    if (draft?.status === 'completed') return 'report'
+    if (PROCESS_SCREENS.includes(draft?.lastScreen)) return draft.lastScreen
+    if (savedReport.isSaved) return 'report'
+    if (savedToBe.isSaved) return 'to-be'
+    if (savedAnalysis.isSaved) return 'analysis'
+    return 'as-is'
+  })
   useEffect(() => {
     if (!['as-is', 'analysis', 'to-be', 'report'].includes(screen)) return
     try {
@@ -3460,58 +3518,47 @@ function App() {
   const [screenBeforeProcesses, setScreenBeforeProcesses] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
   const [workMode, setWorkMode] = useState(savedScope.workMode)
-    useEffect(() => {
-    const currentScope = loadSavedScope()
-
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        ...currentScope,
-        workMode,
-      }),
-    )
-  }, [workMode])
-  const [formData, setFormData] = useState(savedScope.data)
+  const [formData, setFormData] = useState(initialDraft?.scope ?? savedScope.data)
   const [errors, setErrors] = useState({})
   const [scopeSaveError, setScopeSaveError] = useState(false)
-  const [asIsDescription, setAsIsDescription] = useState(savedAsIs.description)
-  const [steps, setSteps] = useState(savedAsIs.steps)
+  const [asIsDescription, setAsIsDescription] = useState(initialDraft?.asIs?.description ?? savedAsIs.description)
+  const [steps, setSteps] = useState(initialDraft?.asIs?.steps ?? savedAsIs.steps)
   const [externalLinks, setExternalLinks] = useState(savedAsIs.externalLinks ?? [])
   const [externalSteps, setExternalSteps] = useState(savedAsIs.externalSteps || [])
-  const [stepDraft, setStepDraft] = useState(emptyStep)
-  const [editingStepId, setEditingStepId] = useState(null)
+  const [stepDraft, setStepDraft] = useState(initialDraft?.asIs?.form ?? emptyStep)
+  const [editingStepId, setEditingStepId] = useState(initialDraft?.asIs?.editingId ?? null)
   const [descriptionError, setDescriptionError] = useState('')
   const [stepError, setStepError] = useState('')
   const [asIsError, setAsIsError] = useState('')
-  const [asIsSaved, setAsIsSaved] = useState(savedAsIs.isSaved)
+  const [asIsSaved, setAsIsSaved] = useState(!initialDraft?.asIs && savedAsIs.isSaved)
   const [asIsSaveError, setAsIsSaveError] = useState(false)
-  const [findings, setFindings] = useState(savedAnalysis.findings)
-  const [findingDraft, setFindingDraft] = useState(emptyFinding)
-  const [editingFindingId, setEditingFindingId] = useState(null)
+  const [findings, setFindings] = useState(initialDraft?.analysis?.findings ?? savedAnalysis.findings)
+  const [findingDraft, setFindingDraft] = useState(initialDraft?.analysis?.form ?? emptyFinding)
+  const [editingFindingId, setEditingFindingId] = useState(initialDraft?.analysis?.editingId ?? null)
   const [findingErrors, setFindingErrors] = useState({})
   const [analysisError, setAnalysisError] = useState('')
-  const [analysisSaved, setAnalysisSaved] = useState(savedAnalysis.isSaved)
+  const [analysisSaved, setAnalysisSaved] = useState(!initialDraft?.analysis && savedAnalysis.isSaved)
   const [analysisSaveError, setAnalysisSaveError] = useState(false)
-  const [toBeAssumptions, setToBeAssumptions] = useState(savedToBe.assumptions)
+  const [toBeAssumptions, setToBeAssumptions] = useState(initialDraft?.toBe?.assumptions ?? savedToBe.assumptions)
   const [selectedFindingIds, setSelectedFindingIds] = useState(
     (
-      savedToBe.selectedFindingIds ??
+      initialDraft?.toBe?.selectedFindingIds ?? savedToBe.selectedFindingIds ??
       savedAnalysis.findings.map((finding) => finding.id)
     ).filter((id) =>
-      savedAnalysis.findings.some((finding) => finding.id === id),
+      (initialDraft?.analysis?.findings ?? savedAnalysis.findings).some((finding) => finding.id === id),
     ),
   )
-  const [toBeSteps, setToBeSteps] = useState(savedToBe.steps)
-  const [toBeExternalLinks, setToBeExternalLinks] = useState(savedToBe.externalLinks ?? [])
-  const [toBeExternalSteps, setToBeExternalSteps] = useState(savedToBe.externalSteps ?? [])
-  const [toBeStepDraft, setToBeStepDraft] = useState(emptyToBeStep)
-  const [editingToBeStepId, setEditingToBeStepId] = useState(null)
+  const [toBeSteps, setToBeSteps] = useState(initialDraft?.toBe?.steps ?? savedToBe.steps)
+  const [toBeExternalLinks, setToBeExternalLinks] = useState(initialDraft?.toBe?.externalLinks ?? savedToBe.externalLinks ?? [])
+  const [toBeExternalSteps, setToBeExternalSteps] = useState(initialDraft?.toBe?.externalSteps ?? savedToBe.externalSteps ?? [])
+  const [toBeStepDraft, setToBeStepDraft] = useState(initialDraft?.toBe?.form ?? emptyToBeStep)
+  const [editingToBeStepId, setEditingToBeStepId] = useState(initialDraft?.toBe?.editingId ?? null)
   const [toBeAssumptionError, setToBeAssumptionError] = useState('')
   const [toBeStepError, setToBeStepError] = useState('')
   const [toBeError, setToBeError] = useState('')
-  const [toBeSaved, setToBeSaved] = useState(savedToBe.isSaved)
+  const [toBeSaved, setToBeSaved] = useState(!initialDraft?.toBe && savedToBe.isSaved)
   const [toBeSaveError, setToBeSaveError] = useState(false)
-  const [copiedFromAsIs, setCopiedFromAsIs] = useState(savedToBe.copiedFromAsIs)
+  const [copiedFromAsIs, setCopiedFromAsIs] = useState(initialDraft?.toBe?.copiedFromAsIs ?? savedToBe.copiedFromAsIs)
   const [copyMessage, setCopyMessage] = useState('')
   const [copyError, setCopyError] = useState('')
   const suggestedStakeholders = buildSuggestedStakeholders(
@@ -3520,17 +3567,17 @@ function App() {
     savedToBe.steps,
   )
   const [stakeholders, setStakeholders] = useState(
-    savedReport.initialized || savedReport.stakeholders.length > 0
+    initialDraft?.report?.stakeholders ?? (savedReport.initialized || savedReport.stakeholders.length > 0
       ? savedReport.stakeholders
-      : suggestedStakeholders,
+      : suggestedStakeholders),
   )
-  const [stakeholderDraft, setStakeholderDraft] = useState(emptyStakeholder)
-  const [editingStakeholderId, setEditingStakeholderId] = useState(null)
+  const [stakeholderDraft, setStakeholderDraft] = useState(initialDraft?.report?.form ?? emptyStakeholder)
+  const [editingStakeholderId, setEditingStakeholderId] = useState(initialDraft?.report?.editingId ?? null)
   const [stakeholderError, setStakeholderError] = useState('')
-  const [raci, setRaci] = useState(savedReport.raci)
+  const [raci, setRaci] = useState(initialDraft?.report?.raci ?? savedReport.raci)
   const [raciErrors, setRaciErrors] = useState({})
   const [reportError, setReportError] = useState('')
-  const [reportSaved, setReportSaved] = useState(savedReport.isSaved)
+  const [reportSaved, setReportSaved] = useState(!initialDraft?.report && savedReport.isSaved)
   const [reportSaveError, setReportSaveError] = useState(false)
   const [printGeneratedAt, setPrintGeneratedAt] = useState(null)
   const [printBpmn, setPrintBpmn] = useState({ svg: '', error: '' })
@@ -3540,6 +3587,173 @@ function App() {
   const findingFormPending = hasPendingForm(findingDraft, emptyFinding, editingFindingId)
   const toBeFormPending = hasPendingForm(toBeStepDraft, emptyToBeStep, editingToBeStepId)
   const stakeholderFormPending = hasPendingForm(stakeholderDraft, emptyStakeholder, editingStakeholderId)
+  const activeProcess = savedProcesses.find((process) => isValidProcessId(process?.id)
+    && process.id.toLowerCase() === processIdentityState.id?.toLowerCase())
+  const completed = activeProcess?.status === 'completed'
+
+  const readCurrentLibrary = () => {
+    const current = loadSavedProcesses()
+    if (current.error || JSON.stringify(current.processes) !== JSON.stringify(libraryRef.current)) {
+      throw new Error('LIBRARY_CHANGED')
+    }
+    return current.processes
+  }
+
+  const writeLibrary = (processes) => {
+    localStorage.setItem(PROCESSES_STORAGE_KEY, JSON.stringify(processes))
+    updateLibrary(processes)
+  }
+
+  const writeProcessSection = (key, value) => {
+    readCurrentLibrary()
+    assertActiveProcess()
+    if (completed) throw new Error('PROCESS_CHANGED')
+    localStorage.setItem(key, value)
+  }
+
+  const assertActiveProcess = () => {
+    if (loadCurrentProcessId(localStorage)?.toLowerCase() !== processIdentityState.id?.toLowerCase()) {
+      throw new Error('PROCESS_CHANGED')
+    }
+  }
+
+  const changeWorkMode = (nextMode) => {
+    try {
+      const storedScope = JSON.parse(localStorage.getItem(STORAGE_KEY))
+      writeProcessSection(STORAGE_KEY, JSON.stringify({ ...storedScope, workMode: nextMode }))
+      setWorkMode(nextMode)
+    } catch {
+      setProcessIdentityState((current) => ({ ...current, error: 'Nie udało się zapisać trybu pracy.' }))
+    }
+  }
+
+  const checkpointProcess = (processId, lastScreen, fields = {}) => {
+    const current = readCurrentLibrary()
+    const activeId = loadCurrentProcessId(localStorage)
+    if (activeId?.toLowerCase() !== processId.toLowerCase()) throw new Error('LIBRARY_CHANGED')
+    const existing = current.find((process) => isValidProcessId(process?.id) && process.id.toLowerCase() === processId.toLowerCase())
+    if (existing?.status === 'completed') return existing
+    const scope = localStorage.getItem(STORAGE_KEY)
+    const name = JSON.parse(scope)?.data?.processName?.trim()
+    if (!name) return null
+    const snapshot = {
+      ...buildProcessSnapshot({
+        existingProcess: existing,
+        id: processId,
+        name,
+        savedAt: new Date().toISOString(),
+        lastScreen: PROCESS_SCREENS.includes(lastScreen) ? lastScreen : existing?.lastScreen ?? 'scope',
+        sections: readProcessSections(),
+      }),
+      status: existing?.status ?? 'draft',
+      ...fields,
+    }
+    if (existing && JSON.stringify({ ...snapshot, savedAt: existing.savedAt }) === JSON.stringify(existing)) return existing
+    writeLibrary(upsertSavedProcess(current, snapshot))
+    return snapshot
+  }
+
+  const checkpointCurrentProcess = (lastScreen) => {
+    if (!processIdentityState.id) return true
+    try {
+      const draftFields = PROCESS_SCREENS.includes(screen) ? { draft: JSON.parse(workspaceDraft) } : {}
+      checkpointProcess(processIdentityState.id, lastScreen, draftFields)
+      return true
+    } catch {
+      setProcessIdentityState((current) => ({
+        ...current,
+        error: 'Nie udało się zapisać bieżącego procesu w bibliotece. Sprawdź, czy proces jest otwarty w innej karcie.',
+      }))
+      return false
+    }
+  }
+
+  const finishVersion = () => {
+    if (completed || !processIdentityState.id || !reportSaved) return
+    if (!asIsSaved || !analysisSaved || !toBeSaved || stakeholderFormPending || !validateReportAssignments()) {
+      setReportError('Przed zakończeniem wersji zapisz wszystkie etapy i uzupełnij macierz RACI.')
+      return
+    }
+    try {
+      checkpointProcess(processIdentityState.id, 'report', {
+        status: 'completed',
+        version: activeProcess?.version ?? 1,
+        seriesId: activeProcess?.seriesId ?? processIdentityState.id,
+        draft: {},
+      })
+      setReportError('')
+    } catch {
+      setReportError('Nie udało się zakończyć wersji. Spróbuj ponownie po sprawdzeniu zapisu w przeglądarce.')
+    }
+  }
+
+  const createProcessVersion = (source) => {
+    let backup
+    try {
+      const current = readCurrentLibrary()
+      if (source.status !== 'completed' || !isValidProcessId(source.id)) return
+      const id = createProcessId(globalThis.crypto)
+      const seriesId = source.seriesId ?? source.id
+      const versions = current.filter((item) => (item?.seriesId ?? item?.id) === seriesId)
+      const version = Math.max(1, ...versions.map((item) => item.version ?? 1)) + 1
+      const library = upsertSavedProcess(current, {
+        ...source, id, seriesId, version, status: 'draft', draft: {},
+        lastScreen: source.sections.asIs ? 'as-is' : 'scope',
+        savedAt: new Date().toISOString(),
+      })
+      if (current.some((item) => isValidProcessId(item?.id) && item.id.toLowerCase() === id.toLowerCase())) throw new Error('VERSION_ID_COLLISION')
+      const targetKeys = getWorkshopStorageKeys(id).slice(0, 2)
+      const sourceKeys = getWorkshopStorageKeys(source.id).slice(0, 2)
+      backup = createStorageBackup(localStorage, targetKeys)
+      if (backup.some((item) => item.existed)) throw new Error('VERSION_ID_COLLISION')
+      sourceKeys.forEach((key, index) => {
+        const raw = localStorage.getItem(key)
+        if (raw !== null) localStorage.setItem(targetKeys[index], raw)
+      })
+      writeLibrary(library)
+      setLibraryMessage(`Utworzono wersję ${version} jako szkic. Otwórz ją z biblioteki, aby zaktualizować proces.`)
+    } catch {
+      if (backup && !restoreStorageBackup(localStorage, backup)) {
+        setLibraryStorageUncertain(true)
+        setLibraryMessage('Nie udało się wycofać zapisu wersji. Sprawdź stan biblioteki przed wznowieniem pracy.')
+        return
+      }
+      setLibraryMessage('Nie udało się utworzyć nowej wersji. Sprawdź dostępność zapisu lub odśwież bibliotekę.')
+    }
+  }
+
+  const workspaceDraft = JSON.stringify({
+    ...(screen === 'scope' && { scope: formData }),
+    ...(!asIsSaved && (steps.length > 0 || asIsDescription || asIsFormPending) && {
+      asIs: { steps, description: asIsDescription, form: stepDraft, editingId: editingStepId },
+    }),
+    ...(!analysisSaved && (screen === 'analysis' || findings.length > 0 || findingFormPending) && {
+      analysis: { findings, form: findingDraft, editingId: editingFindingId },
+    }),
+    ...(!toBeSaved && (screen === 'to-be' || toBeSteps.length || toBeFormPending) && {
+      toBe: {
+        assumptions: toBeAssumptions, selectedFindingIds, steps: toBeSteps,
+        externalLinks: toBeExternalLinks, externalSteps: toBeExternalSteps,
+        copiedFromAsIs, form: toBeStepDraft, editingId: editingToBeStepId,
+      },
+    }),
+    ...(!reportSaved && (screen === 'report' || stakeholderFormPending || Object.keys(raci).length > 0) && {
+      report: { stakeholders, raci, form: stakeholderDraft, editingId: editingStakeholderId },
+    }),
+  })
+  const persistWorkspaceDraft = useEffectEvent(() => {
+    if (!processIdentityState.id || !PROCESS_SCREENS.includes(screen)) return
+    try {
+      checkpointProcess(processIdentityState.id, screen, { draft: JSON.parse(workspaceDraft) })
+    } catch {
+      setProcessIdentityState((current) => ({
+        ...current, error: 'Nie udało się zapisać szkicu. Sprawdź dostępność pamięci przeglądarki lub drugą kartę aplikacji.',
+      }))
+    }
+  })
+  useEffect(() => {
+    persistWorkspaceDraft()
+  }, [screen, processIdentityState.id, workspaceDraft])
 
   const testSupabaseRead = async () => {
     if (!supabase) {
@@ -3566,53 +3780,6 @@ function App() {
     }
   }
 
-  const showStart = () => {
-  const confirmed = window.confirm(
-    'Czy rozpocząć nowy proces? Dane obecnego procesu zostaną usunięte.'
-  )
-
-  if (!confirmed) return
-
-  let sectionBackup
-
-  try {
-    sectionBackup = createStorageBackup(
-      localStorage,
-      PROCESS_SECTION_STORAGE_KEYS,
-    )
-  } catch {
-    setProcessIdentityState((current) => ({
-      ...current,
-      error: 'Nie udało się przygotować bezpiecznego resetu procesu.',
-    }))
-    return
-  }
-
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-    localStorage.removeItem(AS_IS_STORAGE_KEY)
-    localStorage.removeItem(ANALYSIS_STORAGE_KEY)
-    localStorage.removeItem(TO_BE_STORAGE_KEY)
-    localStorage.removeItem(REPORT_STORAGE_KEY)
-    removeCurrentProcessId(localStorage)
-  } catch {
-    const rollbackSucceeded = restoreStorageBackup(
-      localStorage,
-      sectionBackup,
-    )
-
-    setProcessIdentityState((current) => ({
-      ...current,
-      error: rollbackSucceeded
-        ? 'Nie udało się zresetować procesu. Poprzednie dane zostały przywrócone.'
-        : 'Błąd krytyczny: nie udało się w pełni przywrócić danych procesu. Nie kontynuuj edycji.',
-    }))
-    return
-  }
-
-  setProcessIdentityState({ id: null, error: '' })
-  window.location.reload()
-}
 const startNewProcess = () => {
   if (initialLibrary.error) {
     setProcessIdentityState((current) => ({ ...current, error: initialLibrary.error }))
@@ -3637,6 +3804,7 @@ const startNewProcess = () => {
     }
 
     try {
+      assertActiveProcess()
       sessionStorage.removeItem('architekt-procesow-screen-to-open')
       removeCurrentProcessId(localStorage)
     } catch {
@@ -3665,39 +3833,22 @@ const startNewProcess = () => {
   if (!accepted) return
 
   try {
-    const latestRaw = localStorage.getItem(PROCESSES_STORAGE_KEY)
-    let latestLibrary
-    try { latestLibrary = latestRaw === null ? [] : JSON.parse(latestRaw) } catch { throw new Error('LIBRARY_CHANGED') }
-    if (!Array.isArray(latestLibrary) || JSON.stringify(latestLibrary) !== JSON.stringify(savedProcesses)) throw new Error('LIBRARY_CHANGED')
-    const processId =
-      processIdentityState.id ?? createProcessId(globalThis.crypto)
-    const existingProcess = savedProcesses.find(
-      (process) =>
-        isValidProcessId(process?.id) &&
-        process.id.toLowerCase() === processId.toLowerCase(),
-    )
-    const processSnapshot = buildProcessSnapshot({
-      existingProcess,
-      id: processId,
-      name: formData.processName?.trim() || 'Proces bez nazwy',
-      savedAt: new Date().toISOString(),
-      lastScreen: screen,
-      sections: {
-        scope: localStorage.getItem(STORAGE_KEY),
-        asIs: localStorage.getItem(AS_IS_STORAGE_KEY),
-        analysis: localStorage.getItem(ANALYSIS_STORAGE_KEY),
-        toBe: localStorage.getItem(TO_BE_STORAGE_KEY),
-        report: localStorage.getItem(REPORT_STORAGE_KEY),
-      },
-    })
-
-    const updatedProcesses = upsertSavedProcess(savedProcesses, processSnapshot)
-
-    localStorage.setItem(
-      PROCESSES_STORAGE_KEY,
-      JSON.stringify(updatedProcesses)
-    )
-    setSavedProcesses(updatedProcesses)
+    const current = readCurrentLibrary()
+    assertActiveProcess()
+    const lastScreen = screen === 'processes' ? screenBeforeProcesses : screen
+    if (processIdentityState.id) {
+      const draftFields = PROCESS_SCREENS.includes(screen) ? { draft: JSON.parse(workspaceDraft) } : {}
+      checkpointProcess(processIdentityState.id, lastScreen, draftFields)
+    } else {
+      const snapshot = buildProcessSnapshot({
+        id: createProcessId(globalThis.crypto),
+        name: formData.processName.trim(),
+        savedAt: new Date().toISOString(),
+        lastScreen: PROCESS_SCREENS.includes(lastScreen) ? lastScreen : 'scope',
+        sections: readProcessSections(),
+      })
+      writeLibrary(upsertSavedProcess(current, { ...snapshot, status: 'draft' }))
+    }
   } catch (error) {
     setProcessIdentityState((current) => ({
       ...current,
@@ -3764,7 +3915,7 @@ const removeSavedProcess = (process) => {
   if (!window.confirm(`Usunąć proces „${process.name}” z biblioteki oraz jego zapisany tekst warsztatu i propozycję w tej przeglądarce? Operacji nie można cofnąć. Inne procesy i wyeksportowane pliki pozostaną bez zmian.`)) return
   try {
     const remaining = deleteSavedProcess(localStorage, process.id, savedProcesses)
-    setSavedProcesses(remaining)
+    updateLibrary(remaining)
     setLibraryMessage('Proces i zapisane dane jego warsztatu zostały usunięte z tej przeglądarki. Wyeksportowane pliki pozostają bez zmian.')
   } catch (error) {
     if (error.code === 'DELETE_ROLLBACK_FAILED') setLibraryStorageUncertain(true)
@@ -3782,6 +3933,13 @@ const openSavedProcess = (process) => {
   }
 
   const normalizedProcessId = process.id.toLowerCase()
+  try {
+    readCurrentLibrary()
+    assertActiveProcess()
+  } catch {
+    setProcessIdentityState((current) => ({ ...current, error: 'Biblioteka zmieniła się w innej karcie. Odśwież stronę przed otwarciem procesu.' }))
+    return
+  }
   const matchingProcessCount = savedProcesses.filter(
     (savedProcess) =>
       isValidProcessId(savedProcess?.id) &&
@@ -3795,6 +3953,12 @@ const openSavedProcess = (process) => {
     }))
     return
   }
+  if (processIdentityState.id?.toLowerCase() === normalizedProcessId) {
+    const lastScreen = PROCESS_SCREENS.includes(screenBeforeProcesses) ? screenBeforeProcesses : process.lastScreen
+    setScreen(process.status === 'completed' ? 'report' : PROCESS_SCREENS.includes(lastScreen) ? lastScreen : 'scope')
+    return
+  }
+  if (!checkpointCurrentProcess(screenBeforeProcesses)) return
 
   const sections = [
     [STORAGE_KEY, process.sections?.scope],
@@ -3804,7 +3968,7 @@ const openSavedProcess = (process) => {
     [REPORT_STORAGE_KEY, process.sections?.report],
   ]
   const editableScreens = ['scope', 'as-is', 'analysis', 'to-be', 'report']
-  const nextScreen = editableScreens.includes(process.lastScreen)
+  const nextScreen = process.status === 'completed' ? 'report' : editableScreens.includes(process.lastScreen)
     ? process.lastScreen
     : 'scope'
   let sectionBackups
@@ -3886,36 +4050,45 @@ const openSavedProcess = (process) => {
   const nextAnalysis = loadSavedAnalysis()
   const nextToBe = loadSavedToBe()
   const nextReport = loadSavedReport()
+  const draft = process.draft
 
   setProcessIdentityState({ id: process.id, error: '' })
   setStartMethod(nextScope.startMethod)
   setWorkMode(nextScope.workMode)
-  setFormData(nextScope.data)
-  setAsIsDescription(nextAsIs.description)
-  setSteps(nextAsIs.steps)
+  setFormData(draft?.scope ?? nextScope.data)
+  setAsIsDescription(draft?.asIs?.description ?? nextAsIs.description)
+  setSteps(draft?.asIs?.steps ?? nextAsIs.steps)
+  setStepDraft(draft?.asIs?.form ?? emptyStep)
+  setEditingStepId(draft?.asIs?.editingId ?? null)
   setExternalSteps(nextAsIs.externalSteps || [])
   setExternalLinks(nextAsIs.externalLinks ?? [])
-  setAsIsSaved(nextAsIs.isSaved)
-  setFindings(nextAnalysis.findings)
-  setAnalysisSaved(nextAnalysis.isSaved)
-  setToBeAssumptions(nextToBe.assumptions)
+  setAsIsSaved(!draft?.asIs && nextAsIs.isSaved)
+  setFindings(draft?.analysis?.findings ?? nextAnalysis.findings)
+  setFindingDraft(draft?.analysis?.form ?? emptyFinding)
+  setEditingFindingId(draft?.analysis?.editingId ?? null)
+  setAnalysisSaved(!draft?.analysis && nextAnalysis.isSaved)
+  setToBeAssumptions(draft?.toBe?.assumptions ?? nextToBe.assumptions)
   setSelectedFindingIds(
-    (nextToBe.selectedFindingIds ?? nextAnalysis.findings.map(({ id }) => id)).filter(
-      (id) => nextAnalysis.findings.some((finding) => finding.id === id),
+    (draft?.toBe?.selectedFindingIds ?? nextToBe.selectedFindingIds ?? nextAnalysis.findings.map(({ id }) => id)).filter(
+      (id) => (draft?.analysis?.findings ?? nextAnalysis.findings).some((finding) => finding.id === id),
     ),
   )
-  setToBeSteps(nextToBe.steps)
-  setToBeExternalSteps(nextToBe.externalSteps ?? [])
-  setToBeExternalLinks(nextToBe.externalLinks ?? [])
-  setToBeSaved(nextToBe.isSaved)
-  setCopiedFromAsIs(nextToBe.copiedFromAsIs)
+  setToBeSteps(draft?.toBe?.steps ?? nextToBe.steps)
+  setToBeExternalSteps(draft?.toBe?.externalSteps ?? nextToBe.externalSteps ?? [])
+  setToBeExternalLinks(draft?.toBe?.externalLinks ?? nextToBe.externalLinks ?? [])
+  setToBeStepDraft(draft?.toBe?.form ?? emptyToBeStep)
+  setEditingToBeStepId(draft?.toBe?.editingId ?? null)
+  setToBeSaved(!draft?.toBe && nextToBe.isSaved)
+  setCopiedFromAsIs(draft?.toBe?.copiedFromAsIs ?? nextToBe.copiedFromAsIs)
   setStakeholders(
-    nextReport.initialized || nextReport.stakeholders.length > 0
+    draft?.report?.stakeholders ?? (nextReport.initialized || nextReport.stakeholders.length > 0
       ? nextReport.stakeholders
-      : buildSuggestedStakeholders(nextScope.data, nextAsIs.steps, nextToBe.steps),
+      : buildSuggestedStakeholders(nextScope.data, nextAsIs.steps, nextToBe.steps)),
   )
-  setRaci(nextReport.raci)
-  setReportSaved(nextReport.isSaved)
+  setRaci(draft?.report?.raci ?? nextReport.raci)
+  setStakeholderDraft(draft?.report?.form ?? emptyStakeholder)
+  setEditingStakeholderId(draft?.report?.editingId ?? null)
+  setReportSaved(!draft?.report && nextReport.isSaved)
   setScreen(nextScreen)
 }
   const startScope = (method) => {
@@ -3961,8 +4134,11 @@ const openSavedProcess = (process) => {
     let processId = processIdentityState.id
     let identitySaved = false
     let scopeSaved = false
+    let librarySaved = false
 
     try {
+      readCurrentLibrary()
+      assertActiveProcess()
       processId ??= createProcessId(globalThis.crypto)
       saveCurrentProcessId(localStorage, processId)
       identitySaved = true
@@ -3978,6 +4154,8 @@ const openSavedProcess = (process) => {
         }),
       )
       scopeSaved = true
+      checkpointProcess(processId, 'as-is')
+      librarySaved = true
       sessionStorage.setItem(
         'architekt-procesow-screen-to-open',
         'as-is',
@@ -3988,8 +4166,10 @@ const openSavedProcess = (process) => {
     } catch {
       setProcessIdentityState((current) => ({
         id: identitySaved ? processId : current.id,
-        error: scopeSaved
+        error: librarySaved
           ? 'Zakres został zapisany, ale nie udało się zapamiętać ekranu AS-IS. Spróbuj ponownie.'
+          : scopeSaved
+            ? 'Zakres zapisano w bieżącym procesie, ale nie udało się dodać go do biblioteki.'
           : identitySaved
             ? 'Nie udało się zapisać Zakresu. Identyfikator procesu został zachowany do ponownej próby.'
             : 'Nie udało się utworzyć lub potwierdzić identyfikatora procesu. Zakres nie został zapisany.',
@@ -4035,7 +4215,7 @@ const openSavedProcess = (process) => {
     try {
       const result = appendWorkshopSteps(steps, names, () => globalThis.crypto.randomUUID())
       if (result.added.length) {
-        localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: result.steps, externalSteps, externalLinks, startMethod, savedAt: null }))
+        writeProcessSection(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: result.steps, externalSteps, externalLinks, startMethod, savedAt: null }))
         setSteps(result.steps)
         setAsIsSaved(false)
         setAsIsSaveError(false)
@@ -4068,7 +4248,7 @@ const openSavedProcess = (process) => {
 
   const saveConnectionChange = (nextSteps) => {
     try {
-      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: nextSteps, externalSteps, externalLinks, startMethod, savedAt: null }))
+      writeProcessSection(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps: nextSteps, externalSteps, externalLinks, startMethod, savedAt: null }))
       setSteps(nextSteps)
       setAsIsSaved(false)
       setAsIsSaveError(false)
@@ -4100,14 +4280,14 @@ const openSavedProcess = (process) => {
   }
   const changeExternalSteps = (next) => {
     try {
-      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps: next, externalLinks, startMethod, savedAt: null }))
+      writeProcessSection(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps: next, externalLinks, startMethod, savedAt: null }))
       setExternalSteps(next); setAsIsSaved(false); setAsIsSaveError(false)
       return { ok: true }
     } catch { return { error: 'Nie udało się zapisać działań zewnętrznych.' } }
   }
   const changeExternalLinks = (next) => {
     try {
-      localStorage.setItem(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps, externalLinks: next, startMethod, savedAt: null }))
+      writeProcessSection(AS_IS_STORAGE_KEY, JSON.stringify({ description: asIsDescription, steps, externalSteps, externalLinks: next, startMethod, savedAt: null }))
       setExternalLinks(next)
       setAsIsSaved(false)
       return { ok: true }
@@ -4141,7 +4321,7 @@ const openSavedProcess = (process) => {
     ]
 
 try {
-      localStorage.setItem(
+      writeProcessSection(
         AS_IS_STORAGE_KEY,
         JSON.stringify({
           description: asIsDescription,
@@ -4241,7 +4421,7 @@ try {
     }
 
     try {
-      localStorage.setItem(
+      writeProcessSection(
         AS_IS_STORAGE_KEY,
         JSON.stringify({
           description: asIsDescription,
@@ -4252,7 +4432,7 @@ try {
           savedAt: new Date().toISOString(),
         }),
       )
-      setAsIsSaved(true)
+      setAsIsSaved(checkpointCurrentProcess('as-is'))
     } catch {
       setAsIsSaveError(true)
     }
@@ -4275,6 +4455,7 @@ try {
       return
     }
 
+    if (!checkpointCurrentProcess('analysis')) return
     setScreen('analysis')
     setAnalysisError('')
     setAnalysisSaveError(false)
@@ -4410,7 +4591,7 @@ try {
     }
 
     try {
-      localStorage.setItem(
+      writeProcessSection(
         ANALYSIS_STORAGE_KEY,
         JSON.stringify({
           findings,
@@ -4418,7 +4599,7 @@ try {
           savedAt: new Date().toISOString(),
         }),
       )
-      setAnalysisSaved(true)
+      setAnalysisSaved(checkpointCurrentProcess('analysis'))
     } catch {
       setAnalysisSaveError(true)
     }
@@ -4440,6 +4621,7 @@ try {
       setAnalysisError('Dodaj i zapisz co najmniej jedno ustalenie analityczne.')
       return
     }
+    if (!checkpointCurrentProcess('to-be')) return
     setScreen('to-be')
     setToBeError('')
     setToBeSaveError(false)
@@ -4677,7 +4859,7 @@ try {
     }
 
     try {
-      localStorage.setItem(
+      writeProcessSection(
         TO_BE_STORAGE_KEY,
         JSON.stringify({
           assumptions: toBeAssumptions,
@@ -4689,7 +4871,7 @@ try {
           savedAt: new Date().toISOString(),
         }),
       )
-      setToBeSaved(true)
+      setToBeSaved(checkpointCurrentProcess('to-be'))
     } catch {
       setToBeSaveError(true)
     }
@@ -4718,6 +4900,7 @@ try {
     if (!savedReport.initialized && stakeholders.length === 0) {
       setStakeholders(buildSuggestedStakeholders(formData, steps, toBeSteps))
     }
+    if (!checkpointCurrentProcess('report')) return
     setScreen('report')
     setReportError('')
     setReportSaveError(false)
@@ -4868,7 +5051,7 @@ try {
     if (!validateReportAssignments()) return
 
     try {
-      localStorage.setItem(
+      writeProcessSection(
         REPORT_STORAGE_KEY,
         JSON.stringify({
           stakeholders,
@@ -4877,7 +5060,7 @@ try {
           savedAt: new Date().toISOString(),
         }),
       )
-      setReportSaved(true)
+      setReportSaved(checkpointCurrentProcess('report'))
     } catch {
       setReportSaveError(true)
     }
@@ -4985,7 +5168,9 @@ try {
   onTestSupabase={testSupabaseRead}
   supabaseTest={supabaseTest}
   onProcesses={() => {
+  if (screen === 'processes') return
   if (!canLeaveWorkshop()) return
+  if (!initialLibrary.error && !checkpointCurrentProcess(screen)) return
   setScreenBeforeProcesses(screen)
   setScreen('processes')
 }}
@@ -5013,11 +5198,12 @@ try {
     processes={savedProcesses}
     onOpen={openSavedProcess}
     onDelete={removeSavedProcess}
+    onCreateVersion={createProcessVersion}
     currentId={processIdentityState.id}
     onBack={() => setScreen(screenBeforeProcesses)}
   />
 ) : screen === 'start' ? (
-  <StartScreen onStart={startScope} workMode={workMode} onWorkModeChange={setWorkMode} />
+  <StartScreen onStart={startScope} workMode={workMode} onWorkModeChange={changeWorkMode} />
         ) : screen === 'scope' ? (
           <ScopeForm
             formData={formData}
@@ -5025,7 +5211,7 @@ try {
             startMethod={startMethod}
             saved={false}
             saveError={scopeSaveError}
-            onBack={showStart}
+            onBack={startNewProcess}
             onChange={handleScopeChange}
             onSubmit={handleScopeSubmit}
           />
@@ -5148,6 +5334,7 @@ try {
           <ReportScreen
             key={processIdentityState.id}
             processId={processIdentityState.id}
+            completed={completed}
             scope={formData}
             startMethod={startMethod}
             asIsDescription={asIsDescription}
@@ -5179,6 +5366,7 @@ try {
             onRaciChange={handleRaciChange}
             onBack={showToBe}
             onSave={saveReport}
+            onFinish={finishVersion}
             onExport={exportReport}
             printGeneratedAt={printGeneratedAt}
           />

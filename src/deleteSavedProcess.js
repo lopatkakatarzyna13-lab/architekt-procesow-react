@@ -1,7 +1,7 @@
 import { CURRENT_PROCESS_ID_KEY, isValidProcessId } from './processIdentity'
+import { getWorkshopStorageKeys } from './workshop'
 
 const LIBRARY_KEY = 'architekt-procesow:processes'
-const WORKSHOP_PREFIX = 'architekt-procesow:workshop:'
 
 // The user explicitly selects an inactive saved process. No other keys are changed.
 export function deleteSavedProcess(storage, id, expectedProcesses) {
@@ -15,13 +15,12 @@ export function deleteSavedProcess(storage, id, expectedProcesses) {
   if (!Array.isArray(library) || JSON.stringify(library) !== JSON.stringify(expectedProcesses)) throw new Error('Biblioteka zmieniła się lub jest nieczytelna. Odśwież stronę przed usunięciem.')
   const normalizedId = id.toLowerCase()
   if (library.filter((item) => isValidProcessId(item?.id) && item.id.toLowerCase() === normalizedId).length !== 1) throw new Error('Nie można jednoznacznie ustalić procesu. Nic nie usunięto.')
-  const keys = [LIBRARY_KEY, `${WORKSHOP_PREFIX}${normalizedId}`, `${WORKSHOP_PREFIX}${normalizedId}:review`]
+  const keys = [LIBRARY_KEY, ...getWorkshopStorageKeys(normalizedId)]
   const before = keys.map((key) => [key, storage.getItem(key)])
   const remaining = library.filter((item) => !(isValidProcessId(item?.id) && item.id.toLowerCase() === normalizedId))
   try {
     storage.setItem(LIBRARY_KEY, JSON.stringify(remaining))
-    storage.removeItem(keys[1])
-    storage.removeItem(keys[2])
+    for (const key of keys.slice(1)) storage.removeItem(key)
   } catch {
     let restored = true
     for (const [key, value] of before) {

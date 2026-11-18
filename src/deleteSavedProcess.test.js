@@ -14,9 +14,13 @@ function fixture() {
 describe('delete saved process', () => {
   it('removes only the selected saved process and its workshop', () => {
     const store = fixture()
+    store.setItem(`${workshop(A)}:draft`, 'szkic A')
+    store.setItem(`${workshop(B)}:draft`, 'szkic B')
     expect(deleteSavedProcess(store, A, records)).toEqual([records[1]])
     expect(store.getItem(workshop(A))).toBeNull()
     expect(store.getItem(`${workshop(A)}:review`)).toBeNull()
+    expect(store.getItem(`${workshop(A)}:draft`)).toBeNull()
+    expect(store.getItem(`${workshop(B)}:draft`)).toBe('szkic B')
     expect(store.getItem(workshop(B))).toBe('tekst B')
     expect(store.getItem('architekt-procesow:as-is')).toBe('aktywny')
     expect(JSON.parse(store.getItem(libraryKey))).toEqual([records[1]])

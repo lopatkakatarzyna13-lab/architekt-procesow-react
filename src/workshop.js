@@ -82,6 +82,10 @@ function reviewKey(processId) {
   return `${keyFor(processId)}:review`
 }
 
+export function getWorkshopStorageKeys(processId) {
+  return [keyFor(processId), reviewKey(processId), `${keyFor(processId)}:draft`]
+}
+
 // A version marker for stale-draft detection, NOT a cryptographic signature.
 // The complete source transcript is stored only in the workshop record.
 function transcriptMarker(transcript) {
@@ -95,6 +99,29 @@ function transcriptMarker(transcript) {
 
 // Notes started without a transcript are independent of later transcript edits.
 const MANUAL_REVIEW_MARKER = transcriptMarker('')
+
+export function loadWorkshopDraft(storage, processId, savedTranscript) {
+  const draft = JSON.parse(storage.getItem(getWorkshopStorageKeys(processId)[2]))
+  if (draft?.sourceMarker !== transcriptMarker(savedTranscript) ||
+    (draft.transcript !== null && (typeof draft.transcript !== 'string' || draft.transcript.length > MAX_TRANSCRIPT_LENGTH)) ||
+    typeof draft.manual !== 'boolean' || typeof draft.reviewDirty !== 'boolean') return null
+  if (draft.review !== null) {
+    const categories = ['steps', 'roles', 'systems', 'decisions', 'exceptions', 'questions']
+    if (!categories.every((key) => Array.isArray(draft.review?.[key])
+      && draft.review[key].every((item) => typeof item?.text === 'string'
+        && ['answer', 'assignee', 'dueDate', 'evidence'].every((field) => item[field] === undefined || typeof item[field] === 'string')))) return null
+  }
+  return draft
+}
+
+export function saveWorkshopDraft(storage, processId, savedTranscript, draft) {
+  const key = getWorkshopStorageKeys(processId)[2]
+  if (!draft) {
+    if (storage.getItem(key) !== null) storage.removeItem(key)
+    return
+  }
+  storage.setItem(key, JSON.stringify({ ...draft, sourceMarker: transcriptMarker(savedTranscript) }))
+}
 
 export function loadWorkshopReview(storage, processId, transcript) {
   const key = reviewKey(processId)
@@ -147,7 +174,7 @@ export function saveWorkshopReview(storage, processId, transcript, review, { rep
 // Delete only the selected process's workshop and its review. Never touch
 // section snapshots or the process library. Roll back partial failures.
 export function deleteWorkshop(storage, processId) {
-  const keys = [keyFor(processId), reviewKey(processId)]
+  const keys = getWorkshopStorageKeys(processId)
   const backup = keys.map((key) => ({ key, value: storage.getItem(key) }))
   try {
     for (const { key } of backup) storage.removeItem(key)

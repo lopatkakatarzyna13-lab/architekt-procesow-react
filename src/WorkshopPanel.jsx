@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
+import { loadCurrentProcessId } from './processIdentity'
 import {
   deleteWorkshop, formatOpenWorkshopQuestions, getLocalWorkshopDate, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
   MAX_WORKSHOP_ANSWER_LENGTH, MAX_WORKSHOP_ASSIGNEE_LENGTH,
-  saveWorkshop, saveWorkshopReview, validateWorkshopProposal, validateWorkshopReview,
+  loadWorkshopDraft, saveWorkshopDraft, saveWorkshop, saveWorkshopReview, validateWorkshopProposal, validateWorkshopReview,
 } from './workshop'
 
 const categories = { steps: 'Kroki', roles: 'Role', systems: 'Systemy', decisions: 'Decyzje', exceptions: 'Wyjątki', questions: 'Pytania' }
@@ -14,13 +15,18 @@ const unreviewedProposal = (proposal) => Object.fromEntries(Object.keys(categori
   [key, (proposal[key] ?? []).map(({ text, status, evidence }) => ({ text, status, evidence, reviewed: false }))]))
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
-export default function WorkshopPanel({ processId, processName, dirtyRef, canTransferSteps = false, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
+export default function WorkshopPanel({ processId, processName, dirtyRef, autosaveDraft = false, canTransferSteps = false, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
   const [initial] = useState(() => {
     let data
     try { data = loadWorkshop(localStorage, processId) }
     catch { return { transcript: '', savedAt: null, error: 'Nie można odczytać transkrypcji. Istniejące dane nie zostaną nadpisane.', review: null, reviewError: '' } }
     try { return { ...data, error: '', reviewError: '', ...loadWorkshopReview(localStorage, processId, data.transcript) } }
     catch { return { ...data, error: '', review: null, reviewError: 'Nie można odczytać zapisanej propozycji. Zapis nowej propozycji jest zablokowany.' } }
+  })
+  const [draft] = useState(() => {
+    if (!autosaveDraft || initial.error || initial.reviewError) return null
+    try { return loadWorkshopDraft(localStorage, processId, initial.transcript) }
+    catch { return null }
   })
   const [aiSession, setAiSession] = useState(null)
   const [aiEmail, setAiEmail] = useState('')
@@ -30,13 +36,14 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   const [readError, setReadError] = useState(initial.error)
   const [reviewLoadError, setReviewLoadError] = useState(initial.reviewError)
   const [staleReview, setStaleReview] = useState(Boolean(initial.stale))
-  const [transcript, setTranscript] = useState(initial.transcript)
+  const [transcript, setTranscript] = useState(draft?.transcript ?? initial.transcript)
   const [savedTranscript, setSavedTranscript] = useState(initial.transcript)
   const [message, setMessage] = useState(initial.error)
   const [savedAt, setSavedAt] = useState(initial.savedAt)
-  const [analysis, setAnalysis] = useState(() => completeReview(initial.review))
-  const [manualReview, setManualReview] = useState(Boolean(initial.manual))
-  const [reviewDirty, setReviewDirty] = useState(false)
+  const [analysis, setAnalysis] = useState(() => completeReview(draft ? draft.review : initial.review))
+  const [manualReview, setManualReview] = useState(draft?.manual ?? Boolean(initial.manual))
+  const [reviewDirty, setReviewDirty] = useState(draft?.reviewDirty ?? false)
+  const [draftError, setDraftError] = useState('')
   const [analysisMessage, setAnalysisMessage] = useState(initial.reviewError)
   const [storageUncertain, setStorageUncertain] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -62,6 +69,25 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   }, [analysis, analyzing, canTransferSteps, dirty, onDecisionSourceChange, processId, reviewDirty, storageUncertain])
 
   useEffect(() => () => { dirtyRef.current = false }, [dirtyRef])
+  useEffect(() => {
+    if (!autosaveDraft || readError || reviewLoadError || storageUncertain) return
+    dirtyRef.current = dirty || reviewDirty
+    let error = ''
+    try {
+      if (loadCurrentProcessId(localStorage)?.toLowerCase() !== processId.toLowerCase()) return
+      const draft = dirty || reviewDirty
+        ? { transcript: dirty ? transcript : null, review: analysis, manual: manualReview, reviewDirty }
+        : null
+      saveWorkshopDraft(localStorage, processId, savedTranscript, draft)
+    } catch {
+      error = 'Nie udało się zapisać szkicu warsztatu w tej przeglądarce.'
+    }
+    let active = true
+    queueMicrotask(() => {
+      if (active) setDraftError(error)
+    })
+    return () => { active = false }
+  }, [analysis, autosaveDraft, dirty, dirtyRef, manualReview, processId, readError, reviewDirty, reviewLoadError, savedTranscript, storageUncertain, transcript])
   useEffect(() => () => { activeAnalysis.current?.abort(); activeAnalysis.current = null }, [])
   const signInAi = async (event) => {
     event.preventDefault()
@@ -317,6 +343,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   return (
     <section className="workshop-panel" aria-labelledby="workshop-title">
       <h2 id="workshop-title">Ustalenia warsztatowe</h2>
+      {draftError && <p role="alert">{draftError}</p>}
       <p>Kliknij „Opracuj ręcznie”, aby zapisywać ustalenia już w trakcie spotkania. Tekst rozmowy możesz wkleić i zapisać później. Zapisy trafiają do tej przeglądarki. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
       {analysisAvailable && <p>Analiza AI wysyła transkrypcję do OpenAI po Twoim potwierdzeniu. Wpisanie lub zapisanie tekstu nie uruchamia analizy.</p>}
       <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} W trybie dodawania kroków możesz przenieść zapisane ustalenia do AS-IS.</p>
