@@ -193,6 +193,10 @@ try {
     const copyMap = copyPage.getByRole('button', { name: 'Skopiuj mapę BPMN z AS-IS', exact: true })
     await copyMap.click()
     assert.equal(await copyMap.isDisabled(), true)
+    await copyPage.getByLabel('Powiązane usprawnienie', { exact: true }).selectOption({ label: 'Brak fikcyjnego dokumentu' })
+    await copyPage.getByRole('button', { name: 'Użyj pomysłu jako nazwy kroku', exact: true }).click()
+    assert.equal(await copyPage.getByLabel(/Nazwa kroku/).inputValue(), 'Uzgodnić ścieżkę kompletowania dokumentów')
+    await copyPage.getByRole('button', { name: 'Dodaj krok', exact: true }).click()
     await copyPage.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
     const [bpmnCopy] = await Promise.all([
       copyPage.waitForEvent('download'),
@@ -203,6 +207,7 @@ try {
     const copiedProcess = copiedModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Process')
     const copiedCollaboration = copiedModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
     assert.ok(copiedProcess.flowElements.some((item) => item.$type === 'bpmn:ExclusiveGateway' && item.name === 'Czy dane są kompletne?'))
+    assert.ok(copiedProcess.flowElements.some((item) => item.$type === 'bpmn:Task' && item.name === 'Uzgodnić ścieżkę kompletowania dokumentów'))
     assert.ok(copiedCollaboration.messageFlows.some((flow) => flow.name === 'Fikcyjne dane do weryfikacji'))
   } finally {
     await copyPage.close()

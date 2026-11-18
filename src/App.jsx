@@ -1736,7 +1736,17 @@ function ToBeStepEditor({
   onAdd,
   onCancel,
   onCopy,
+  onUseImprovement,
 }) {
+  const idea = findings.find((finding) => finding.id === draft.findingId)?.improvement
+  const improvement = typeof idea === 'string' ? idea.trim().replace(/\s+/g, ' ') : ''
+  const useImprovement = () => {
+    if (!improvement || improvement === draft.name.trim()) return
+    if (draft.name.trim() && !window.confirm('Zastąpić bieżącą nazwę kroku pomysłem z analizy?')) return
+    onUseImprovement(improvement)
+    document.getElementById('toBeStepName')?.focus()
+  }
+
   const findingOptions = findings.map((finding) => ({
     value: finding.id,
     label: finding.name,
@@ -1828,14 +1838,20 @@ function ToBeStepEditor({
             options={['Nowy', 'Zmieniony', 'Bez zmian']}
             placeholder=""
           />
-          <SelectField
-            id="toBeStepFinding"
-            label="Powiązane usprawnienie"
-            value={draft.findingId}
-            onChange={onChange}
-            options={findingOptions}
-            placeholder="Brak powiązania"
-          />
+          <div>
+            <SelectField
+              id="toBeStepFinding"
+              label="Powiązane usprawnienie"
+              value={draft.findingId}
+              onChange={onChange}
+              options={findingOptions}
+              placeholder="Brak powiązania"
+            />
+            {improvement && <div className="bpmn-actions">
+              <button type="button" className="back-button" disabled={improvement === draft.name.trim()}
+                onClick={useImprovement}>Użyj pomysłu jako nazwy kroku</button>
+            </div>}
+          </div>
           <SelectField
             id="toBeStepAutomatable"
             label="Czy krok może zostać zautomatyzowany?"
@@ -2015,6 +2031,7 @@ function ToBeScreen({
   onAssumptionChange,
   onToggleFinding,
   onStepChange,
+  onUseImprovement,
   onAddStep,
   onEditStep,
   onDeleteStep,
@@ -2076,6 +2093,7 @@ function ToBeScreen({
         copyMessage={copyMessage}
         copyError={copyError}
         onChange={onStepChange}
+        onUseImprovement={onUseImprovement}
         onAdd={onAddStep}
         onCancel={onCancelEdit}
         onCopy={onCopySteps}
@@ -4272,8 +4290,11 @@ try {
       toBeStepFinding: 'findingId',
       toBeStepAutomatable: 'automatable',
     }
-    const field = fieldMap[event.target.name]
-    setToBeStepDraft((current) => ({ ...current, [field]: event.target.value }))
+    updateToBeStepField(fieldMap[event.target.name], event.target.value)
+  }
+
+  const updateToBeStepField = (field, value) => {
+    setToBeStepDraft((current) => ({ ...current, [field]: value }))
     if (field === 'name') {
       setToBeStepError('')
     }
@@ -4873,6 +4894,7 @@ try {
             onAssumptionChange={handleToBeAssumptionChange}
             onToggleFinding={toggleToBeFinding}
             onStepChange={handleToBeStepChange}
+            onUseImprovement={(name) => updateToBeStepField('name', name)}
             onAddStep={addOrUpdateToBeStep}
             onEditStep={editToBeStep}
             onDeleteStep={deleteToBeStep}
