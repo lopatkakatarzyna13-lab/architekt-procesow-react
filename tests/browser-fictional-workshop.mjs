@@ -47,7 +47,7 @@ try {
   for (const category of ['role', 'systemy', 'decyzje', 'wyjątki', 'pytania']) {
     await page.getByRole('checkbox', { name: `Sprawdzono treść — ${category}, pozycja 1` }).check()
   }
-  const answer = page.getByLabel('Odpowiedź — pytanie 1')
+  const answer = page.getByRole('textbox', { name: 'Odpowiedź — pytanie 1', exact: true })
   const confirmAnswer = page.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 1' })
   await page.getByText(/Otwarte pytania: 2 z 2/).waitFor()
   assert.equal(await confirmAnswer.isDisabled(), true)
