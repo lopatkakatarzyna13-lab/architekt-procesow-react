@@ -20,6 +20,10 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   const print = vi.spyOn(window, 'print').mockImplementation(() => {})
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ proposal: {
     steps: [{ text: steps[0], status: 'supported', evidence: 'HR sprawdza kompletność danych.' }, { text: steps[1], status: 'supported', evidence: 'biuro przygotowuje dokumenty.' }], roles: [], decisions: [{ text: 'Czy dane są kompletne?', status: 'assumption' }], questions: [],
+    exceptions: [
+      { text: 'Brak załącznika', status: 'assumption' },
+      { text: 'Przykład do weryfikacji', status: 'assumption' },
+    ],
   } }) })))
   const view = render(<App />)
   await user.click(screen.getByRole('button', { name: /Dodaj kroki samodzielnie/ }))
@@ -33,6 +37,7 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
   expect(await screen.findByLabelText('Kroki — pozycja 1')).toHaveProperty('value', steps[0])
   await user.click(screen.getByRole('checkbox', { name: 'Sprawdzono treść — decyzje, pozycja 1' }))
+  await user.click(screen.getByRole('checkbox', { name: 'Sprawdzono treść — wyjątki, pozycja 1' }))
   await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
   await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }))
   await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 2 do przeniesienia' }))
@@ -64,6 +69,20 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   expect(JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps.map((step) => step.name)).toEqual(steps)
   expect(screen.getByLabelText(`Pytanie decyzji — ${steps[1]}`).value).toBe('Czy dane są kompletne?')
   await user.click(screen.getByRole('button', { name: 'Przejdź do analizy' }))
+  const exception = screen.getByLabelText('Sprawdzony wyjątek z warsztatu')
+  expect(within(exception).queryByRole('option', { name: 'Przykład do weryfikacji' })).toBeNull()
+  await user.selectOptions(exception, 'Brak załącznika')
+  const name = screen.getByLabelText(/Nazwa problemu lub obserwacji/)
+  await user.type(name, 'Robocze ustalenie')
+  const insertException = screen.getByRole('button', { name: 'Wstaw wyjątek do formularza' })
+  confirm.mockReturnValueOnce(false)
+  await user.click(insertException)
+  expect(name.value).toBe('Robocze ustalenie')
+  await user.click(insertException)
+  expect(name.value).toBe('Brak załącznika')
+  expect(screen.getByLabelText(/Kategoria/).value).toBe('')
+  await user.selectOptions(screen.getByLabelText(/Kategoria/), 'Ryzyko lub możliwość błędu')
+  await user.click(screen.getByRole('button', { name: 'Dodaj ustalenie' }))
   await user.selectOptions(screen.getByLabelText(/Kategoria/), 'Wąskie gardło')
   await user.type(screen.getByLabelText(/Nazwa problemu lub obserwacji/), 'Brak terminu przekazania')
   await user.type(screen.getByLabelText('Wstępny pomysł usprawnienia'), 'Ustalić wspólny termin')

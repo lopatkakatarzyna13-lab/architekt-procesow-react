@@ -166,6 +166,13 @@ try {
   ].join('\n'))
   assert.equal(calls, 1)
   await page.getByRole('button', { name: 'Przejdź do analizy' }).click()
+  await page.getByLabel('Sprawdzony wyjątek z warsztatu', { exact: true }).selectOption('Brak fikcyjnego dokumentu')
+  await page.getByRole('button', { name: 'Wstaw wyjątek do formularza', exact: true }).click()
+  assert.equal(await page.getByLabel(/Nazwa problemu lub obserwacji/).inputValue(), 'Brak fikcyjnego dokumentu')
+  assert.equal(await page.getByLabel(/Kategoria/).inputValue(), '')
+  await page.getByLabel(/Kategoria/).selectOption({ label: 'Ryzyko lub możliwość błędu' })
+  await page.getByLabel('Wstępny pomysł usprawnienia').fill('Uzgodnić ścieżkę kompletowania dokumentów')
+  await page.getByRole('button', { name: 'Dodaj ustalenie' }).click()
   await page.getByLabel(/Kategoria/).selectOption({ label: 'Wąskie gardło' })
   await page.getByLabel(/Nazwa problemu lub obserwacji/).fill('Brak terminu przekazania')
   await page.getByLabel('Wstępny pomysł usprawnienia').fill('Ustalić wspólny termin')
@@ -318,7 +325,7 @@ try {
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
   assert.ok(!pdfText.includes('Piątek, godzina 13:00'), 'local workshop answers should stay out of the PDF')
   assert.ok(!pdfText.includes('Koordynatorka fikcyjnego wdrożenia'), 'local workshop follow-up details should stay out of the PDF')
-  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
+  for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Uzgodnić ścieżkę kompletowania dokumentów', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }
   assert.ok(rawPdfText.split('\f').some((sheet) => sheet.includes('Interesariusze procesu') && sheet.includes('Koordynator HR')), 'stakeholder heading and first item should share a page for this example')

@@ -13,3 +13,7 @@ Przy pytaniu możesz też wskazać osobę lub zespół, który wróci z odpowied
 Po sprawdzeniu treści otwartych pytań i zapisaniu propozycji przycisk „Pobierz otwarte pytania (.txt)” tworzy listę do wykorzystania po spotkaniu. Plik zawiera nazwę procesu, treść sprawdzonych otwartych pytań, przypisane osoby lub zespoły i terminy. Treść transkrypcji, cytaty i odpowiedzi robocze pozostają w warsztacie.
 
 Przed kolejnym spotkaniem możesz włączyć „Pokaż tylko otwarte pytania”. Otwarte pytania z terminem wcześniejszym niż bieżąca data urządzenia mają oznaczenie „Po terminie”. Pytania z terminem dzisiejszym są jeszcze w terminie. Filtr zmienia widok warsztatu.
+
+## Przejście od wyjątku do analizy
+
+Po sprawdzeniu wyjątku w warsztacie zapisz propozycję. W analizie procesu wybierz pozycję z pola „Sprawdzony wyjątek z warsztatu” i kliknij „Wstaw wyjątek do formularza”. Tekst wypełnia nazwę obserwacji. Wybierz kategorię, dodaj opis skutku i pomysł usprawnienia, a potem dodaj ustalenie i zapisz analizę. Zastąpienie już rozpoczętego formularza wymaga potwierdzenia.

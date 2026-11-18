@@ -26,7 +26,7 @@ import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
-import { appendWorkshopSteps } from './workshop'
+import { appendWorkshopSteps, loadWorkshop, loadWorkshopReview } from './workshop'
 import ProcessConnections from './ProcessConnections'
 import BpmnExport from './BpmnExport'
 import BpmnDecisions from './BpmnDecisions'
@@ -1229,10 +1229,13 @@ function FindingForm({
   startMethod,
   steps,
   editingId,
+  workshopExceptions,
+  onUseWorkshopException,
   onChange,
   onSubmit,
   onCancel,
 }) {
+  const [selectedException, setSelectedException] = useState('')
   const stepOptions = steps.map((step, index) => ({
     value: step.id,
     label: `${index + 1}. ${step.name}`,
@@ -1251,6 +1254,21 @@ function FindingForm({
       </div>
 
       <div className="finding-form-panel">
+        {workshopExceptions.length > 0 && <div className="form-grid">
+          <SelectField
+            id="findingWorkshopException"
+            label="Sprawdzony wyjątek z warsztatu"
+            value={selectedException}
+            options={workshopExceptions}
+            onChange={(event) => setSelectedException(event.target.value)}
+            placeholder="Wybierz wyjątek"
+          />
+          <div className="step-form-actions">
+            <button className="back-button" type="button" disabled={!selectedException} onClick={() => {
+              if (onUseWorkshopException(selectedException)) setSelectedException('')
+            }}>Wstaw wyjątek do formularza</button>
+          </div>
+        </div>}
         <div className="form-grid">
           <SelectField
             id="findingCategory"
@@ -1448,6 +1466,7 @@ function FindingsList({ findings, steps, startMethod, editingId, onEdit, onDelet
 }
 
 function AnalysisScreen({
+  processId,
   scope,
   startMethod,
   steps,
@@ -1459,6 +1478,7 @@ function AnalysisScreen({
   saved,
   saveError,
   onChange,
+  onUseWorkshopException,
   onAdd,
   onEdit,
   onDelete,
@@ -1467,6 +1487,17 @@ function AnalysisScreen({
   onSave,
   onContinue,
 }) {
+  const [workshopExceptions] = useState(() => {
+    if (!processId) return []
+    try {
+      const { transcript } = loadWorkshop(localStorage, processId)
+      const { review } = loadWorkshopReview(localStorage, processId, transcript)
+      return [...new Set((review?.exceptions ?? []).filter((item) => item.reviewed === true)
+        .map(({ text }) => text.trim().replace(/\s+/g, ' ')))]
+    } catch {
+      return []
+    }
+  })
   return (
     <section className="workspace analysis-workspace" aria-labelledby="analysis-title">
       <div className="analysis-intro">
@@ -1491,6 +1522,8 @@ function AnalysisScreen({
         startMethod={startMethod}
         steps={steps}
         editingId={editingId}
+        workshopExceptions={workshopExceptions}
+        onUseWorkshopException={onUseWorkshopException}
         onChange={onChange}
         onSubmit={onAdd}
         onCancel={onCancelEdit}
@@ -4074,6 +4107,19 @@ try {
     setFindingErrors({})
   }
 
+  const useWorkshopException = (text) => {
+    const hasDraft = Object.keys(emptyFinding).some((field) => findingDraft[field] !== emptyFinding[field])
+    if ((hasDraft || editingFindingId) && !window.confirm('Zastąpić bieżący formularz analizy wyjątkiem z warsztatu?')) return false
+    setFindingDraft({ ...emptyFinding, name: text })
+    setEditingFindingId(null)
+    setFindingErrors({})
+    setAnalysisError('')
+    setAnalysisSaved(false)
+    setAnalysisSaveError(false)
+    document.getElementById('findingCategory')?.focus()
+    return true
+  }
+
   const addOrUpdateFinding = () => {
     const validationErrors = {}
     if (!findingDraft.category) {
@@ -4784,6 +4830,8 @@ try {
           />
         ) : screen === 'analysis' ? (
           <AnalysisScreen
+            key={processIdentityState.id}
+            processId={processIdentityState.id}
             scope={formData}
             startMethod={startMethod}
             steps={steps}
@@ -4795,6 +4843,7 @@ try {
             saved={analysisSaved}
             saveError={analysisSaveError}
             onChange={handleFindingChange}
+            onUseWorkshopException={useWorkshopException}
             onAdd={addOrUpdateFinding}
             onEdit={editFinding}
             onDelete={deleteFinding}
