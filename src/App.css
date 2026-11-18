@@ -2254,6 +2254,24 @@ button {
   font-size: 9px;
 }
 
+.raci-table tbody tr:focus {
+  outline: 2px solid #6554ae;
+  outline-offset: -2px;
+}
+
+.report-workshop-questions li {
+  margin-block: 0.75em;
+  break-inside: avoid;
+}
+
+.report-workshop-questions li p {
+  margin: 0.25em 0 0;
+}
+
+.report-workshop-questions label input {
+  margin-inline-end: 0.5em;
+}
+
 .raci-table th,
 .raci-table td {
   min-width: 125px;

@@ -20,7 +20,7 @@ import {
   saveCurrentProcessId,
 } from './processIdentity'
 import { buildProcessSnapshot } from './processSnapshot'
-import { compareProcessSteps } from './processStepComparison'
+import { compareProcessSteps, withDetectedStepChanges } from './processStepComparison'
 import { getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
 import { deleteSavedProcess } from './deleteSavedProcess'
@@ -2100,6 +2100,9 @@ function ToBeScreen({
   const [bpmnDrafts, setBpmnDrafts] = useState({})
   const bpmnDraftDirty = Object.values(bpmnDrafts).some(Boolean)
   const markBpmnDraft = (id, dirty) => setBpmnDrafts((current) => ({ ...current, [id]: dirty }))
+  const displaySteps = startMethod === 'steps'
+    ? withDetectedStepChanges(steps, compareProcessSteps(asIsSteps, steps))
+    : steps
   return (
     <section className="workspace to-be-workspace" aria-labelledby="to-be-title">
       <div className="analysis-intro">
@@ -2146,7 +2149,7 @@ function ToBeScreen({
         onCopy={onCopySteps}
       />
       <ToBeStepsList
-        steps={steps}
+        steps={displaySteps}
         findings={findings}
         editingId={editingStepId}
         error={toBeError}
@@ -2155,7 +2158,7 @@ function ToBeScreen({
         deleteDisabled={bpmnDraftDirty}
         onMove={onMoveStep}
       />
-      <ToBeSummary steps={steps} selectedCount={selectedFindingIds.length} />
+      <ToBeSummary steps={displaySteps} selectedCount={selectedFindingIds.length} />
       {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
       <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
       <BpmnLanes steps={steps} variant="TO-BE" onSave={onSaveBpmnLane} onDraftChange={markBpmnDraft} />
@@ -2791,7 +2794,7 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
             <tbody>
               {steps.map((step, index) => (
                 <Fragment key={step.id}>
-                  <tr>
+                  <tr id={`raci-step-${step.id}`} tabIndex={-1}>
                     <th><span>{index + 1}</span>{step.name}</th>
                     {stakeholders.map((item) => {
                       const value = raci[step.id]?.[item.id] ?? ''
@@ -2802,6 +2805,7 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
                             value={value}
                             onChange={(event) => onChange(step.id, item.id, event.target.value)}
                             aria-label={`${step.name}: ${item.name}`}
+                            aria-describedby={errors[step.id]?.length ? `raci-errors-${step.id}` : undefined}
                           >
                             {options.map(([optionValue, label]) => <option value={optionValue} key={optionValue || 'none'}>{label}</option>)}
                           </select>
@@ -2811,7 +2815,7 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange }) {
                   </tr>
                   {errors[step.id]?.length > 0 && (
                     <tr className="raci-error-row">
-                      <td colSpan={stakeholders.length + 1}>
+                      <td id={`raci-errors-${step.id}`} colSpan={stakeholders.length + 1}>
                         {errors[step.id].map((message) => <span key={message}>! {message}</span>)}
                       </td>
                     </tr>
@@ -3025,6 +3029,7 @@ function PrintReport({
   stepComparison,
   stakeholders,
   raci,
+  workshopQuestions,
   generatedAt,
 }) {
   const formattedDate = new Intl.DateTimeFormat('pl-PL', {
@@ -3092,6 +3097,16 @@ function PrintReport({
         toBeSteps={toBeSteps}
         selectedFindingIds={selectedFindingIds}
       />
+      {workshopQuestions.length > 0 && (
+        <section className="report-section report-workshop-questions">
+          <ReportSectionTitle number="10" title="Otwarte pytania po warsztacie" />
+          <ol>
+            {workshopQuestions.map((question) => (
+              <li key={question.id}><strong>{question.text}</strong><WorkshopQuestionDetails question={question} /></li>
+            ))}
+          </ol>
+        </section>
+      )}
     </div>
   )
 }
@@ -3105,7 +3120,7 @@ function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
     ['Ustalenia o wysokim wpływie', findings.filter((item) => item.impactLevel === 'Wysoki').map((item) => item.name), 'Nie zidentyfikowano ustaleń o wysokim wpływie'],
     ['Wąskie gardła', findings.filter((item) => item.category === 'Wąskie gardło').map((item) => item.name), 'Nie zidentyfikowano wąskich gardeł'],
     ['Ryzyka', findings.filter((item) => item.category === 'Ryzyko lub możliwość błędu').map((item) => item.name), 'Nie zidentyfikowano ryzyk'],
-    ['Niejasne odpowiedzialności', findings.filter((item) => item.category === 'Niejasna odpowiedzialność').map((item) => item.name), 'Nie zidentyfikowano niejasnych odpowiedzialności'],
+    ['Niejasne odpowiedzialności', findings.filter((item) => item.category === 'Niejasna odpowiedzialność').map((item) => item.name), 'Brak ustaleń analitycznych w tej kategorii'],
     ['Wybrane ustalenia bez powiązanego kroku TO-BE', missingSteps.map(({ name }) => name), 'Każde wybrane ustalenie ma powiązany krok TO-BE'],
     ['Ustalenia nieuwzględnione w TO-BE', findings.filter((item) => !selectedIds.has(item.id)).map((item) => item.name), 'Wszystkie ustalenia uwzględniono w TO-BE'],
   ]
@@ -3125,7 +3140,28 @@ function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
   )
 }
 
+function loadReportQuestions(processId) {
+  if (!processId) return []
+  try {
+    const { transcript } = loadWorkshop(localStorage, processId)
+    const { review } = loadWorkshopReview(localStorage, processId, transcript)
+    return (review?.questions ?? []).flatMap(({ text, reviewed, answerConfirmed, assignee, dueDate }, index) => {
+      if (reviewed !== true || answerConfirmed) return []
+      const question = { text: text.trim(), assignee: assignee?.trim() ?? '', dueDate: dueDate ?? '' }
+      return [{ ...question, id: JSON.stringify([index, question]) }]
+    })
+  } catch {
+    return []
+  }
+}
+
+function WorkshopQuestionDetails({ question }) {
+  const dueDate = question.dueDate.split('-').reverse().join('.')
+  return <p>Osoba lub zespół: {question.assignee || 'do ustalenia'} · Termin: {dueDate || 'do ustalenia'}</p>
+}
+
 function ReportScreen({
+  processId,
   scope,
   startMethod,
   asIsDescription,
@@ -3161,12 +3197,25 @@ function ReportScreen({
   printGeneratedAt,
 }) {
   const stepComparison = startMethod === 'steps' ? compareProcessSteps(asIsSteps, modeledSteps) : null
-  const changedStepIds = new Set(stepComparison?.changed.map(({ id }) => id))
-  const toBeSteps = modeledSteps.map((step) => (
-    step.stepType === 'Bez zmian' && changedStepIds.has(step.id)
-      ? { ...step, stepType: 'Zmieniony' }
-      : step
-  ))
+  const toBeSteps = withDetectedStepChanges(modeledSteps, stepComparison)
+  const [workshopQuestions, setWorkshopQuestions] = useState(() => loadReportQuestions(processId))
+  const [selectedQuestions, setSelectedQuestions] = useState([])
+  const [questionError, setQuestionError] = useState('')
+  const questionsForPrint = workshopQuestions.filter((question) => selectedQuestions.includes(question.id))
+
+  const handleExport = () => {
+    if (selectedQuestions.length > 0) {
+      const currentQuestions = loadReportQuestions(processId)
+      if (!selectedQuestions.every((id) => currentQuestions.some((question) => question.id === id))) {
+        setWorkshopQuestions(currentQuestions)
+        setSelectedQuestions([])
+        setQuestionError('Ustalenia warsztatowe się zmieniły. Sprawdź pytania przed eksportem.')
+        return
+      }
+    }
+    setQuestionError('')
+    onExport()
+  }
 
   return (
     <section className="workspace report-workspace" aria-labelledby="report-title">
@@ -3200,6 +3249,30 @@ function ReportScreen({
       />
       <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} onChange={onRaciChange} />
       <Recommendations findings={findings} toBeSteps={toBeSteps} selectedFindingIds={selectedFindingIds} />
+      {(workshopQuestions.length > 0 || questionError) && (
+        <section className="report-section report-workshop-questions">
+          <ReportSectionTitle number="10" title="Otwarte pytania po warsztacie"
+            description="Zaznacz pytania, które chcesz uwzględnić w PDF." />
+          {questionError && <p role="alert">{questionError}</p>}
+          <ul>
+            {workshopQuestions.map((question) => (
+              <li key={question.id}>
+                <label>
+                  <input type="checkbox" checked={selectedQuestions.includes(question.id)} disabled={printPreparing}
+                    onChange={(event) => {
+                      const { checked } = event.target
+                      setSelectedQuestions((current) => checked
+                        ? [...current, question.id]
+                        : current.filter((id) => id !== question.id))
+                    }} />
+                  {question.text}
+                </label>
+                <WorkshopQuestionDetails question={question} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {reportError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>{reportError}</strong><small>Uzupełnij wymagane dane raportu.</small></div></div>}
       {saved && <div className="save-message success-message" role="status"><span aria-hidden="true">✓</span><div><strong>Raport procesu został zapisany</strong><small>Interesariusze i macierz RACI są zapisane lokalnie.</small></div></div>}
       {saveError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>Nie udało się zapisać raportu</strong><small>Sprawdź ustawienia przeglądarki i spróbuj ponownie.</small></div></div>}
@@ -3209,7 +3282,7 @@ function ReportScreen({
       <div className="form-actions">
         <button className="back-button" type="button" onClick={onBack}><span aria-hidden="true">←</span>Wróć do TO-BE</button>
         <button className="save-button" type="button" onClick={onSave}>Zapisz raport<span aria-hidden="true">✓</span></button>
-        <button className="export-button" type="button" onClick={onExport} disabled={printPreparing}>
+        <button className="export-button" type="button" onClick={handleExport} disabled={printPreparing}>
           {printPreparing ? 'Przygotowuję PDF…' : 'Eksportuj do PDF'}
           <span aria-hidden="true">↗</span>
         </button>
@@ -3231,6 +3304,7 @@ function ReportScreen({
         stepComparison={stepComparison}
         stakeholders={stakeholders}
         raci={raci}
+        workshopQuestions={questionsForPrint}
         generatedAt={printGeneratedAt}
       />
     </section>
@@ -4763,6 +4837,24 @@ try {
     setReportSaveError(false)
   }
 
+  const validateReportAssignments = () => {
+    if (stakeholders.length === 0) {
+      setReportError('Dodaj co najmniej jednego interesariusza.')
+      document.getElementById('stakeholderName')?.focus()
+      return false
+    }
+
+    const validationErrors = getRaciValidationErrors(toBeSteps, raci)
+    setRaciErrors(validationErrors)
+    const firstInvalidIndex = toBeSteps.findIndex((step) => validationErrors[step.id]?.length)
+    if (firstInvalidIndex < 0) return true
+
+    const step = toBeSteps[firstInvalidIndex]
+    setReportError(`Uzupełnij macierz RACI w kroku ${firstInvalidIndex + 1}. ${step.name}`)
+    document.getElementById(`raci-step-${step.id}`)?.focus()
+    return false
+  }
+
   const saveReport = () => {
     setReportError('')
     setReportSaved(false)
@@ -4773,18 +4865,7 @@ try {
       return
     }
 
-    if (stakeholders.length === 0) {
-      setReportError('Dodaj co najmniej jednego interesariusza.')
-      return
-    }
-
-    const validationErrors = getRaciValidationErrors(toBeSteps, raci)
-    setRaciErrors(validationErrors)
-
-    if (Object.keys(validationErrors).length > 0) {
-      setReportError('Uzupełnij poprawnie macierz RACI dla wszystkich kroków.')
-      return
-    }
+    if (!validateReportAssignments()) return
 
     try {
       localStorage.setItem(
@@ -4808,19 +4889,8 @@ try {
       setReportError('Dokończ formularz interesariusza przed eksportem PDF.')
       return
     }
-    const validationErrors = getRaciValidationErrors(toBeSteps, raci)
-    setRaciErrors(validationErrors)
     setReportSaveError(false)
-
-    if (
-      stakeholders.length === 0 ||
-      Object.keys(validationErrors).length > 0
-    ) {
-      setReportError(
-        'Przed eksportem uzupełnij interesariuszy i poprawnie przypisz role w macierzy RACI.',
-      )
-      return
-    }
+    if (!validateReportAssignments()) return
 
     setReportError('')
     printPreparingRef.current = true
@@ -5076,6 +5146,8 @@ try {
           />
         ) : (
           <ReportScreen
+            key={processIdentityState.id}
+            processId={processIdentityState.id}
             scope={formData}
             startMethod={startMethod}
             asIsDescription={asIsDescription}

@@ -19,7 +19,11 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
   const print = vi.spyOn(window, 'print').mockImplementation(() => {})
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ proposal: {
-    steps: [{ text: steps[0], status: 'supported', evidence: 'HR sprawdza kompletność danych.' }, { text: steps[1], status: 'supported', evidence: 'biuro przygotowuje dokumenty.' }], roles: [], decisions: [{ text: 'Czy dane są kompletne?', status: 'assumption' }], questions: [],
+    steps: [{ text: steps[0], status: 'supported', evidence: 'HR sprawdza kompletność danych.' }, { text: steps[1], status: 'supported', evidence: 'biuro przygotowuje dokumenty.' }], roles: [], decisions: [{ text: 'Czy dane są kompletne?', status: 'assumption' }], questions: [
+      { text: 'Kto zastąpi koordynatora?', status: 'question' },
+      { text: 'Kto powiadamia biuro?', status: 'question' },
+      { text: 'Kiedy nastąpi przegląd?', status: 'question' },
+    ],
     exceptions: [
       { text: 'Brak załącznika', status: 'assumption' },
       { text: 'Przykład do weryfikacji', status: 'assumption' },
@@ -38,6 +42,9 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   expect(await screen.findByLabelText('Kroki — pozycja 1')).toHaveProperty('value', steps[0])
   await user.click(screen.getByRole('checkbox', { name: 'Sprawdzono treść — decyzje, pozycja 1' }))
   await user.click(screen.getByRole('checkbox', { name: 'Sprawdzono treść — wyjątki, pozycja 1' }))
+  await user.click(screen.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }))
+  await user.click(screen.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 3' }))
+  await user.type(screen.getByLabelText('Kto wróci z odpowiedzią — pytanie 1'), 'Zespół testowy')
   await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
   await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }))
   await user.click(screen.getByRole('checkbox', { name: 'Wybierz krok 2 do przeniesienia' }))
@@ -106,6 +113,8 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   await user.clear(sourceOwner)
   await user.type(sourceOwner, 'Zespół kontroli')
   await user.click(screen.getByRole('button', { name: 'Zapisz zmiany', exact: true }))
+  const stepList = screen.getByRole('region', { name: 'Kroki procesu docelowego' })
+  expect(within(within(stepList).getByText(steps[0]).closest('li')).getByText('Zmieniony')).toBeTruthy()
   const included = within(screen.getByRole('region', { name: 'Ustalenia do uwzględnienia' }))
   const missingFinding = included.getByRole('checkbox', { name: /Brak załącznika/ }).closest('label')
   const linkedFinding = included.getByRole('checkbox', { name: /Brak terminu przekazania/ }).closest('label')
@@ -149,6 +158,12 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   await user.click(screen.getByRole('button', { name: 'Przejdź do raportu' }))
   await user.type(screen.getByLabelText(/Nazwa osoby, roli lub zespołu/), 'Koordynator HR')
   await user.click(screen.getByRole('button', { name: 'Dodaj interesariusza' }))
+  await user.selectOptions(screen.getByLabelText(`${steps[0]}: Koordynator HR`), 'RA')
+  const invalidRow = screen.getByLabelText(`${steps[1]}: Koordynator HR`).closest('tr')
+  await user.click(screen.getByRole('button', { name: 'Eksportuj do PDF' }))
+  expect(screen.getByText(`Uzupełnij macierz RACI w kroku 2. ${steps[1]}`)).toBeTruthy()
+  expect(document.activeElement).toBe(invalidRow)
+  expect(print).not.toHaveBeenCalled()
   for (const step of [...steps, 'Ustalić wspólny termin']) {
     await user.selectOptions(screen.getByLabelText(`${step}: Koordynator HR`), 'RA')
   }
@@ -158,6 +173,16 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   render(<App />)
   expect(screen.getByText('Raport procesu został zapisany')).toBeTruthy()
   const report = screen.getByRole('heading', { name: 'Podsumuj proces i odpowiedzialności' }).closest('.report-workspace')
+  const questionToPrint = within(report).getByRole('checkbox', { name: 'Kto zastąpi koordynatora?' })
+  const printView = report.querySelector('.print-report')
+  expect(questionToPrint.checked).toBe(false)
+  expect(within(printView).queryByText('Kto zastąpi koordynatora?')).toBeNull()
+  expect(within(report).queryByRole('checkbox', { name: 'Kto powiadamia biuro?' })).toBeNull()
+  await user.click(questionToPrint)
+  expect(within(printView).getByText('Kto zastąpi koordynatora?')).toBeTruthy()
+  expect(within(printView).getByText(/Osoba lub zespół: Zespół testowy/)).toBeTruthy()
+  expect(within(report).getByRole('checkbox', { name: 'Kiedy nastąpi przegląd?' }).checked).toBe(false)
+  expect(within(printView).queryByText('Kiedy nastąpi przegląd?')).toBeNull()
   for (const counter of within(report).getAllByText('Zmienione kroki', { exact: true })) {
     expect(counter.previousElementSibling.textContent).toBe('1')
   }

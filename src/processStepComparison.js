@@ -31,3 +31,11 @@ export function compareProcessSteps(asIsSteps, toBeSteps) {
 
   return { changed, unmatchedToBe, unmatchedAsIs: asIsSteps.filter(({ id }) => !matchedIds.has(id)) }
 }
+
+export function withDetectedStepChanges(steps, comparison) {
+  if (!comparison?.changed.length) return steps
+  const changedIds = new Set(comparison.changed.map(({ id }) => id))
+  return steps.map((step) => step.stepType === 'Bez zmian' && changedIds.has(step.id)
+    ? { ...step, stepType: 'Zmieniony' }
+    : step)
+}
