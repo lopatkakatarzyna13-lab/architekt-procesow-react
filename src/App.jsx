@@ -140,6 +140,12 @@ const emptyStakeholder = {
   engagement: '',
 }
 
+function hasPendingForm(draft, defaults, editingId) {
+  return Boolean(editingId) || Object.entries(defaults).some(([field, initial]) => {
+    const value = draft[field]
+    return Array.isArray(initial) ? value.length > 0 : value !== initial
+  })
+}
 
 
 function loadSavedScope() {
@@ -3359,6 +3365,14 @@ function App() {
   () =>
     sessionStorage.getItem('architekt-procesow-screen-to-open') || 'start'
 )
+  useEffect(() => {
+    if (!['as-is', 'analysis', 'to-be', 'report'].includes(screen)) return
+    try {
+      sessionStorage.setItem('architekt-procesow-screen-to-open', screen)
+    } catch {
+      // The saved process sections remain available if session storage is unavailable.
+    }
+  }, [screen])
   const [screenBeforeProcesses, setScreenBeforeProcesses] = useState('start')
   const [startMethod, setStartMethod] = useState(savedScope.startMethod)
   const [workMode, setWorkMode] = useState(savedScope.workMode)
@@ -3438,6 +3452,10 @@ function App() {
   const [printBpmn, setPrintBpmn] = useState({ svg: '', error: '' })
   const [printPreparing, setPrintPreparing] = useState(false)
   const printPreparingRef = useRef(false)
+  const asIsFormPending = startMethod === 'steps' && hasPendingForm(stepDraft, emptyStep, editingStepId)
+  const findingFormPending = hasPendingForm(findingDraft, emptyFinding, editingFindingId)
+  const toBeFormPending = hasPendingForm(toBeStepDraft, emptyToBeStep, editingToBeStepId)
+  const stakeholderFormPending = hasPendingForm(stakeholderDraft, emptyStakeholder, editingStakeholderId)
 
   const testSupabaseRead = async () => {
     if (!supabase) {
@@ -4122,6 +4140,11 @@ try {
     setAsIsSaveError(false)
     setAsIsError('')
 
+    if (asIsFormPending) {
+      setAsIsError('Dokończ formularz kroku AS-IS przed zapisem procesu.')
+      return
+    }
+
     if (startMethod === 'steps' && steps.length === 0) {
       setAsIsError('Dodaj co najmniej jeden krok procesu.')
       return
@@ -4152,6 +4175,10 @@ try {
   }
 
   const continueToAnalysis = () => {
+    if (asIsFormPending) {
+      setAsIsError('Dokończ formularz kroku AS-IS przed przejściem do analizy.')
+      return
+    }
     const hasRequiredAsIs =
       startMethod === 'steps' ? steps.length > 0 : Boolean(asIsDescription.trim())
 
@@ -4199,8 +4226,7 @@ try {
   }
 
   const useWorkshopException = (text) => {
-    const hasDraft = Object.keys(emptyFinding).some((field) => findingDraft[field] !== emptyFinding[field])
-    if ((hasDraft || editingFindingId) && !window.confirm('Zastąpić bieżący formularz analizy wyjątkiem z warsztatu?')) return false
+    if (findingFormPending && !window.confirm('Zastąpić bieżący formularz analizy wyjątkiem z warsztatu?')) return false
     setFindingDraft({ ...emptyFinding, name: text })
     setEditingFindingId(null)
     setFindingErrors({})
@@ -4289,6 +4315,11 @@ try {
     setAnalysisSaved(false)
     setAnalysisSaveError(false)
 
+    if (findingFormPending) {
+      setAnalysisError('Dokończ formularz ustalenia przed zapisem analizy.')
+      return
+    }
+
     if (findings.length === 0) {
       setAnalysisError('Dodaj co najmniej jedno ustalenie analityczne.')
       return
@@ -4317,6 +4348,10 @@ try {
   }
 
   const continueToToBe = () => {
+    if (findingFormPending) {
+      setAnalysisError('Dokończ formularz ustalenia przed przejściem do TO-BE.')
+      return
+    }
     if (!analysisSaved || findings.length === 0) {
       setAnalysisError('Dodaj i zapisz co najmniej jedno ustalenie analityczne.')
       return
@@ -4534,6 +4569,11 @@ try {
     setToBeSaved(false)
     setToBeSaveError(false)
 
+    if (toBeFormPending) {
+      setToBeError('Dokończ formularz kroku TO-BE przed zapisem procesu.')
+      return
+    }
+
     const isGoalMissing = !toBeAssumptions.changeGoal.trim()
     const areStepsMissing = toBeSteps.length === 0
 
@@ -4579,6 +4619,10 @@ try {
   }
 
   const continueToReport = () => {
+    if (toBeFormPending) {
+      setToBeError('Dokończ formularz kroku TO-BE przed przejściem do raportu.')
+      return
+    }
     if (
       !toBeSaved ||
       !toBeAssumptions.changeGoal.trim() ||
@@ -4714,6 +4758,11 @@ try {
     setReportSaved(false)
     setReportSaveError(false)
 
+    if (stakeholderFormPending) {
+      setReportError('Dokończ formularz interesariusza przed zapisem raportu.')
+      return
+    }
+
     if (stakeholders.length === 0) {
       setReportError('Dodaj co najmniej jednego interesariusza.')
       return
@@ -4745,6 +4794,10 @@ try {
 
   const exportReport = async () => {
     if (printPreparingRef.current) return
+    if (stakeholderFormPending) {
+      setReportError('Dokończ formularz interesariusza przed eksportem PDF.')
+      return
+    }
     const validationErrors = getRaciValidationErrors(toBeSteps, raci)
     setRaciErrors(validationErrors)
     setReportSaveError(false)

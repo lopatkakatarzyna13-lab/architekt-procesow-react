@@ -15,3 +15,11 @@ Dla `a415fa357d93467778221b721f306e3763d44dd6` [przebieg MVP](https://github.com
 Przegląd wizualny PDF wygenerowanego dla `c9c9f4950935bac222060174535559b6aa48c631`: cztery strony A4, nazwa, procesy, mapa i RACI widoczne; nagłówek interesariuszy został na końcu strony 3, a treść przeszła na stronę 4. Dodatkowo przy R/A pokazywały się puste wiersze R i A. Przygotowano poprawkę podziału strony i usunięcie pustych przypisań; weryfikacja po poprawce wymaga nowego wyniku CI i wizualnego przeglądu. Próba jest ograniczona do tego przykładu, nie zastępuje weryfikacji długich danych.
 
 Wynik po poprawce dla `6e172d5db6efe0bd55220fcffda36f8f61ffc164`: [MVP i Chromium](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44137714296) zakończyły się sukcesem; PDF sprawdzono pod kątem wybranych treści oraz obejrzano wszystkie cztery strony A4. Nagłówek i pierwszy interesariusz są na jednej stronie; puste R i A przy R/A nie występują. W tym fikcyjnym przykładzie nie stwierdzono blokującego problemu układu. Punkt próby na fikcyjnym warsztacie zamknięto dla tego zakresu; nie obejmuje prawdziwego modelu, klienta, innych przeglądarek ani wielostronicowych nietypowo długich danych. SEC-04, koszty oraz wdrożenie pozostają otwarte.
+
+## Ponowna próba 18 listopada 2026
+
+Punkt wyjścia `4ec8193`. Przykład HR obejmuje kontrolę kompletności dokumentów, zwrot brakujących danych, uzgodnienie terminu przekazania, udział zewnętrznego biura i przypisanie odpowiedzialności.
+
+- Po odświeżeniu karta wracała do poprzednio zapamiętanego ekranu, zwykle AS-IS. Aplikacja zapisuje teraz bieżący etap od AS-IS do raportu dla tej karty. Scenariusz sprawdza odświeżenie TO-BE i zapisanego raportu z macierzą RACI.
+- Zapis etapu mógł pominąć wpis w otwartym formularzu kroku, ustalenia lub interesariusza. Zapis i przejście dalej wymagają dokończenia formularza. Eksport PDF również sprawdza formularz interesariusza.
+- Próba w Chromium obejmuje archiwizację i otwarcie z „Moich procesów”, odczyt eksportu BPMN i sprawdzenie tekstu wygenerowanego PDF. Odpowiedź AI pochodzi z fikcyjnej odpowiedzi zapisanej w teście.
