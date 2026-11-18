@@ -1,6 +1,6 @@
-export function validateWorkshopProposal(proposal, transcript) {
+export function validateWorkshopProposal(proposal, transcript, { allowEmptyTranscript = false } = {}) {
   const errors = []
-  if (typeof transcript !== 'string' || !transcript.trim()) return ['Brakuje transkrypcji.']
+  if (typeof transcript !== 'string' || (!allowEmptyTranscript && !transcript.trim())) return ['Brakuje transkrypcji.']
   if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) return ['Nieprawidłowy format propozycji.']
   for (const category of ['steps', 'roles', 'decisions', 'questions', 'systems', 'exceptions']) {
     if ((category === 'systems' || category === 'exceptions') && proposal[category] === undefined) continue

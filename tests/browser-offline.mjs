@@ -21,9 +21,7 @@ try {
   // Simulate losing internet AFTER the application has loaded.
   await context.setOffline(true)
   assert.equal(await page.evaluate(() => navigator.onLine), false)
-  await page.getByLabel('Tekst rozmowy').fill(transcript)
-  await page.getByRole('button', { name: 'Zapisz transkrypcję' }).click()
-  await page.getByText('Transkrypcja zapisana na tym urządzeniu.').waitFor()
+  assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), '')
   await page.getByRole('button', { name: 'Opracuj ręcznie' }).click()
   await page.getByRole('button', { name: 'Dodaj: kroki' }).click()
   await page.getByLabel('Kroki — pozycja 1').fill(expectedSteps[0])
@@ -36,6 +34,10 @@ try {
   await page.getByRole('button', { name: 'Przenieś wybrane kroki do AS-IS' }).click()
   await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
   await page.getByText('Proces AS-IS został zapisany').waitFor()
+  await page.getByLabel('Tekst rozmowy').fill(transcript)
+  await page.getByRole('button', { name: 'Zapisz transkrypcję' }).click()
+  await page.getByText('Transkrypcja zapisana na tym urządzeniu.').waitFor()
+  assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), expectedSteps[0])
 
   const saved = await page.evaluate(() => ({
     identity: localStorage.getItem('architekt-procesow:current-process-id'),
@@ -57,6 +59,7 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByLabel('Tekst rozmowy').waitFor()
   assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), transcript)
+  assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), expectedSteps[0])
   const restoredSteps = await page.locator('ol.steps-list li .step-details strong').allTextContents()
   assert.deepEqual(restoredSteps, expectedSteps)
   console.log('PASS: after reconnecting and reloading, the saved workshop and AS-IS steps are restored')

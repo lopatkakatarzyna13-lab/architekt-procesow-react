@@ -14,7 +14,7 @@ function isWorkshopDueDate(value) {
 }
 
 export function validateWorkshopReview(review, transcript) {
-  const errors = validateWorkshopProposal(review, transcript)
+  const errors = validateWorkshopProposal(review, transcript, { allowEmptyTranscript: true })
   if (errors.length) return errors
 
   for (const question of review.questions) {
@@ -87,6 +87,9 @@ function transcriptMarker(transcript) {
   return `${transcript.length}:${hash.toString(16).padStart(16, '0')}`
 }
 
+// Notes started without a transcript are independent of later transcript edits.
+const MANUAL_REVIEW_MARKER = transcriptMarker('')
+
 export function loadWorkshopReview(storage, processId, transcript) {
   const key = reviewKey(processId)
   const value = storage.getItem(key)
@@ -117,19 +120,22 @@ export function loadWorkshopReview(storage, processId, transcript) {
     typeof data.review !== 'object') {
     throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
   }
-  if (data.sourceMarker !== transcriptMarker(transcript)) return { review: null, stale: true }
-  if (validateWorkshopReview(data.review, transcript).length) {
+  const manual = data.sourceMarker === MANUAL_REVIEW_MARKER
+  if (!manual && data.sourceMarker !== transcriptMarker(transcript)) return { review: null, stale: true }
+  if (validateWorkshopReview(data.review, manual ? '' : transcript).length) {
     throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
   }
-  return { review: data.review, stale: false }
+  return { review: data.review, stale: false, ...(manual && { manual }) }
 }
 
-export function saveWorkshopReview(storage, processId, transcript, review, { replaceStale = false } = {}) {
+export function saveWorkshopReview(storage, processId, transcript, review, { replaceStale = false, manual = false } = {}) {
   const key = reviewKey(processId)
-  if (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_LENGTH || validateWorkshopReview(review, transcript).length) throw new Error('Nieprawidłowa propozycja.')
+  if (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_LENGTH) throw new Error('Nieprawidłowa transkrypcja.')
+  const source = manual || !transcript.trim() ? '' : transcript
+  if (validateWorkshopReview(review, source).length) throw new Error('Nieprawidłowa propozycja.')
   const current = loadWorkshopReview(storage, processId, transcript)
   if (current.stale && !replaceStale) throw new Error('Istnieje propozycja dla innej wersji transkrypcji.')
-  storage.setItem(key, JSON.stringify({ version: 2, sourceMarker: transcriptMarker(transcript), review }))
+  storage.setItem(key, JSON.stringify({ version: 2, sourceMarker: transcriptMarker(source), review }))
 }
 
 // Delete only the selected process's workshop and its review. Never touch

@@ -59,6 +59,15 @@ describe('review persistence', () => {
     expect(loadWorkshopReview(s, B, transcript)).toEqual({ review: null, stale: false })
     expect(loadWorkshopReview(s, A, 'HR zmienia dane.')).toEqual({ review: null, stale: true })
   })
+  it('retains a manual review when a transcript is added and rejects unsupported source claims', () => {
+    const s = storage()
+    const manual = { ...review(), steps: [{ text: 'Kontrola danych', status: 'assumption' }] }
+    saveWorkshopReview(s, A, '', manual)
+    saveWorkshop(s, A, transcript)
+    expect(loadWorkshopReview(s, A, transcript)).toEqual({ review: manual, manual: true, stale: false })
+    expect(() => saveWorkshopReview(s, A, transcript, review(), { manual: true })).toThrow()
+    expect(loadWorkshopReview(s, A, transcript).review).toEqual(manual)
+  })
   it('requires explicit replacement for a review from an older transcript', () => {
     const s = storage()
     const other = { steps: [], roles: [], decisions: [], questions: [{ text: 'Kto zatwierdza?', status: 'question', evidence: '' }] }

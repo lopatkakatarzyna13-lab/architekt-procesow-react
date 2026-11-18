@@ -48,6 +48,34 @@ describe('workshop review screen', () => {
     expect(screen.queryByText('Propozycja do sprawdzenia')).toBeNull()
   })
 
+  it('saves manual notes before a transcript and preserves them when text is added later', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const view = render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+    await user.click(screen.getByRole('button', { name: 'Dodaj: pytania' }))
+    await user.type(screen.getByLabelText('Pytania — pozycja 1'), 'Kto zatwierdza?')
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    expect(screen.getByText('Propozycja zapisana na tym urządzeniu.')).toBeTruthy()
+    expect(screen.getByLabelText('Tekst rozmowy').value).toBe('')
+
+    await user.type(screen.getByLabelText('Odpowiedź — pytanie 1'), 'Kadry')
+    await user.type(screen.getByLabelText('Tekst rozmowy'), 'Fragment dopisany po spotkaniu.')
+    expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('Kadry')
+    expect(confirm).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Zapisz transkrypcję' }))
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    view.unmount()
+
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    expect(screen.getByLabelText('Pytania — pozycja 1').value).toBe('Kto zatwierdza?')
+    expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('Kadry')
+    expect(screen.getByLabelText('Tekst rozmowy').value).toBe('Fragment dopisany po spotkaniu.')
+    await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
+    expect(confirm).toHaveBeenCalledWith('Nowa propozycja zastąpi bieżące ustalenia, w tym odpowiedzi na pytania, przypisane osoby i terminy. Kontynuować?')
+    expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('Kadry')
+  })
+
   it('opens an older proposal and allows new categories to be added', async () => {
     const user = userEvent.setup()
     const transcript = 'HR sprawdza dane.'

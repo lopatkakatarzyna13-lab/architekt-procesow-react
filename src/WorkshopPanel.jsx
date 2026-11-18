@@ -35,6 +35,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   const [message, setMessage] = useState(initial.error)
   const [savedAt, setSavedAt] = useState(initial.savedAt)
   const [analysis, setAnalysis] = useState(() => completeReview(initial.review))
+  const [manualReview, setManualReview] = useState(Boolean(initial.manual))
   const [reviewDirty, setReviewDirty] = useState(false)
   const [analysisMessage, setAnalysisMessage] = useState(initial.reviewError)
   const [storageUncertain, setStorageUncertain] = useState(false)
@@ -107,6 +108,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
       setReviewLoadError('')
       setStaleReview(false)
       setAnalysis(null)
+      setManualReview(false)
       setReviewDirty(false)
       setSelectedSteps([])
       dirtyRef.current = false
@@ -119,26 +121,31 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   }
 
   const changeTranscript = (value) => {
-    if (reviewDirty && !window.confirm('Masz niezapisaną propozycję. Zmiana transkrypcji ją usunie. Kontynuować?')) return
+    if (!manualReview && reviewDirty && !window.confirm('Masz niezapisaną propozycję. Zmiana transkrypcji ją usunie. Kontynuować?')) return
     setTranscript(value)
+    revision.current += 1
+    setMessage('')
+    if (manualReview) {
+      dirtyRef.current = value !== savedTranscript || reviewDirty
+      return
+    }
     setReviewDirty(false)
     dirtyRef.current = value !== savedTranscript
-    revision.current += 1
     setSelectedSteps([])
     setAnalysis(null)
     setAnalysisMessage('')
-    setMessage('')
   }
 
   const replaceReview = () => {
     if (analysis?.questions.some(({ answer, assignee, dueDate }) => answer?.trim() || assignee?.trim() || dueDate)) {
       return window.confirm('Nowa propozycja zastąpi bieżące ustalenia, w tym odpowiedzi na pytania, przypisane osoby i terminy. Kontynuować?')
     }
+    if (manualReview && analysis) return window.confirm('Zastąpić ustalenia zapisane ręcznie?')
     return !reviewDirty || window.confirm('Masz niezapisaną propozycję. Czy chcesz ją zastąpić?')
   }
   const startManual = () => {
-    if (!transcript.trim()) { setAnalysisMessage('Najpierw wklej transkrypcję.'); return }
     if (!replaceReview()) return
+    setManualReview(!transcript.trim())
     setAnalysis(emptyReview())
     setSelectedSteps([])
     setReviewDirty(true)
@@ -178,7 +185,13 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
       }
       if (revision.current !== currentRevision) setAnalysisMessage('Transkrypcja lub propozycja zmieniła się podczas analizy. Uruchom analizę ponownie.')
       else if (validateWorkshopProposal(result.proposal, transcript).length) setAnalysisMessage('Odpowiedź nie przeszła kontroli źródeł. Spróbuj ponownie.')
-      else { setAnalysis(unreviewedProposal(result.proposal)); setSelectedSteps([]); setReviewDirty(true); dirtyRef.current = true }
+      else {
+        setManualReview(false)
+        setAnalysis(unreviewedProposal(result.proposal))
+        setSelectedSteps([])
+        setReviewDirty(true)
+        dirtyRef.current = true
+      }
     } catch (error) {
       if (activeAnalysis.current !== controller) return
       if (error.message === 'AI_LOGIN_REQUIRED') { setAnalysisMessage('Sesja wygasła. Zaloguj się ponownie.'); return }
@@ -233,14 +246,14 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
   }
   const saveReview = () => {
     if (dirty) { setAnalysisMessage('Najpierw zapisz aktualną transkrypcję.'); return }
-    if (validateWorkshopReview(analysis, transcript).length) {
+    if (validateWorkshopReview(analysis, manualReview ? '' : transcript).length) {
       setAnalysisMessage('Uzupełnij treść dodanych pozycji, sprawdź ich źródła i popraw ewentualne błędy w datach.')
       return
     }
     try {
       const existing = loadWorkshopReview(localStorage, processId, transcript)
       if (existing.stale && !window.confirm('Istnieje zapisana propozycja dla wcześniejszej wersji transkrypcji. Zastąpić ją?')) return
-      saveWorkshopReview(localStorage, processId, transcript, analysis, { replaceStale: existing.stale })
+      saveWorkshopReview(localStorage, processId, transcript, analysis, { replaceStale: existing.stale, manual: manualReview })
       setReviewDirty(false)
       dirtyRef.current = false
       setAnalysisMessage('Propozycja zapisana na tym urządzeniu.')
@@ -298,10 +311,10 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, canTra
 
   return (
     <section className="workshop-panel" aria-labelledby="workshop-title">
-      <h2 id="workshop-title">Transkrypcja warsztatu</h2>
-      <p>Wklej rozmowę dotyczącą tego procesu. Po kliknięciu „Zapisz transkrypcję” tekst zostanie zapisany w tej przeglądarce. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
+      <h2 id="workshop-title">Ustalenia warsztatowe</h2>
+      <p>Kliknij „Opracuj ręcznie”, aby zapisywać ustalenia już w trakcie spotkania. Tekst rozmowy możesz wkleić i zapisać później. Zapisy trafiają do tej przeglądarki. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
       {analysisAvailable && <p>Analiza AI wysyła transkrypcję do OpenAI po Twoim potwierdzeniu. Wpisanie lub zapisanie tekstu nie uruchamia analizy.</p>}
-      <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} Wynik wymaga Twojej weryfikacji i nie zmienia automatycznie procesu. Mapa BPMN powstanie w kolejnym etapie.</p>
+      <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} W trybie dodawania kroków możesz przenieść zapisane ustalenia do AS-IS.</p>
       {analysisAvailable && workshopAiRemote && <div>
         {!workshopAiClient ? <p>Analiza AI nie jest skonfigurowana.</p> : aiSession ? <div><p>Zalogowano do analizy AI.</p><button type="button" disabled={authBusy} onClick={signOutAi}>Wyloguj z analizy AI</button></div> : <form onSubmit={signInAi}>
           <label htmlFor="ai-email">E-mail do analizy AI</label>

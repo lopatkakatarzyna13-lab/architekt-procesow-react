@@ -2,6 +2,10 @@
 
 Aktualizacja: 17 listopada 2026. Cel: osobista praca konsultantki z tekstem warsztatu, weryfikacją propozycji AI i przygotowaniem AS-IS. Zakres tego etapu nie obejmuje transkrypcji na żywo ani formalnego BPMN 2.0. Faktyczne dane klientów i płatne API dopiero po osobnej decyzji oraz spełnieniu warunków bezpieczeństwa.
 
+## Rozpoczęcie spotkania bez transkrypcji
+
+W sekcji „Ustalenia warsztatowe” wybierz „Opracuj ręcznie”. Dodaj pozycje i kliknij „Zapisz propozycję”. Jeśli później uzyskasz tekst rozmowy, dodaj go przez „Zapisz transkrypcję”. Ustalenia rozpoczęte bez transkrypcji zachowują się obok niej w tej samej przeglądarce. Uruchomienie analizy AI, która ma je zastąpić, wymaga potwierdzenia.
+
 ## Punkt startowy — potwierdzone
 
 - Edycja transkrypcji, ręczna propozycja, zapis i przeniesienie wybranych kroków do AS-IS są przygotowane.
