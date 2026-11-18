@@ -16,7 +16,10 @@ const proposal = {
   ],
   roles: [{ text: 'HR', status: 'supported', evidence: 'HR' }],
   decisions: [{ text: 'Czy dane są kompletne?', status: 'assumption', evidence: '' }],
-  questions: [{ text: 'Jaki jest termin przekazania?', status: 'question', evidence: '' }],
+  questions: [
+    { text: 'Jaki jest termin przekazania?', status: 'question', evidence: '' },
+    { text: 'Kto zastępuje osobę przekazującą?', status: 'question', evidence: '' },
+  ],
 }
 let calls = 0
 try {
@@ -44,6 +47,22 @@ try {
   for (const category of ['role', 'systemy', 'decyzje', 'wyjątki', 'pytania']) {
     await page.getByRole('checkbox', { name: `Sprawdzono treść — ${category}, pozycja 1` }).check()
   }
+  const answer = page.getByLabel('Odpowiedź — pytanie 1')
+  const confirmAnswer = page.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 1' })
+  await page.getByText(/Otwarte pytania: 2 z 2/).waitFor()
+  assert.equal(await confirmAnswer.isDisabled(), true)
+  await answer.fill('Piątek, godzina 12:00')
+  await confirmAnswer.check()
+  await page.getByText(/Otwarte pytania: 1 z 2/).waitFor()
+  await page.getByLabel('Pytania — pozycja 1').fill('Do kiedy przekazujemy dokumenty?')
+  assert.equal(await confirmAnswer.isChecked(), false)
+  assert.equal(await answer.inputValue(), 'Piątek, godzina 12:00')
+  await confirmAnswer.check()
+  await answer.fill('Piątek, godzina 13:00')
+  assert.equal(await confirmAnswer.isChecked(), false)
+  await page.getByText(/Otwarte pytania: 2 z 2/).waitFor()
+  await confirmAnswer.check()
+  await page.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }).check()
   await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
   await page.getByRole('checkbox', { name: 'Wybierz krok 1 do przeniesienia' }).check()
   await page.getByRole('checkbox', { name: 'Wybierz krok 2 do przeniesienia' }).check()
@@ -90,7 +109,11 @@ try {
   assert.equal(savedStep.system, 'System Testowy')
   assert.equal(savedStep.description, 'Pierwotny opis kontroli\nDecyzja: Czy dane są kompletne?\nWyjątek: Brak fikcyjnego dokumentu')
   assert.equal(await page.getByRole('checkbox', { name: 'Sprawdzono treść — pytania, pozycja 1' }).isChecked(), true)
-  assert.equal(await page.getByLabel('Pytania — pozycja 1').inputValue(), proposal.questions[0].text)
+  assert.equal(await page.getByLabel('Pytania — pozycja 1').inputValue(), 'Do kiedy przekazujemy dokumenty?')
+  assert.equal(await answer.inputValue(), 'Piątek, godzina 13:00')
+  assert.equal(await confirmAnswer.isChecked(), true)
+  assert.equal(await page.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 2' }).isChecked(), false)
+  await page.getByText(/Otwarte pytania: 1 z 2/).waitFor()
   assert.equal(calls, 1)
   await page.getByRole('button', { name: 'Przejdź do analizy' }).click()
   await page.getByLabel(/Kategoria/).selectOption({ label: 'Wąskie gardło' })
@@ -214,6 +237,7 @@ try {
   assert.ok(pdf.length > 1000, 'print view should render a nonempty PDF')
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
+  assert.ok(!pdfText.includes('Piątek, godzina 13:00'), 'local workshop answers should stay out of the PDF')
   for (const expected of ['Fikcyjny obieg dokumentów', ...proposal.steps.map((step) => step.text), 'Pierwotny opis kontroli', 'Decyzja: Czy dane są kompletne?', 'Wyjątek: Brak fikcyjnego dokumentu', 'System Testowy', 'Brak terminu przekazania', 'Ustalić przewidywalny termin przekazania', 'Koordynator HR', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', 'Bank TO-BE', 'Potwierdzenie bankowe TO-BE', 'Bank TO-BE / Realizacja płatności TO-BE → Biuro TO-BE / Sprawdzenie pakietu TO-BE — Zwrot potwierdzenia płatności', 'Pakiet dokumentów TO-BE', 'Sprawdzenie pakietu TO-BE', 'TO-BE: popraw niezgodności', 'Dodatkowe przejścia', 'Brak danych — wróć do kontroli', 'Firma Testowa', 'Biuro Testowe', 'Fikcyjne dane do weryfikacji', 'Weryfikacja dokumentów przez biuro']) {
     assert.ok(pdfText.includes(expected), `PDF should include: ${expected}`)
   }

@@ -78,6 +78,16 @@ describe('review persistence', () => {
     expect(() => saveWorkshopReview(s, A, transcript, review())).toThrow()
     expect(s.getItem(`architekt-procesow:workshop:${A}:review`)).toBe('{')
   })
+  it('rejects confirming an empty or malformed answer without replacing a valid review', () => {
+    const s = storage()
+    const saved = review()
+    saveWorkshopReview(s, A, transcript, saved)
+    for (const answer of ['', '  ', 123]) {
+      const invalid = { ...saved, questions: [{ text: 'Kiedy?', status: 'question', answer, answerConfirmed: true }] }
+      expect(() => saveWorkshopReview(s, A, transcript, invalid)).toThrow()
+    }
+    expect(loadWorkshopReview(s, A, transcript).review).toEqual(saved)
+  })
   it('preserves data when saving fails', () => {
     const s = storage()
     saveWorkshopReview(s, A, transcript, review())

@@ -4,6 +4,25 @@ import { isValidProcessId } from './processIdentity.js'
 
 const KEY_PREFIX = 'architekt-procesow:workshop:'
 export const MAX_TRANSCRIPT_LENGTH = 100_000
+export const MAX_WORKSHOP_ANSWER_LENGTH = 2_000
+
+export function validateWorkshopReview(review, transcript) {
+  const errors = validateWorkshopProposal(review, transcript)
+  if (errors.length) return errors
+
+  for (const question of review.questions) {
+    if (question.answer !== undefined &&
+      (typeof question.answer !== 'string' || question.answer.length > MAX_WORKSHOP_ANSWER_LENGTH)) {
+      errors.push('Nieprawidłowa odpowiedź na pytanie warsztatowe.')
+    }
+    if (question.answerConfirmed !== undefined &&
+      (typeof question.answerConfirmed !== 'boolean' ||
+        (question.answerConfirmed && (typeof question.answer !== 'string' || !question.answer.trim())))) {
+      errors.push('Potwierdzenie wymaga treści odpowiedzi.')
+    }
+  }
+  return errors
+}
 
 function keyFor(processId) {
   if (!isValidProcessId(processId)) throw new TypeError('Nieprawidłowy identyfikator procesu.')
@@ -55,7 +74,7 @@ export function loadWorkshopReview(storage, processId, transcript) {
     // Legacy records contain an extra full copy of the transcript.
     if (typeof data.sourceTranscript !== 'string' || !data.sourceTranscript.trim() ||
       data.sourceTranscript.length > MAX_TRANSCRIPT_LENGTH ||
-      validateWorkshopProposal(data.review, data.sourceTranscript).length) {
+      validateWorkshopReview(data.review, data.sourceTranscript).length) {
       throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
     }
     const stale = data.sourceTranscript !== transcript
@@ -75,7 +94,7 @@ export function loadWorkshopReview(storage, processId, transcript) {
     throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
   }
   if (data.sourceMarker !== transcriptMarker(transcript)) return { review: null, stale: true }
-  if (validateWorkshopProposal(data.review, transcript).length) {
+  if (validateWorkshopReview(data.review, transcript).length) {
     throw new Error('Nieprawidłowy zapis propozycji. Dane nie zostały nadpisane.')
   }
   return { review: data.review, stale: false }
@@ -83,7 +102,7 @@ export function loadWorkshopReview(storage, processId, transcript) {
 
 export function saveWorkshopReview(storage, processId, transcript, review, { replaceStale = false } = {}) {
   const key = reviewKey(processId)
-  if (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_LENGTH || validateWorkshopProposal(review, transcript).length) throw new Error('Nieprawidłowa propozycja.')
+  if (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_LENGTH || validateWorkshopReview(review, transcript).length) throw new Error('Nieprawidłowa propozycja.')
   const current = loadWorkshopReview(storage, processId, transcript)
   if (current.stale && !replaceStale) throw new Error('Istnieje propozycja dla innej wersji transkrypcji.')
   storage.setItem(key, JSON.stringify({ version: 2, sourceMarker: transcriptMarker(transcript), review }))

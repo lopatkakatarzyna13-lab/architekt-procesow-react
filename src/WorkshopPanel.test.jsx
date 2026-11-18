@@ -99,12 +99,62 @@ describe('workshop review screen', () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ proposal: {
-      steps: [{ text: 'Sprawdzenie danych', status: 'supported', evidence: 'HR sprawdza dane.', reviewed: true }], roles: [], decisions: [], questions: [],
+      steps: [{ text: 'Sprawdzenie danych', status: 'supported', evidence: 'HR sprawdza dane.', reviewed: true }],
+      roles: [], decisions: [], questions: [{ text: 'Kto zatwierdza?', status: 'question', answer: 'AI', answerConfirmed: true }],
     } }) })))
     render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
     await user.type(screen.getByLabelText('Tekst rozmowy'), 'HR sprawdza dane.')
     await user.click(screen.getByRole('button', { name: 'Analizuj transkrypcję' }))
     expect((await screen.findByRole('checkbox', { name: 'Sprawdzono treść — kroki, pozycja 1' })).checked).toBe(false)
+    expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('')
+    expect(screen.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 1' }).checked).toBe(false)
+  })
+
+  it('restores open and confirmed questions and reopens an edited answer', async () => {
+    const user = userEvent.setup()
+    const transcript = 'HR przekazuje dokumenty.'
+    saveWorkshop(localStorage, PROCESS_A, transcript)
+    saveWorkshopReview(localStorage, PROCESS_A, transcript, {
+      steps: [], roles: [], decisions: [], questions: [
+        { text: 'Kiedy?', status: 'question' },
+        { text: 'Do kogo?', status: 'question' },
+      ],
+    })
+    const view = render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    const confirmation = () => screen.getByRole('checkbox', { name: 'Potwierdzono odpowiedź — pytanie 1' })
+    expect(confirmation().disabled).toBe(true)
+    await user.type(screen.getByLabelText('Odpowiedź — pytanie 1'), 'W piątek')
+    await user.click(confirmation())
+    expect(screen.getByText(/Otwarte pytania: 1 z 2/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Zapisz propozycję' }))
+    view.unmount()
+
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    expect(confirmation().checked).toBe(true)
+    expect(screen.getByText(/Otwarte pytania: 1 z 2/)).toBeTruthy()
+    expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('W piątek')
+    await user.type(screen.getByLabelText('Pytania — pozycja 1'), ' dokładnie?')
+    expect(confirmation().checked).toBe(false)
+    expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('W piątek')
+    await user.click(confirmation())
+    await user.type(screen.getByLabelText('Odpowiedź — pytanie 1'), ' rano')
+    expect(confirmation().checked).toBe(false)
+    expect(screen.getByText(/Otwarte pytania: 2 z 2/)).toBeTruthy()
+  })
+
+  it('keeps a saved answer if the user declines to replace the workshop review', async () => {
+    const user = userEvent.setup()
+    const transcript = 'HR przekazuje dokumenty.'
+    saveWorkshop(localStorage, PROCESS_A, transcript)
+    saveWorkshopReview(localStorage, PROCESS_A, transcript, {
+      steps: [], roles: [], decisions: [],
+      questions: [{ text: 'Kiedy?', status: 'question', answer: 'W piątek', answerConfirmed: true }],
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<WorkshopPanel processId={PROCESS_A} dirtyRef={{ current: false }} />)
+    await user.click(screen.getByRole('button', { name: 'Opracuj ręcznie' }))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('odpowiedzi na pytania'))
+    expect(screen.getByLabelText('Odpowiedź — pytanie 1').value).toBe('W piątek')
   })
 
   it('keeps unsaved review if the user cancels changing the transcript', async () => {
