@@ -186,13 +186,13 @@ try {
   await button('Eksportuj do PDF').click()
   await page.waitForFunction(() => window.__referralPrintCalled)
   for (const [selector, names] of [['.print-bpmn-image:not(.print-tobe-bpmn)', asIs], ['.print-tobe-bpmn', toBe]]) {
-    const result = await page.locator(selector).evaluate((image, taskNames) => {
+    const result = await page.locator(selector).evaluate((image, { taskNames, branchText }) => {
       const svg = new DOMParser().parseFromString(decodeURIComponent(image.src.split(',')[1]), 'image/svg+xml').documentElement
       svg.style.position = 'fixed'
       svg.style.left = '-10000px'
       document.body.appendChild(svg)
       try {
-        return taskNames.map((name, index) => {
+        const taskLabelsFit = taskNames.map((name, index) => {
           const task = svg.querySelector(`[data-element-id="Task_${index + 1}"]`)
           const label = task.querySelector('text')
           const text = [...label.querySelectorAll('tspan')].map((line) => line.textContent.trim()).join(' ')
@@ -201,11 +201,25 @@ try {
           return text === name && bounds.x >= box.x && bounds.y >= box.y
             && bounds.x + bounds.width <= box.x + box.width && bounds.y + bounds.height <= box.y + box.height
         })
+        let branchLabelAboveLine = null
+        if (branchText) {
+          const text = [...svg.querySelectorAll('[data-element-id$="_label"] text')].find((element) => (
+            [...element.querySelectorAll('tspan')].map((line) => line.textContent.trim()).join(' ') === branchText
+          ))
+          const labelId = text.closest('[data-element-id]').dataset.elementId
+          const path = svg.querySelector(`[data-element-id="${labelId.replace(/_label$/, '')}"] .djs-visual path`)
+          const box = text.getBBox()
+          const bottom = new DOMPoint(box.x, box.y + box.height).matrixTransform(text.getCTM())
+          const lineTop = new DOMPoint(0, path.getBBox().y).matrixTransform(path.getCTM())
+          branchLabelAboveLine = bottom.y < lineTop.y
+        }
+        return { taskLabelsFit, branchLabelAboveLine }
       } finally {
         svg.remove()
       }
-    }, names)
-    assert.deepEqual(result, names.map(() => true), `all task labels must fit inside ${selector}`)
+    }, { taskNames: names, branchText: branched ? returnPath : null })
+    assert.deepEqual(result.taskLabelsFit, names.map(() => true), `all task labels must fit inside ${selector}`)
+    if (branched) assert.equal(result.branchLabelAboveLine, true, `the return label must clear the line in ${selector}`)
   }
 
   await page.emulateMedia({ media: 'print' })

@@ -24,6 +24,10 @@ describe('explicit BPMN decisions', () => {
     expect(task.y + task.height).toBeLessThan(item('Lane_1').bounds.y + item('Lane_1').bounds.height)
     const returnFlow = elements.find(({ bpmnElement }) => bpmnElement.name === 'Brak danych')
     expect(returnFlow.waypoint[1].y).toBeLessThan(task.y)
+    const label = returnFlow.label.bounds
+    expect(label.y).toBeGreaterThan(item('Lane_1').bounds.y)
+    expect(label.y + label.height).toBeLessThan(returnFlow.waypoint[1].y)
+    expect(label.x + label.width / 2).toBe((returnFlow.waypoint[1].x + returnFlow.waypoint[2].x) / 2)
   })
 
   it('creates named exclusive split, merge and the requested return with diagram coordinates', async () => {
