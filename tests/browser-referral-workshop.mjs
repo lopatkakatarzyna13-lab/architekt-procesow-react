@@ -207,7 +207,7 @@ try {
             [...element.querySelectorAll('tspan')].map((line) => line.textContent.trim()).join(' ') === branchText
           ))
           const labelId = text.closest('[data-element-id]').dataset.elementId
-          const path = svg.querySelector(`[data-element-id="${labelId.replace(/_label$/, '')}"] .djs-visual path`)
+          const path = svg.querySelector(`.djs-connection[data-element-id="${labelId.replace(/_label$/, '')}"] .djs-visual > path`)
           const box = text.getBBox()
           const bottom = new DOMPoint(box.x, box.y + box.height).matrixTransform(text.getCTM())
           const lineTop = new DOMPoint(0, path.getBBox().y).matrixTransform(path.getCTM())
