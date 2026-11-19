@@ -20,6 +20,7 @@ import {
   saveCurrentProcessId,
 } from './processIdentity'
 import { buildProcessSnapshot } from './processSnapshot'
+import { completedProcessExportStem } from './processExportName'
 import { compareProcessSteps, withDetectedStepChanges } from './processStepComparison'
 import { getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
@@ -2684,7 +2685,7 @@ function ProcessFlowCanvas({ steps, scope, variant, findings }) {
   )
 }
 
-function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings, bpmnModels }) {
+function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings, bpmnModels, exportStem }) {
   const [mapVariant, setMapVariant] = useState('to-be')
   const selectedSteps = mapVariant === 'to-be' ? toBeSteps : asIsSteps
   const isTextAsIs = mapVariant === 'as-is' && startMethod !== 'steps'
@@ -2717,7 +2718,7 @@ function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings,
       </div>
 
       {!isTextAsIs && bpmnModels && (
-        <BpmnExport key={mapVariant} {...bpmnModels[mapVariant]} scope={scope} variant={mapVariant} saved readOnly />
+        <BpmnExport key={mapVariant} {...bpmnModels[mapVariant]} scope={scope} variant={mapVariant} saved readOnly exportStem={exportStem} />
       )}
       {isTextAsIs ? (
         <div className="map-empty-message">
@@ -3102,6 +3103,7 @@ function PrintReport({
   raci,
   workshopQuestions,
   generatedAt,
+  completedVersion,
 }) {
   const formattedDate = new Intl.DateTimeFormat('pl-PL', {
     day: '2-digit',
@@ -3115,6 +3117,7 @@ function PrintReport({
         <span>Architekt Procesów</span>
         <h1>Raport procesu</h1>
         <p>{scope.processName}</p>
+        {completedVersion !== undefined && <p>Wersja procesu {completedVersion}</p>}
         <time dateTime={(generatedAt ?? new Date()).toISOString()}>
           Data wygenerowania: {formattedDate}
         </time>
@@ -3234,6 +3237,7 @@ function WorkshopQuestionDetails({ question }) {
 function ReportScreen({
   processId,
   completed,
+  completedVersion,
   scope,
   startMethod,
   asIsDescription,
@@ -3308,6 +3312,7 @@ function ReportScreen({
         asIsSteps={asIsSteps}
         toBeSteps={toBeSteps}
         findings={findings}
+        exportStem={completed ? completedProcessExportStem(scope.processName, completedVersion) : undefined}
         bpmnModels={completed ? {
           'as-is': { steps: asIsSteps, externalSteps, externalLinks },
           'to-be': { steps: modeledSteps, externalSteps: toBeExternalSteps, externalLinks: toBeExternalLinks },
@@ -3387,6 +3392,7 @@ function ReportScreen({
         raci={raci}
         workshopQuestions={questionsForPrint}
         generatedAt={printGeneratedAt}
+        completedVersion={completedVersion}
       />
     </section>
   )
@@ -5203,7 +5209,9 @@ try {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 80) || 'Proces'
-    document.title = `Raport procesu - ${safeProcessName}`
+    document.title = completed
+      ? `${completedProcessExportStem(formData.processName, activeProcess?.version)}-raport`
+      : `Raport procesu - ${safeProcessName}`
 
     let titleRestored = false
     const restoreTitle = () => {
@@ -5421,6 +5429,7 @@ try {
             key={processIdentityState.id}
             processId={processIdentityState.id}
             completed={completed}
+            completedVersion={completed ? activeProcess?.version ?? 1 : undefined}
             scope={formData}
             startMethod={startMethod}
             asIsDescription={asIsDescription}

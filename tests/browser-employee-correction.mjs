@@ -46,8 +46,9 @@ try {
     await choose('Typ zadania BPMN', type)
     await button('Zapisz zmiany').click()
   }
-  const downloadBpmn = async () => {
+  const downloadBpmn = async (expectedFilename) => {
     const [download] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
+    if (expectedFilename) assert.equal(download.suggestedFilename(), expectedFilename)
     const path = await download.path()
     execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path], { stdio: 'inherit' })
     return readFile(path, 'utf8')
@@ -182,8 +183,20 @@ try {
     await button('Pokaż podgląd BPMN').click()
     await page.getByRole('img', { name: `Podgląd zapisanego diagramu BPMN ${variant}` })
       .locator('[data-element-id="Participant_External_1"]').waitFor()
-    assert.equal(await downloadBpmn(), expected)
+    assert.equal(await downloadBpmn(`korekta-danych-pracownika-v1-${variant.toLowerCase()}.bpmn`), expected)
   }
+  await page.evaluate(() => {
+    window.print = () => {
+      window.completedPrintTitle = document.title
+      window.dispatchEvent(new Event('afterprint'))
+    }
+  })
+  await button('Eksportuj do PDF').click()
+  await page.waitForFunction(() => window.completedPrintTitle)
+  assert.equal(await page.evaluate(() => window.completedPrintTitle), 'korekta-danych-pracownika-v1-raport')
+  await page.emulateMedia({ media: 'print' })
+  const completedPdf = await page.pdf({ format: 'A4', printBackground: true })
+  assert.match(execFileSync('pdftotext', ['-', '-'], { input: completedPdf, encoding: 'utf8' }), /Wersja procesu 1/)
   console.log('PASS: completed report reopens with previews and the original BPMN downloads')
   console.log('PASS: employee data correction round-trips through AS-IS, TO-BE, BPMN 2.0 and PDF')
 } finally {

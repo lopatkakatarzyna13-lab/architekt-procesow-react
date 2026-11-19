@@ -42,7 +42,7 @@ Drugą próbę przeprowadzono na fikcyjnym [przekazaniu danych do biura rachunko
 
 Trzecia próba dotyczy [korekty danych pracownika](pilot-2.0/03-korekta-danych.md). Test przeglądarkowy sprawdza pominięcie prośby, jeśli dokument jest dostępny, oczekiwanie na dokument, kontrolę przez drugą osobę z HR i powrót po wykryciu błędu. Dwie ścieżki dochodzą do tej samej bramki osobnymi liniami. Brak dokumentu i synchronizacja zmian są pytaniami w raporcie. Oznaczenie kroku oczekiwania jako zadania odbioru wiadomości jest propozycją TO-BE.
 
-W zakończonej wersji otwartej z biblioteki sekcja map w raporcie pozwala podejrzeć i pobrać zapisany BPMN po wyborze wariantu AS-IS lub TO-BE. Próba korekty danych porównuje pliki z raportu z plikami pobranymi w edytorze.
+W zakończonej wersji otwartej z biblioteki sekcja map w raporcie pozwala podejrzeć i pobrać zapisany BPMN po wyborze wariantu AS-IS lub TO-BE. Nazwy BPMN z raportu zawierają nazwę procesu, numer wersji i wariant mapy. Numer wersji jest także w nagłówku PDF i proponowanej nazwie PDF. Próba korekty danych porównuje treść BPMN z raportu z eksportem z edytora oraz sprawdza nazwy plików i nagłówek PDF.
 
 ### Zakres pierwszej rozbudowy
 

@@ -3,7 +3,7 @@ const BpmnPreview = lazy(() => import('./BpmnPreview'))
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { toBeBpmnScope } from './toBeBpmn'
 
-export default function BpmnExport({ steps, externalSteps = [], externalLinks = [], scope, saved, variant = 'as-is', readOnly = false }) {
+export default function BpmnExport({ steps, externalSteps = [], externalLinks = [], scope, saved, variant = 'as-is', readOnly = false, exportStem }) {
   const [message, setMessage] = useState('')
   const [previewKey, setPreviewKey] = useState(null)
   const toBe = variant === 'to-be'
@@ -19,7 +19,9 @@ export default function BpmnExport({ steps, externalSteps = [], externalLinks = 
       const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = toBe ? 'proces-tobe.bpmn' : 'proces-asis.bpmn'
+      link.download = exportStem
+        ? `${exportStem}-${variant}.bpmn`
+        : toBe ? 'proces-tobe.bpmn' : 'proces-asis.bpmn'
       document.body.appendChild(link)
       link.click()
       link.remove()
