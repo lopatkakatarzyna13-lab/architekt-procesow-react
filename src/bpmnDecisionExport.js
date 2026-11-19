@@ -201,7 +201,9 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
         ? [taskPoint, { x, y: middleY }, { x: bypassX, y: middleY }, { x: bypassX, y: approachY }, { x: poolPoint.x, y: approachY }, poolPoint]
         : x === poolPoint.x ? [taskPoint, poolPoint] : [taskPoint, { x, y: middleY }, { x: poolPoint.x, y: middleY }, poolPoint]
       const points = message.direction === 'outgoing' ? forward : [...forward].reverse()
-      const labelX = Math.max(12, Math.min(poolWidth - 170, x === poolPoint.x ? x + 8 : (x + poolPoint.x) / 2 - 90))
+      // Keep the label to the right of the vertical segment, including
+      // other messages from the same task whose ports can be offset by 30.
+      const labelX = Math.min(poolWidth - 170, taskBox.x + taskBox.width / 2 + 38)
       const label = moddle.create('bpmndi:BPMNLabel', { bounds: moddle.create('dc:Bounds', { x: labelX, y: labelY, width: 180, height: labelHeights[index] }) })
       return moddle.create('bpmndi:BPMNEdge', { id: `MessageEdge_${index + 1}`, bpmnElement: messageFlow, waypoint: points.map((point) => moddle.create('dc:Point', point)), label })
     })

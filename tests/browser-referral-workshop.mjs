@@ -361,6 +361,7 @@ try {
             && bounds.x + bounds.width <= box.x + box.width && bounds.y + bounds.height <= box.y + box.height
         })
         let branchLabelAboveLine = null
+        let messageLabelClearsLine = null
         if (branchText) {
           const text = [...svg.querySelectorAll('[data-element-id$="_label"] text')].find((element) => (
             [...element.querySelectorAll('tspan')].map((line) => line.textContent.trim()).join(' ') === branchText
@@ -371,14 +372,22 @@ try {
           const bottom = new DOMPoint(box.x, box.y + box.height).matrixTransform(text.getCTM())
           const lineTop = new DOMPoint(0, path.getBBox().y).matrixTransform(path.getCTM())
           branchLabelAboveLine = bottom.y < lineTop.y
+          const messageText = svg.querySelector('[data-element-id="MessageFlow_1_label"] text')
+          const messagePath = svg.querySelector('.djs-connection[data-element-id="MessageFlow_1"] .djs-visual > path')
+          const messageLeft = new DOMPoint(messageText.getBBox().x, 0).matrixTransform(messageText.getCTM()).x
+          const messageStart = messagePath.getPointAtLength(0).matrixTransform(messagePath.getCTM())
+          messageLabelClearsLine = messageLeft > messageStart.x
         }
-        return { taskLabelsFit, branchLabelAboveLine }
+        return { taskLabelsFit, branchLabelAboveLine, messageLabelClearsLine }
       } finally {
         svg.remove()
       }
     }, { taskNames: names, branchText: branched ? (enriched && names === toBe ? targetReturnPath : returnPath) : null })
     assert.deepEqual(result.taskLabelsFit, names.map(() => true), `all task labels must fit inside ${selector}`)
-    if (branched) assert.equal(result.branchLabelAboveLine, true, `the return label must clear the line in ${selector}`)
+    if (branched) {
+      assert.equal(result.branchLabelAboveLine, true, `the return label must clear the line in ${selector}`)
+      assert.equal(result.messageLabelClearsLine, true, `the message label must clear its vertical segment in ${selector}`)
+    }
   }
 
   await page.emulateMedia({ media: 'print' })
