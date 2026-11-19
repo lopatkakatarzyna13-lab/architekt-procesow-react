@@ -101,6 +101,20 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   const poolWidth = Math.max(endX + 80, 230 + externalSteps.length * 220)
   const laneShapes = lanes.map((lane, index) => moddle.create('bpmndi:BPMNShape', { id: `LaneShape_${index + 1}`, bpmnElement: lane, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: hasCollaboration ? 40 : 10, y: laneTop + index * laneHeight + (index ? routingPadding : 0), width: poolWidth - (hasCollaboration ? 30 : 0), height: laneHeight + (index ? 0 : routingPadding) }) }))
   const shapes = nodes.map((node, index) => moddle.create('bpmndi:BPMNShape', { id: `Shape_${index + 1}`, bpmnElement: node, ...(node.$type === 'bpmn:ExclusiveGateway' ? { isMarkerVisible: true } : {}), bounds: moddle.create('dc:Bounds', boxes.get(node)) }))
+  // Separate approaches when two alternate flows converge on the same gateway.
+  const approachesByTarget = new Map()
+  for (const link of alternateLayout.keys()) {
+    const approaches = approachesByTarget.get(link.target) ?? []
+    approaches.push(link)
+    approachesByTarget.set(link.target, approaches)
+  }
+  const approachOffset = new Map()
+  for (const approaches of approachesByTarget.values()) {
+    approaches.sort((a, b) => boxes.get(a.source).x - boxes.get(b.source).x)
+    approaches.forEach((link, index) => {
+      approachOffset.set(link, 20 * ((index + 1) / (approaches.length + 1) - 0.5))
+    })
+  }
   const edges = flows.map((flow, index) => {
     const { source, target } = links[index]
     const alternate = alternateLayout.get(links[index])
@@ -108,8 +122,10 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     const startX = a.x + a.width; const endX = b.x; const y1 = a.y + a.height / 2; const y2 = b.y + b.height / 2
     // Alternate flows leave and enter the top of their gateways so a return
     // does not overlap the primary incoming and outgoing sequence flows.
+    const offset = approachOffset.get(links[index]) ?? 0
+    const targetPortX = b.x + b.width / 2 + offset
     const positions = alternate
-      ? [{ x: a.x + a.width / 2, y: a.y }, { x: a.x + a.width / 2, y: alternate.routeY }, { x: b.x + b.width / 2, y: alternate.routeY }, { x: b.x + b.width / 2, y: b.y }]
+      ? [{ x: a.x + a.width / 2, y: a.y }, { x: a.x + a.width / 2, y: alternate.routeY }, { x: targetPortX, y: alternate.routeY }, { x: targetPortX, y: b.y + Math.abs(offset) }]
       : y1 === y2 ? [{ x: startX, y: y1 }, { x: endX, y: y2 }]
         : [{ x: startX, y: y1 }, { x: (startX + endX) / 2, y: y1 }, { x: (startX + endX) / 2, y: y2 }, { x: endX, y: y2 }]
     const edge = moddle.create('bpmndi:BPMNEdge', { id: `Edge_${index + 1}`, bpmnElement: flow, waypoint: positions.map((point) => moddle.create('dc:Point', point)) })

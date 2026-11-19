@@ -40,6 +40,8 @@ Wynik rozbudowy, diagnozę i ograniczenia opisano w [próbie przekazania map do 
 
 Drugą próbę przeprowadzono na fikcyjnym [przekazaniu danych do biura rachunkowego](pilot-2.0/proba-bpmn-przekazanie-do-biura.md). Sprawdzono termin na kroku menedżera, powrót do kontroli HR i potwierdzenie odbioru jako oddzielną wiadomość z biura.
 
+Trzecia próba dotyczy [korekty danych pracownika](pilot-2.0/03-korekta-danych.md). Test przeglądarkowy sprawdza pominięcie prośby, jeśli dokument jest dostępny, oczekiwanie na dokument, kontrolę przez drugą osobę z HR i powrót po wykryciu błędu. Dwie ścieżki dochodzą do tej samej bramki osobnymi liniami. Brak dokumentu i synchronizacja zmian są pytaniami w raporcie. Oznaczenie kroku oczekiwania jako zadania odbioru wiadomości jest propozycją TO-BE.
+
 ### Zakres pierwszej rozbudowy
 
 - Umożliwić wybór typu zadania na AS-IS i TO-BE. W pierwszej kolejności dodać zadanie ręczne, zadanie użytkownika i zadanie systemowe. Istniejące kroki zachowują ogólny typ zadania do czasu świadomej zmiany.
