@@ -38,6 +38,8 @@ Punktem wyjścia są mapy z próby skierowania na badania wstępne. Pokazują st
 
 Wynik rozbudowy, diagnozę i ograniczenia opisano w [próbie przekazania map do IT i AI](proba-bpmn-przekazanie-it-ai-2026-11-19.md).
 
+Drugą próbę przeprowadzono na fikcyjnym [przekazaniu danych do biura rachunkowego](pilot-2.0/proba-bpmn-przekazanie-do-biura.md). Sprawdzono termin na kroku menedżera, powrót do kontroli HR i potwierdzenie odbioru jako oddzielną wiadomość z biura.
+
 ### Zakres pierwszej rozbudowy
 
 - Umożliwić wybór typu zadania na AS-IS i TO-BE. W pierwszej kolejności dodać zadanie ręczne, zadanie użytkownika i zadanie systemowe. Istniejące kroki zachowują ogólny typ zadania do czasu świadomej zmiany.

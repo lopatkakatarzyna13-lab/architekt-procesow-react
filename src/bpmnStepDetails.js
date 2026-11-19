@@ -2,6 +2,8 @@ export const bpmnTaskTypes = {
   manual: { label: 'Ręczne', element: 'bpmn:ManualTask' },
   user: { label: 'Człowiek w systemie', element: 'bpmn:UserTask' },
   service: { label: 'Systemowe', element: 'bpmn:ServiceTask' },
+  send: { label: 'Wysyła wiadomość', element: 'bpmn:SendTask' },
+  receive: { label: 'Czeka na wiadomość', element: 'bpmn:ReceiveTask' },
 }
 
 export const bpmnDocumentDirections = { input: 'Wejście', output: 'Wyjście' }
@@ -12,6 +14,7 @@ export const bpmnStepFields = [
   ['bpmnException', 'Wyjątek'],
   ['bpmnHumanCheck', 'Punkt kontroli człowieka'],
   ['bpmnFrequency', 'Częstotliwość'],
+  ['bpmnDeadline', 'Termin wykonania'],
   ['bpmnWorkTime', 'Czas pracy'],
   ['bpmnWaitTime', 'Czas oczekiwania'],
 ]

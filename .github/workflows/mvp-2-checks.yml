@@ -91,6 +91,7 @@ jobs:
           FICTIONAL_PDF_PATH="$RUNNER_TEMP/fictional-report.pdf" BPMN_SCREENSHOT_PATH="$RUNNER_TEMP/bpmn-preview.png" node tests/browser-fictional-workshop.mjs
           REFERRAL_PDF_PATH="$RUNNER_TEMP/referral-workshop-report.pdf" node tests/browser-referral-workshop.mjs
           REFERRAL_WITH_POOLS=1 REFERRAL_PDF_PATH="$RUNNER_TEMP/referral-workshop-pools-report.pdf" node tests/browser-referral-workshop.mjs
+          ACCOUNTING_PDF_PATH="$RUNNER_TEMP/accounting-handoff-report.pdf" node tests/browser-accounting-handoff.mjs
       - name: Save fictional report for visual review
         uses: actions/upload-artifact@v4
         with:
@@ -100,6 +101,7 @@ jobs:
             ${{ runner.temp }}/bpmn-preview.png
             ${{ runner.temp }}/referral-workshop-report.pdf
             ${{ runner.temp }}/referral-workshop-pools-report.pdf
+            ${{ runner.temp }}/accounting-handoff-report.pdf
           retention-days: 1
 
 
