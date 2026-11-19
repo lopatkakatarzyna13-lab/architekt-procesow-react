@@ -41,7 +41,7 @@ export function describeBpmnDocument({ name, format, channel }) {
 export function getBpmnStepDetails(step) {
   return [
     ['Typ zadania BPMN', Object.hasOwn(bpmnTaskTypes, step.bpmnTaskType) ? bpmnTaskTypes[step.bpmnTaskType].label : ''],
-    ['Wykonawca', step.owner],
+    [step.bpmnTaskType === 'service' ? 'Odpowiedzialność biznesowa' : 'Wykonawca', step.owner],
     ['System', step.system],
     ['Opis', step.description],
     ['Rezultat', step.result],

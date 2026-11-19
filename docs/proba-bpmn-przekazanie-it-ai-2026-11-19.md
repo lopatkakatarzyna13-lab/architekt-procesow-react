@@ -25,3 +25,9 @@ Zdarzenie czasowe ma sens, jeśli pilotaż wykaże potrzebę przypomnienia lub e
 Test w repozytorium działa po uruchomieniu Vite na porcie 5173. Ustawienie `REFERRAL_WITH_POOLS=1` włącza opisany scenariusz w `tests/browser-referral-workshop.mjs`. Opcjonalne `REFERRAL_PDF_PATH` i `REFERRAL_BPMN_PREFIX` zapisują wydruki do lokalnego przeglądu.
 
 Dokumenty są przypisane do poszczególnych kroków. Sama zbieżność nazw nie łączy obiektów danych między zadaniami. Format, kanał i reguły są opisem do wdrożenia, a eksport BPMN ma status modelu dokumentacyjnego. Zapis sprawdzono lokalnie w przeglądarce. SEC-04 i weryfikacja środowiska docelowego pozostają otwarte.
+
+## Uzupełnienie po przeglądzie dla IT
+
+W pierwszym raporcie odbiorca widział HR jako wykonawcę zadania systemowego i musiał wywnioskować, jak wynik weryfikacji przechodzi do generatora. W szczegółach zadania systemowego pole roli opisuje teraz odpowiedzialność biznesową. W fikcyjnym TO-BE HR tworzy wynik „Zatwierdzone zgłoszenie”, generator używa tego wyniku do utworzenia PDF, a krok wysyłki odbiera PDF. Test odczytuje te warunki z pobranego BPMN oraz PDF-u.
+
+Do decyzji przed implementacją pozostają sposób obsługi nieudanego transferu, wykrycie powtórnego przesłania, sposób zapisania akceptacji przez HR oraz zastępstwo przy wysyłce. Scenariusz zachowuje je jako pytania biznesowe i techniczne. [Karta próby dla odbiorcy](pilot-2.0/odbior-map-bpmn-skierowanie.md) zawiera pytania do samodzielnego odczytu.

@@ -59,6 +59,8 @@ const oldSteps = [
   },
   { type: 'user', owner: 'HR', system: 'Poczta', documents: [['output', 'Skierowanie do badań', 'PDF', 'E-mail']], fields: {} },
 ]
+const approvedRecord = 'Zatwierdzone zgłoszenie'
+const generateRule = 'System generuje skierowanie wyłącznie z rekordu zatwierdzonego przez HR.'
 const newSteps = [
   {
     ...oldSteps[0], type: 'user', system: 'Formularz HR',
@@ -66,7 +68,8 @@ const newSteps = [
     fields: { ...oldSteps[0].fields, 'Reguła': 'Formularz blokuje wysłanie bez stanowiska i warunków pracy.' },
   },
   {
-    ...oldSteps[1], type: 'user', system: 'System HR', documents: [['input', 'Rekord zgłoszenia', 'Rekord', 'Integracja']],
+    ...oldSteps[1], type: 'user', system: 'System HR',
+    documents: [['input', 'Rekord zgłoszenia', 'Rekord', 'Integracja'], ['output', approvedRecord, 'Rekord', 'System HR']],
     fields: {
       'Wyjątek': 'HR zwraca opis wymagający doprecyzowania merytorycznego.',
       'Czas oczekiwania': '',
@@ -75,10 +78,13 @@ const newSteps = [
   },
   {
     ...oldSteps[2], type: 'service',
-    documents: [['input', 'Rekord zgłoszenia', 'Rekord', 'Integracja'], ...oldSteps[2].documents],
-    fields: { 'Reguła': 'System pobiera zatwierdzony rekord z formularza przez integrację.', 'Czas pracy': '' },
+    documents: [['input', approvedRecord, 'Rekord', 'System HR'], ...oldSteps[2].documents],
+    fields: { 'Reguła': generateRule, 'Czas pracy': '' },
   },
-  oldSteps[3],
+  {
+    ...oldSteps[3],
+    documents: [['input', 'Skierowanie', 'PDF', 'System HR'], ...oldSteps[3].documents],
+  },
 ]
 const output = process.env.REFERRAL_PDF_PATH
 const bpmnPrefix = process.env.REFERRAL_BPMN_PREFIX
@@ -169,6 +175,16 @@ try {
     const yes = gateway.outgoing.find((item) => item.name === 'Tak')
     const no = gateway.outgoing.find((item) => item.name === (targetVariant ? targetReturnPath : returnPath))
     assert.equal(yes.targetRef, tasks[2])
+    if (targetVariant) {
+      const [, review, generation, delivery] = tasks
+      assert.match(generation.documentation[0].text, /^Odpowiedzialność biznesowa: HR$/m)
+      assert.match(generation.documentation[0].text, /^System: System HR$/m)
+      assert.doesNotMatch(generation.documentation[0].text, /^Wykonawca: HR$/m)
+      assert.equal(review.dataOutputAssociations[0].targetRef.name, approvedRecord)
+      assert.equal(generation.dataInputAssociations[0].sourceRef[0].name, approvedRecord)
+      assert.equal(generation.outgoing[0].targetRef, delivery)
+      assert.equal(delivery.dataInputAssociations[0].sourceRef[0].name, generation.dataOutputAssociations[0].targetRef.name)
+    }
     assert.equal(no.targetRef, start.outgoing[0].targetRef)
     assert.equal(no.targetRef.outgoing[0].targetRef, tasks[0])
     assert.equal(tasks[0].outgoing[0].targetRef, tasks[1])
@@ -396,7 +412,7 @@ try {
     .split('\f').map((page) => page.replace(/\s+/g, ' '))
   const text = pages.join(' ')
   if (enriched) {
-    for (const [variant, document] of [['AS-IS', 'Zgłoszenie papierowe'], ['TO-BE', 'Rekord zgłoszenia']]) {
+    for (const [variant, document] of [['AS-IS', 'Zgłoszenie papierowe'], ['TO-BE', approvedRecord]]) {
       const mapPage = pages.find((page) => page.includes(`Mapa BPMN ${variant}`))
       const diagram = mapPage?.split('Szczegóły kroków BPMN')[0]
       assert.ok(diagram?.includes(recipient) && diagram.includes(document), `PDF must keep the ${variant} diagram and heading together`)
@@ -408,7 +424,7 @@ try {
     'HR przepisuje stanowisko i warunki pracy z papieru.',
     'Do 2 dni na odpowiedź kierownika.',
     'Formularz blokuje wysłanie bez stanowiska i warunków pracy.',
-    'System pobiera zatwierdzony rekord z formularza przez integrację.',
+    generateRule, 'Odpowiedzialność biznesowa HR', approvedRecord,
     'HR akceptuje merytorycznie warunki pracy przed wygenerowaniem PDF.',
   ] : []
   for (const expected of [title, ...asIs, ...toBe, issue, question, assignee, '20.11.2026', 'Mapa BPMN AS-IS', 'Mapa BPMN TO-BE', ...branchDetails, ...handoffDetails]) {
