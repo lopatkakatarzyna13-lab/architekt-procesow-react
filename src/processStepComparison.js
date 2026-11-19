@@ -1,10 +1,20 @@
+import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, describeBpmnDocument, getBpmnDocuments } from './bpmnStepDetails.js'
+
 const comparableFields = [
   ['name', 'Nazwa'],
   ['owner', 'Odpowiedzialność'],
   ['system', 'System'],
+  ['bpmnTaskType', 'Typ zadania BPMN'],
+  ...bpmnStepFields,
+  ['bpmnDocuments', 'Dokumenty'],
 ]
 
-const fieldValue = (value) => typeof value === 'string' ? value.trim() : ''
+function fieldValue(step, field) {
+  if (field === 'bpmnTaskType') return bpmnTaskTypes[step[field]]?.label ?? ''
+  if (field === 'bpmnDocuments') return getBpmnDocuments(step)
+    .map((document) => `${bpmnDocumentDirections[document.direction]}: ${describeBpmnDocument(document)}`).join('; ')
+  return typeof step[field] === 'string' ? step[field].trim() : ''
+}
 
 export function compareProcessSteps(asIsSteps, toBeSteps) {
   const sourceById = new Map(asIsSteps.map((step) => [step.id, step]))
@@ -22,8 +32,8 @@ export function compareProcessSteps(asIsSteps, toBeSteps) {
 
     matchedIds.add(sourceId)
     const differences = comparableFields.flatMap(([field, label]) => {
-      const before = fieldValue(source[field])
-      const after = fieldValue(step[field])
+      const before = fieldValue(source, field)
+      const after = fieldValue(step, field)
       return before === after ? [] : [{ field, label, before, after }]
     })
     if (differences.length) changed.push({ id: step.id, name: step.name, differences })

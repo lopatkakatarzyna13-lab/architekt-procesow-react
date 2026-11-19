@@ -20,7 +20,7 @@ W sekcji „Ustalenia warsztatowe” wybierz „Opracuj ręcznie”. Dodaj pozyc
 3. **Koszty i konfiguracja AI — w toku.** Zweryfikować aktualne możliwości ograniczania wydatków i zasady danych u wybranego dostawcy; przedstawić Kasi konkretną propozycję ustawień. Dzienna liczba prób i blokada równoległości nie gwarantują limitu finansowego. Płatny dostęp wymaga osobnej decyzji.
 4. **Próba na fikcyjnym warsztacie — zakończona dla fikcyjnego scenariusza.** Przejść przygotowanie procesu, tekst, propozycje, sprawdzenie, przeniesienie do AS-IS, zapis, otwarcie i wynikowy raport. Oddzielić wynik fikcyjnego dostawcy od oceny rzeczywistego modelu. Gotowe, gdy zapisano wyniki i poprawiono blokujące problemy.
 5. **Przygotowanie docelowego uruchomienia — w toku.** Przygotować konkretną listę konfiguracji, sprawdzenia i wycofania zmian, następnie poprosić o wymaganą zgodę na wdrożenie funkcji i SQL. Po zgodzie zweryfikować działanie w docelowym środowisku i przekazać prostą instrukcję.
-6. **Rozbudowa i testy map BPMN dla IT i AI — do realizacji.** Rozwinąć mapy AS-IS i TO-BE tak, aby wspierały diagnozę błędów procesu i przekazanie wymagań do automatyzacji. Zakres i kryteria odbioru opisano poniżej.
+6. **Rozbudowa i testy map BPMN dla IT i AI — wdrożono na gałęzi roboczej i sprawdzono na fikcyjnym przykładzie.** Odbiór przez osobę spoza warsztatu pozostaje do wykonania. [Wyniki próby](proba-bpmn-przekazanie-it-ai-2026-11-19.md).
 
 Stan: **próba fikcyjnego warsztatu zakończona**, odporność, bezpieczeństwo oraz koszty w toku; uruchomienie docelowe w toku. Te punkty mają różną pracochłonność; nie należy traktować ich liczby jako procentu ukończenia. Zmiany wyłącznie na `feature/architekt-2-mvp`, bez prawdziwych danych i płatnego API przed osobną decyzją.
 
@@ -35,6 +35,8 @@ Przygotowanie do przeglądu: [zakres i plan wycofania](przygotowanie-uruchomieni
 ## Rozbudowa i testy map BPMN dla IT i AI
 
 Punktem wyjścia są mapy z próby skierowania na badania wstępne. Pokazują start u kierownika, tory kierownika i HR, oddzielny basen osoby przyjmowanej, decyzję o kompletności, powrót po uzupełnienie oraz przekazanie skierowania. [Sprawdzony przebieg w Chromium](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44339216593).
+
+Wynik rozbudowy, diagnozę i ograniczenia opisano w [próbie przekazania map do IT i AI](proba-bpmn-przekazanie-it-ai-2026-11-19.md).
 
 ### Zakres pierwszej rozbudowy
 

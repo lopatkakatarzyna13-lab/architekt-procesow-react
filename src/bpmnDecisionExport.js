@@ -1,3 +1,4 @@
+import { addBpmnDataObjects, createBpmnTask, getBpmnDataLayout } from './bpmnTaskModel.js'
 import { createLinearBpmn, defaultBpmnTaskSize, getLinearBpmnError } from './bpmnExport.js'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
 
@@ -20,7 +21,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   const process = moddle.create('bpmn:Process', { id: 'Process_1', name: processName?.trim() || 'Proces', isExecutable: false, flowElements: [] })
   const start = moddle.create('bpmn:StartEvent', { id: 'StartEvent_1', name: startName?.trim() || 'Początek' })
   const end = moddle.create('bpmn:EndEvent', { id: 'EndEvent_1', name: endName?.trim() || 'Koniec' })
-  const tasks = steps.map((step, index) => moddle.create('bpmn:Task', { id: `Task_${index + 1}`, name: step.name.trim() }))
+  const tasks = steps.map((step, index) => createBpmnTask(moddle, step, `Task_${index + 1}`))
   const indexes = new Map(steps.map((step, index) => [step.id, index]))
   const inbound = steps.map(() => 1)
   for (const step of steps) for (const link of step.extraConnections || []) inbound[indexes.get(link.targetId)] += 1
@@ -41,9 +42,17 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     }
   })
   const laneNames = hasLanes ? [...new Set(steps.map((step) => step.bpmnLane.trim()))] : []
-  const taskSizes = tasks.map((task) => getTaskSize(task.name))
+  const dataLayout = getBpmnDataLayout(steps)
+  const taskSizes = tasks.map((task, index) => getTaskSize(task.name, steps[index]))
+  const taskColumns = [250]
+  for (let index = 1; index < steps.length; index += 1) {
+    const gatewaySpace = (splits[index - 1] ? 115 : 24) + (merges[index] ? 100 : 0)
+    const gap = dataLayout.height ? Math.max(280, taskSizes[index - 1].width + gatewaySpace) : 360
+    taskColumns.push(taskColumns[index - 1] + gap)
+  }
   const maxTaskHeight = Math.max(...taskSizes.map(({ height }) => height))
-  const laneHeight = Math.max(180, maxTaskHeight + 100)
+  const taskBandHeight = Math.max(180, maxTaskHeight + 100)
+  const laneHeight = taskBandHeight + dataLayout.height
   const laneTop = hasCollaboration ? 10 : 100
   const routingTop = hasLanes ? laneTop : hasCollaboration ? 10 : 0
   const alternateLayout = new Map()
@@ -56,16 +65,17 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     nextLabelY = routeY + 12
   }
   const baseUnlanedCenter = Math.max(240, maxTaskHeight / 2 + 110)
-  const firstShapeTop = hasLanes ? laneTop + (laneHeight - maxTaskHeight) / 2 : baseUnlanedCenter - maxTaskHeight / 2
+  const firstShapeTop = hasLanes ? laneTop + (taskBandHeight - maxTaskHeight) / 2 : baseUnlanedCenter - maxTaskHeight / 2
   const routingPadding = Math.max(0, nextLabelY - firstShapeTop)
   const unlanedCenter = baseUnlanedCenter + routingPadding
   const shiftX = hasCollaboration ? 40 : 0
-  const centerY = (index) => hasLanes ? laneTop + laneHeight / 2 + routingPadding + laneNames.indexOf(steps[index].bpmnLane.trim()) * laneHeight : unlanedCenter
+  const centerY = (index) => hasLanes ? laneTop + taskBandHeight / 2 + routingPadding + laneNames.indexOf(steps[index].bpmnLane.trim()) * laneHeight : unlanedCenter
   const boxes = new Map()
   boxes.set(start, { x: 70 + shiftX, y: centerY(0) - 18, width: 36, height: 36 })
-  boxes.set(end, { x: 250 + steps.length * 360 + shiftX, y: centerY(steps.length - 1) - 18, width: 36, height: 36 })
+  const endX = taskColumns.at(-1) + (dataLayout.height ? 280 : 360) + shiftX + dataLayout.offsets.at(-1) + dataLayout.lastExtra
+  boxes.set(end, { x: endX, y: centerY(steps.length - 1) - 18, width: 36, height: 36 })
   steps.forEach((_, index) => {
-    const x = 250 + index * 360 + shiftX; const center = centerY(index)
+    const x = taskColumns[index] + shiftX + dataLayout.offsets[index]; const center = centerY(index)
     const size = taskSizes[index]
     boxes.set(tasks[index], { x, y: center - size.height / 2, ...size })
     if (merges[index]) boxes.set(merges[index], { x: x - 100, y: center - 25, width: 50, height: 50 })
@@ -86,8 +96,9 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     return flow
   })
   const nodes = [start, ...steps.flatMap((_, index) => [merges[index], tasks[index], splits[index]].filter(Boolean)), end]
-  process.flowElements = [...nodes, ...flows]
-  const poolWidth = Math.max(250 + steps.length * 360 + 80 + shiftX, 230 + externalSteps.length * 220)
+  const data = addBpmnDataObjects(moddle, dataLayout.groups, tasks, (task) => boxes.get(task), maxTaskHeight)
+  process.flowElements = [...nodes, ...flows, ...data.elements]
+  const poolWidth = Math.max(endX + 80, 230 + externalSteps.length * 220)
   const laneShapes = lanes.map((lane, index) => moddle.create('bpmndi:BPMNShape', { id: `LaneShape_${index + 1}`, bpmnElement: lane, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: hasCollaboration ? 40 : 10, y: laneTop + index * laneHeight + (index ? routingPadding : 0), width: poolWidth - (hasCollaboration ? 30 : 0), height: laneHeight + (index ? 0 : routingPadding) }) }))
   const shapes = nodes.map((node, index) => moddle.create('bpmndi:BPMNShape', { id: `Shape_${index + 1}`, bpmnElement: node, ...(node.$type === 'bpmn:ExclusiveGateway' ? { isMarkerVisible: true } : {}), bounds: moddle.create('dc:Bounds', boxes.get(node)) }))
   const edges = flows.map((flow, index) => {
@@ -110,7 +121,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     }
     return edge
   })
-  let planeElement = [...laneShapes, ...shapes, ...edges]
+  let planeElement = [...laneShapes, ...shapes, ...data.shapes, ...edges, ...data.edges]
   let rootElements = [process]
   let planeRoot = process
   if (hasCollaboration) {
@@ -142,7 +153,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     const poolByName = new Map(externalNames.map(([key], index) => [key, pools[index]]))
     const participants = pools.map(({ participant }) => participant)
     const collaboration = moddle.create('bpmn:Collaboration', { id: 'Collaboration_1', participants: [primary, ...participants], messageFlows: [] })
-    const mainHeight = hasLanes ? laneNames.length * laneHeight + routingPadding : Math.max(320, unlanedCenter + maxTaskHeight / 2 + 30)
+    const mainHeight = hasLanes ? laneNames.length * laneHeight + routingPadding : Math.max(320, unlanedCenter + maxTaskHeight / 2 + 30 + dataLayout.height)
     const mainShape = moddle.create('bpmndi:BPMNShape', { id: 'ParticipantShape_Main', bpmnElement: primary, isHorizontal: true, bounds: moddle.create('dc:Bounds', { x: 10, y: 10, width: poolWidth, height: mainHeight }) })
     // Reserve a separate row for each label; longer names need additional lines.
     const labelHeights = messages.map((message) => Math.max(44, Math.ceil(message.label.trim().length / 18) * 16 + 16))
@@ -236,7 +247,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     })
     planeRoot = collaboration
     rootElements = [process, ...pools.flatMap(({ processRef }) => processRef ? [processRef] : []), collaboration]
-    planeElement = [mainShape, ...laneShapes, ...externalShapes, ...shapes, ...externalTaskShapes, ...edges, ...externalFlowEdges, ...messageEdges, ...externalMessageEdges]
+    planeElement = [mainShape, ...laneShapes, ...externalShapes, ...shapes, ...externalTaskShapes, ...data.shapes, ...edges, ...data.edges, ...externalFlowEdges, ...messageEdges, ...externalMessageEdges]
   }
   const plane = moddle.create('bpmndi:BPMNPlane', { id: 'Plane_1', bpmnElement: planeRoot, planeElement })
   const diagram = moddle.create('bpmndi:BPMNDiagram', { id: 'Diagram_1', plane })

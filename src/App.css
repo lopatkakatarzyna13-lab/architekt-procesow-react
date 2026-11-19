@@ -3632,3 +3632,21 @@ footer span:first-child::before {
   .print-bpmn-details li { break-inside: avoid; margin-bottom: 1mm; }
   .print-bpmn-image { display: block; width: 100%; max-height: 220mm; object-fit: contain; margin: 3mm 0; break-inside: avoid; }
 }
+
+.bpmn-step-editor { margin-block: 12px; }
+.bpmn-step-editor summary { cursor: pointer; font-weight: 600; }
+.bpmn-step-editor fieldset { min-width: 0; margin-block: 12px; padding: 12px; border: 1px solid #dedbed; border-radius: 8px; }
+.bpmn-step-editor fieldset button { margin-top: 8px; }
+.bpmn-step-summary { margin: 8px 0 12px; }
+.bpmn-step-summary dt { font-weight: 600; }
+.bpmn-step-summary dd { margin: 0 0 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media print {
+  .print-bpmn-step-list .bpmn-step-summary div {
+    display: grid;
+    grid-template-columns: 38mm 1fr;
+    column-gap: 3mm;
+    break-inside: avoid;
+  }
+  .print-bpmn-step-list .bpmn-step-summary dd { margin-bottom: 1mm; }
+}

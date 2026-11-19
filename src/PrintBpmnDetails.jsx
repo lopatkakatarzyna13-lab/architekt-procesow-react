@@ -1,3 +1,5 @@
+import BpmnStepSummary from './BpmnStepSummary'
+import { bpmnStepFields, getBpmnDocuments } from './bpmnStepDetails'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages'
 
 export default function PrintBpmnDetails({ steps, externalSteps, externalLinks = [], svg, error, variant = 'AS-IS' }) {
@@ -7,11 +9,16 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
   const endpoint = (pool, id) => [poolNames.get(pool) ?? pool, externalSteps.find((step) => step.id === id)?.name].filter(Boolean).join(' / ')
   const extra = steps.flatMap((step) => (step.extraConnections || []).map((link) => ({ from: step.name, to: steps.find((item) => item.id === link.targetId)?.name || 'Nieznany krok', label: link.label })))
   const decisions = steps.filter((step) => step.extraConnections?.length && step.bpmnDecision)
+  const detailed = steps.some((step) => step.bpmnTaskType || getBpmnDocuments(step).length || bpmnStepFields.some(([id]) => step[id]))
   return <div className="print-bpmn-details">
     <div className="print-map-block">
       <h3>Mapa BPMN {variant}</h3>
       {svg ? <><p>Diagram odpowiada zapisanemu modelowi BPMN {variant}. Szczegóły połączeń podano poniżej. Diagram: bpmn.io.</p><img className={variant === 'TO-BE' ? 'print-bpmn-image print-tobe-bpmn' : 'print-bpmn-image'} src={svg} alt={`Mapa BPMN procesu ${variant}`} /></> : <p>Nie zamieszczono diagramu BPMN: {error || 'model nie jest dostępny'}.</p>}
     </div>
+    {detailed && <>
+      <h4>Szczegóły kroków BPMN {variant}</h4>
+      <ol className="print-bpmn-step-list">{steps.map((step) => <li key={step.id}><strong>{step.name}</strong><BpmnStepSummary step={step} /></li>)}</ol>
+    </>}
     {decisions.length > 0 && <><h4>Decyzje i ścieżki podstawowe</h4><ul>{decisions.map((step) => <li key={step.id}>{step.name}: {step.bpmnDecision.question} — ścieżka podstawowa: {step.bpmnDecision.mainLabel}</li>)}</ul></>}
     {extra.length > 0 && <><h4>Dodatkowe przejścia</h4><ul>{extra.map((item, index) => <li key={index}>{item.from} → {item.to}: {item.label}</li>)}</ul></>}
     {messages.length > 0 && <><h4>Baseny i wiadomości</h4><p>Basen własny: {messages[0].primary}. Baseny zewnętrzne: {pools.map(([, name]) => name).join(', ')}.</p><ul>{messages.map((message) => {

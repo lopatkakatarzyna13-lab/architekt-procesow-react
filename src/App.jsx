@@ -36,6 +36,7 @@ import BpmnMessages from './BpmnMessages'
 import BpmnExternalMessages from './BpmnExternalMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
+import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, emptyBpmnStep, getBpmnDocuments, getBpmnStepError, readBpmnStepDraft } from './bpmnStepDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages'
@@ -95,7 +96,10 @@ const requiredFields = {
   processEnd: 'Określ, co kończy proces.',
 }
 
+const bpmnStepFieldMap = Object.fromEntries(Object.keys(emptyBpmnStep).map((key) => [key, key]))
+
 const emptyStep = {
+  ...emptyBpmnStep,
   name: '',
   description: '',
   owner: '',
@@ -122,6 +126,7 @@ const emptyToBeAssumptions = {
 }
 
 const emptyToBeStep = {
+  ...emptyBpmnStep,
   name: '',
   description: '',
   owner: '',
@@ -144,7 +149,7 @@ const emptyStakeholder = {
 
 function hasPendingForm(draft, defaults, editingId) {
   return Boolean(editingId) || Object.entries(defaults).some(([field, initial]) => {
-    const value = draft[field]
+    const value = draft[field] ?? initial
     return Array.isArray(initial) ? value.length > 0 : value !== initial
   })
 }
@@ -846,6 +851,61 @@ function DescribeAsIs({
   )
 }
 
+function BpmnStepEditor({ draft, onChange, prefix }) {
+  const documents = getBpmnDocuments(draft)
+  const changeDocuments = (value) => onChange({ target: { name: 'bpmnDocuments', value } })
+  const changeDocument = (index, field, value) => changeDocuments(
+    documents.map((document, i) => i === index ? { ...document, [field]: value } : document),
+  )
+  return <>
+    <SelectField
+      id="bpmnTaskType"
+      label="Typ zadania BPMN"
+      value={draft.bpmnTaskType ?? ''}
+      onChange={onChange}
+      options={Object.entries(bpmnTaskTypes).map(([value, { label }]) => ({ value, label }))}
+      placeholder="Ogólne"
+    />
+    <details className="bpmn-step-editor">
+      <summary>Dokumenty i szczegóły wykonania</summary>
+      {documents.map((document, index) => (
+        <fieldset key={index}>
+          <legend>{bpmnDocumentDirections[document.direction]} · dokument {index + 1}</legend>
+          <div className="form-grid">
+            {[
+              ['name', 'Nazwa dokumentu', 'np. Zgłoszenie pracownika'],
+              ['format', 'Format', 'np. papier, skan, PDF, formularz'],
+              ['channel', 'Kanał przekazania', 'np. osobiście, e-mail, integracja'],
+            ].map(([field, label, placeholder]) => <FormField
+              key={field}
+              id={`${prefix}-${field}-${index}`}
+              label={`${label} — dokument ${index + 1}`}
+              value={document[field] ?? ''}
+              required={field === 'name'}
+              placeholder={placeholder}
+              onChange={(event) => changeDocument(index, field, event.target.value)}
+            />)}
+          </div>
+          <button type="button" className="back-button" onClick={() => changeDocuments(documents.filter((_, i) => i !== index))}>
+            Usuń dokument {index + 1}
+          </button>
+        </fieldset>
+      ))}
+      <div className="bpmn-actions">
+        {Object.entries(bpmnDocumentDirections).map(([direction, label]) => <button
+          key={direction}
+          type="button"
+          className="back-button"
+          onClick={() => changeDocuments([...documents, { direction, name: '', format: '', channel: '' }])}
+        >Dodaj dokument — {label.toLocaleLowerCase('pl')}</button>)}
+      </div>
+      <div className="form-grid">
+        {bpmnStepFields.map(([id, label]) => <FormField key={id} id={id} label={label} value={draft[id] ?? ''} onChange={onChange} />)}
+      </div>
+    </details>
+  </>
+}
+
 function StepsAsIs({
   stepDraft,
   stepError,
@@ -875,7 +935,7 @@ function StepsAsIs({
             label="Nazwa kroku"
             value={stepDraft.name}
             onChange={onStepChange}
-            error={stepError}
+            error={stepDraft.name.trim() ? '' : stepError}
             required
             placeholder="np. Weryfikacja zamówienia"
           />
@@ -911,6 +971,8 @@ function StepsAsIs({
             />
           </div>
         </div>
+        <BpmnStepEditor draft={stepDraft} onChange={onStepChange} prefix="as-is-bpmn" />
+        {stepDraft.name.trim() && stepError && <p className="error-message" role="alert">{stepError}</p>}
         <div className="step-form-actions">
           {editingStepId && (
             <button className="cancel-edit-button" type="button" onClick={onCancelEdit}>
@@ -1833,7 +1895,7 @@ function ToBeStepEditor({
             label="Nazwa kroku"
             value={draft.name}
             onChange={onChange}
-            error={error}
+            error={draft.name.trim() ? '' : error}
             required
             placeholder="np. Automatyczna weryfikacja zamówienia"
           />
@@ -1908,6 +1970,8 @@ function ToBeStepEditor({
             placeholder=""
           />
         </div>
+        <BpmnStepEditor draft={draft} onChange={onChange} prefix="to-be-bpmn" />
+        {draft.name.trim() && error && <p className="error-message" role="alert">{error}</p>}
         <div className="step-form-actions">
           {editingId && (
             <button className="cancel-edit-button" type="button" onClick={onCancel}>
@@ -4188,6 +4252,7 @@ const openSavedProcess = (process) => {
 
   const handleStepChange = (event) => {
     const fieldMap = {
+      ...bpmnStepFieldMap,
       stepName: 'name',
       stepDescription: 'description',
       stepOwner: 'owner',
@@ -4196,7 +4261,7 @@ const openSavedProcess = (process) => {
     }
     const field = fieldMap[event.target.name]
     setStepDraft((currentStep) => ({ ...currentStep, [field]: event.target.value }))
-    if (field === 'name') {
+    if (field === 'name' || field === 'bpmnDocuments') {
       setStepError('')
     }
     setAsIsError('')
@@ -4303,6 +4368,11 @@ const openSavedProcess = (process) => {
       document.getElementById('stepName')?.focus()
       return
     }
+    const documentError = getBpmnStepError(stepDraft)
+    if (documentError) {
+      setStepError(documentError)
+      return
+    }
 
     const nextSteps = editingStepId
   ? steps.map((step) =>
@@ -4349,6 +4419,7 @@ try {
 
   const editStep = (step) => {
     setStepDraft({
+      ...readBpmnStepDraft(step),
       name: step.name,
       description: step.description,
       owner: step.owner,
@@ -4655,6 +4726,7 @@ try {
 
   const handleToBeStepChange = (event) => {
     const fieldMap = {
+      ...bpmnStepFieldMap,
       toBeStepName: 'name',
       toBeStepDescription: 'description',
       toBeStepOwner: 'owner',
@@ -4675,7 +4747,7 @@ try {
         additionalFindingIds: current.additionalFindingIds.filter((id) => id !== value),
       }),
     }))
-    if (field === 'name') {
+    if (field === 'name' || field === 'bpmnDocuments') {
       setToBeStepError('')
     }
     setToBeSaved(false)
@@ -4699,6 +4771,11 @@ try {
     if (!toBeStepDraft.name.trim()) {
       setToBeStepError('Uzupełnij nazwę kroku.')
       document.getElementById('toBeStepName')?.focus()
+      return
+    }
+    const documentError = getBpmnStepError(toBeStepDraft)
+    if (documentError) {
+      setToBeStepError(documentError)
       return
     }
 
@@ -4727,6 +4804,7 @@ try {
 
   const editToBeStep = (step) => {
     setToBeStepDraft({
+      ...readBpmnStepDraft(step),
       name: step.name,
       description: step.description,
       owner: step.owner,
@@ -4791,6 +4869,7 @@ try {
 
     const copiedSteps = steps.map((step, index) => ({
       ...emptyToBeStep,
+      ...readBpmnStepDraft(step),
       name: step.name,
       description: step.description,
       owner: step.owner,

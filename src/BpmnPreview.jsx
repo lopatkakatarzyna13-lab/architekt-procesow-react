@@ -1,3 +1,4 @@
+import BpmnStepSummary from './BpmnStepSummary'
 import { useEffect, useRef, useState } from 'react'
 import { getBpmnMessages, getExternalPools } from './bpmnMessages'
 
@@ -7,6 +8,7 @@ export default function BpmnPreview({ steps, externalSteps = [], externalLinks =
   const [status, setStatus] = useState('loading')
   const [selectedId, setSelectedId] = useState('')
   const [navigationError, setNavigationError] = useState('')
+  const selectedTask = steps.find((_, index) => selectedId === `Task_${index + 1}`)
   const messages = getBpmnMessages(steps)
   const targets = [
     ...(messages.length ? [
@@ -21,11 +23,11 @@ export default function BpmnPreview({ steps, externalSteps = [], externalLinks =
     let viewer
     const load = async () => {
       try {
-        const [{ default: NavigatedViewer }, { createDecisionBpmn }] = await Promise.all([
-          import('bpmn-js/lib/NavigatedViewer'), import('./bpmnDecisionExport'),
+        const [{ default: NavigatedViewer }, { createBrowserBpmn }] = await Promise.all([
+          import('bpmn-js/lib/NavigatedViewer'), import('./createBrowserBpmn'),
           import('bpmn-js/dist/assets/diagram-js.css'), import('bpmn-js/dist/assets/bpmn-js.css'), import('bpmn-js/dist/assets/bpmn-font/css/bpmn.css'),
         ])
-        const xml = await createDecisionBpmn({ steps, externalSteps, externalLinks, processName: scope.processName, startName: scope.processStart, endName: scope.processEnd })
+        const xml = await createBrowserBpmn({ steps, externalSteps, externalLinks, scope })
         if (cancelled) return
         viewer = new NavigatedViewer({ container: canvasRef.current })
         const { warnings } = await viewer.importXML(xml)
@@ -79,6 +81,10 @@ export default function BpmnPreview({ steps, externalSteps = [], externalLinks =
     {status === 'loading' && <p role="status">Przygotowuję podgląd BPMN…</p>}
     {status === 'warning' && <p role="alert">Nie można potwierdzić poprawnego wyświetlenia wszystkich elementów BPMN. Sprawdź dane procesu.</p>}
     {status === 'error' && <p role="alert">Nie udało się wyświetlić diagramu BPMN. Spróbuj ponownie.</p>}
+    {selectedTask && <div>
+      <h3>{selectedTask.name}</h3>
+      <BpmnStepSummary step={selectedTask} />
+    </div>}
     <div ref={canvasRef} className="bpmn-preview-canvas" role="img" aria-label={`Podgląd zapisanego diagramu BPMN ${variant === 'to-be' ? 'TO-BE' : 'AS-IS'}`} />
   </div>
 }

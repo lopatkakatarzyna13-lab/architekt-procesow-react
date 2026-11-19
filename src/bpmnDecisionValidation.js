@@ -1,3 +1,4 @@
+import { getBpmnStepError } from './bpmnStepDetails.js'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
 
 export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = []) {
@@ -7,6 +8,8 @@ export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = 
   const ids = new Set()
   for (const step of steps) {
     if (!step || typeof step.id !== 'string' || !step.id || ids.has(step.id) || typeof step.name !== 'string' || !step.name.trim()) return 'Lista kroków jest nieprawidłowa.'
+    const stepError = getBpmnStepError(step)
+    if (stepError) return `Krok „${step.name}”. ${stepError}`
     ids.add(step.id)
   }
   for (const step of steps) {

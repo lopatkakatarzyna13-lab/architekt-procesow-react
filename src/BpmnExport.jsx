@@ -14,8 +14,8 @@ export default function BpmnExport({ steps, externalSteps = [], externalLinks = 
   const exportFile = async () => {
     if (!saved || error) return
     try {
-      const { createDecisionBpmn } = await import('./bpmnDecisionExport')
-      const xml = await createDecisionBpmn({ steps, externalSteps, externalLinks, processName: bpmnScope.processName, startName: bpmnScope.processStart, endName: bpmnScope.processEnd })
+      const { createBrowserBpmn } = await import('./createBrowserBpmn')
+      const xml = await createBrowserBpmn({ steps, externalSteps, externalLinks, scope: bpmnScope })
       const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
@@ -29,8 +29,9 @@ export default function BpmnExport({ steps, externalSteps = [], externalLinks = 
   }
   return <section className="step-connections" aria-labelledby="bpmn-export-title">
     <h2 id="bpmn-export-title">{toBe ? 'Mapa BPMN 2.0 procesu TO-BE' : 'Eksport procesu BPMN 2.0'}</h2>
-    {toBe ? <p>Mapa pokazuje zapisane kroki TO-BE w kolejności listy oraz zapisane decyzje, dodatkowe przejścia, tory i przekazania. Początek i koniec mają ogólne nazwy. Możesz zacząć od pustej mapy lub skopiować mapę AS-IS osobnym przyciskiem. Ról, systemów i opisów nie przedstawia jako elementów BPMN. Model nie służy do automatycznego wykonywania procesu.</p> : <p>Eksport obejmuje nazwę procesu, początek, nazwy zadań, koniec, połączenia określone przez Ciebie bramki wyboru jednej ścieżki oraz wskazane wiadomości z zewnętrznymi uczestnikami. Opcjonalne tory są uwzględniane tylko wtedy, gdy przypiszesz je wszystkim krokom. Pola odpowiedzialności, systemy, opisy i ustalenia nie są automatycznie uwzględniane. Plik nie jest przeznaczony do automatycznego wykonywania procesu.</p>}
-    {!toBe && <p>Dla dodatkowych przejść uzupełnij decyzję i warunek podstawowej ścieżki. Opisy warunków nie są regułami do automatycznego wykonania. Podgląd i plik powstają z tych samych zapisanych danych. Sprawdź model przed użyciem.</p>}
+    <p>Mapa pokazuje zapisane zadania, dokumenty, decyzje, tory i przekazania. W podglądzie wybierz krok, aby odczytać szczegóły wykonania. Plik BPMN zawiera te szczegóły w dokumentacji elementów.</p>
+    {!toBe && <p>Dla dodatkowych przejść uzupełnij decyzję i warunek podstawowej ścieżki. Jeśli używasz torów, przypisz tor do każdego kroku.</p>}
+    {toBe && <p>Początek i koniec mają ogólne nazwy. Mapę możesz skopiować z AS-IS i dostosować w TO-BE.</p>}
     {!saved && <p>Najpierw zapisz proces {toBe ? 'TO-BE' : 'AS-IS'}.</p>}
     {error && <p>{error}</p>}
     <div className="bpmn-actions">

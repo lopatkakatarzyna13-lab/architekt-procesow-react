@@ -44,3 +44,38 @@ describe('linear BPMN export', () => {
     expect(flow.waypoint[0]).toMatchObject({ x: bounds.x + bounds.width, y: bounds.y + bounds.height / 2 })
   })
 })
+
+it('round-trips typed tasks and multiple document associations in a linear diagram', async () => {
+  const enriched = [
+    { ...steps[0], bpmnTaskType: 'manual', bpmnDocuments: [
+      { direction: 'input', name: 'Opis A', format: 'Papier', channel: 'Osobiście' },
+      { direction: 'input', name: 'Opis B', format: 'Skan', channel: 'E-mail' },
+      { direction: 'output', name: 'Zgłoszenie & dane', format: 'PDF' },
+    ] },
+    { ...steps[1], bpmnTaskType: 'user', bpmnRule: 'Zweryfikuj dane przed wysyłką.' },
+    { id: 'c', name: 'Zapisz', bpmnTaskType: 'service' },
+    { id: 'd', name: 'Starszy krok' },
+  ]
+  const xml = await createLinearBpmn({ steps: enriched })
+  const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+  expect(warnings).toEqual([])
+  const { flowElements } = rootElement.rootElements[0]
+  const tasks = flowElements.filter((item) => item.$instanceOf('bpmn:Task'))
+  expect(tasks.map((task) => task.$type)).toEqual(['bpmn:ManualTask', 'bpmn:UserTask', 'bpmn:ServiceTask', 'bpmn:Task'])
+  expect(tasks[1].documentation[0].text).toContain('Zweryfikuj dane przed wysyłką.')
+  const [first] = tasks
+  expect(first.dataInputAssociations.map(({ sourceRef }) => sourceRef[0].name)).toEqual(['Opis A', 'Opis B'])
+  expect(first.dataInputAssociations[0].sourceRef[0].documentation[0].text).toBe('Format: Papier\nKanał przekazania: Osobiście')
+  expect(first.dataOutputAssociations[0].targetRef.name).toBe('Zgłoszenie & dane')
+  const diagram = rootElement.diagrams[0].plane.planeElement
+  const firstInput = diagram.find(({ bpmnElement }) => bpmnElement.id === 'Document_Task_1_input_1')
+  const secondInput = diagram.find(({ bpmnElement }) => bpmnElement.id === 'Document_Task_1_input_2')
+  expect(secondInput.label.bounds.x + secondInput.label.bounds.width).toBeLessThan(firstInput.label.bounds.x)
+})
+
+it('rejects documents with a missing name or unsupported direction', async () => {
+  for (const document of [{ name: ' ', direction: 'input' }, { name: 'Dokument', direction: 'unknown' }]) {
+    const input = [{ ...steps[0], bpmnDocuments: [document] }]
+    await expect(createLinearBpmn({ steps: input })).rejects.toThrow('Sprawdź nazwy oraz kierunek')
+  }
+})
