@@ -3,7 +3,7 @@ const BpmnPreview = lazy(() => import('./BpmnPreview'))
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { toBeBpmnScope } from './toBeBpmn'
 
-export default function BpmnExport({ steps, externalSteps = [], externalLinks = [], scope, saved, variant = 'as-is' }) {
+export default function BpmnExport({ steps, externalSteps = [], externalLinks = [], scope, saved, variant = 'as-is', readOnly = false }) {
   const [message, setMessage] = useState('')
   const [previewKey, setPreviewKey] = useState(null)
   const toBe = variant === 'to-be'
@@ -28,10 +28,10 @@ export default function BpmnExport({ steps, externalSteps = [], externalLinks = 
     } catch { setMessage('Nie udało się przygotować pliku BPMN. Spróbuj ponownie.') }
   }
   return <section className="step-connections" aria-labelledby="bpmn-export-title">
-    <h2 id="bpmn-export-title">{toBe ? 'Mapa BPMN 2.0 procesu TO-BE' : 'Eksport procesu BPMN 2.0'}</h2>
+    <h2 id="bpmn-export-title">{readOnly ? `BPMN 2.0 — ${toBe ? 'TO-BE' : 'AS-IS'}` : toBe ? 'Mapa BPMN 2.0 procesu TO-BE' : 'Eksport procesu BPMN 2.0'}</h2>
     <p>Mapa pokazuje zapisane zadania, dokumenty, decyzje, tory i przekazania. W podglądzie wybierz krok, aby odczytać szczegóły wykonania. Plik BPMN zawiera te szczegóły w dokumentacji elementów.</p>
-    {!toBe && <p>Dla dodatkowych przejść uzupełnij decyzję i warunek podstawowej ścieżki. Jeśli używasz torów, przypisz tor do każdego kroku.</p>}
-    {toBe && <p>Początek i koniec mają ogólne nazwy. Mapę możesz skopiować z AS-IS i dostosować w TO-BE.</p>}
+    {!readOnly && !toBe && <p>Dla dodatkowych przejść uzupełnij decyzję i warunek podstawowej ścieżki. Jeśli używasz torów, przypisz tor do każdego kroku.</p>}
+    {!readOnly && toBe && <p>Początek i koniec mają ogólne nazwy. Mapę możesz skopiować z AS-IS i dostosować w TO-BE.</p>}
     {!saved && <p>Najpierw zapisz proces {toBe ? 'TO-BE' : 'AS-IS'}.</p>}
     {error && <p>{error}</p>}
     <div className="bpmn-actions">

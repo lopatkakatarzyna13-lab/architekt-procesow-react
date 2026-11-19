@@ -46,11 +46,14 @@ try {
     await choose('Typ zadania BPMN', type)
     await button('Zapisz zmiany').click()
   }
-  const verifyExport = async (variant) => {
+  const downloadBpmn = async () => {
     const [download] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
     const path = await download.path()
     execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path], { stdio: 'inherit' })
-    const xml = await readFile(path, 'utf8')
+    return readFile(path, 'utf8')
+  }
+  const verifyExport = async (variant) => {
+    const xml = await downloadBpmn()
     if (process.env.CORRECTION_BPMN_PREFIX) await writeFile(`${process.env.CORRECTION_BPMN_PREFIX}-${variant}.bpmn`, xml)
     const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
     assert.deepEqual(warnings, [])
@@ -85,6 +88,7 @@ try {
         ? [name, 'Participant_External_1', tasks[index].id]
         : [name, tasks[index].id, 'Participant_External_1']))
     assert.equal(close.outgoing[0].targetRef.$type, 'bpmn:EndEvent')
+    return xml
   }
 
   await page.goto('http://127.0.0.1:5173/')
@@ -131,7 +135,7 @@ try {
     await button('Dodaj wiadomość BPMN').click()
   }
   await button('Zapisz proces AS-IS').click()
-  await verifyExport('as-is')
+  const savedAsIs = await verifyExport('as-is')
   await button('Przejdź do analizy').click()
   await choose(/Kategoria/, 'Wąskie gardło')
   await label(/Nazwa problemu lub obserwacji/).fill('Błąd korekty wymaga ponownej kontroli')
@@ -145,7 +149,7 @@ try {
   await button('Skopiuj mapę BPMN z AS-IS').click()
   await saveTaskType(2, 'Czeka na wiadomość')
   await button('Zapisz proces TO-BE').click()
-  await verifyExport('to-be')
+  const savedToBe = await verifyExport('to-be')
   await button('Pokaż podgląd BPMN').click()
   await page.locator('.bpmn-preview-canvas [data-element-id="Participant_External_1"]').waitFor()
   await button('Przejdź do raportu').click()
@@ -166,6 +170,21 @@ try {
   for (const variant of ['AS-IS', 'TO-BE']) {
     assert.ok(pages.find((page) => page.includes(`Mapa BPMN ${variant}`))?.includes(employee), `Missing pool on PDF map ${variant}`)
   }
+  await page.emulateMedia({ media: 'screen' })
+  await button('Zakończ wersję').click()
+  await page.reload()
+  await button('Moje procesy').click()
+  const completed = page.locator('.process-card').filter({ hasText: 'Wersja 1 · Zakończona' })
+  await completed.getByRole('button', { name: 'Otwórz proces', exact: true }).click()
+  assert.equal(await button('Zapisz raport').count(), 0)
+  for (const [variant, expected] of [['TO-BE', savedToBe], ['AS-IS', savedAsIs]]) {
+    await button(`Mapa ${variant}`).click()
+    await button('Pokaż podgląd BPMN').click()
+    await page.getByRole('img', { name: `Podgląd zapisanego diagramu BPMN ${variant}` })
+      .locator('[data-element-id="Participant_External_1"]').waitFor()
+    assert.equal(await downloadBpmn(), expected)
+  }
+  console.log('PASS: completed report reopens with previews and the original BPMN downloads')
   console.log('PASS: employee data correction round-trips through AS-IS, TO-BE, BPMN 2.0 and PDF')
 } finally {
   await browser.close()

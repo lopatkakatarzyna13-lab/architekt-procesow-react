@@ -2684,7 +2684,7 @@ function ProcessFlowCanvas({ steps, scope, variant, findings }) {
   )
 }
 
-function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings }) {
+function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings, bpmnModels }) {
   const [mapVariant, setMapVariant] = useState('to-be')
   const selectedSteps = mapVariant === 'to-be' ? toBeSteps : asIsSteps
   const isTextAsIs = mapVariant === 'as-is' && startMethod !== 'steps'
@@ -2716,6 +2716,9 @@ function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings 
         </button>
       </div>
 
+      {!isTextAsIs && bpmnModels && (
+        <BpmnExport key={mapVariant} {...bpmnModels[mapVariant]} scope={scope} variant={mapVariant} saved readOnly />
+      )}
       {isTextAsIs ? (
         <div className="map-empty-message">
           <span aria-hidden="true">i</span>
@@ -3305,6 +3308,10 @@ function ReportScreen({
         asIsSteps={asIsSteps}
         toBeSteps={toBeSteps}
         findings={findings}
+        bpmnModels={completed ? {
+          'as-is': { steps: asIsSteps, externalSteps, externalLinks },
+          'to-be': { steps: modeledSteps, externalSteps: toBeExternalSteps, externalLinks: toBeExternalLinks },
+        } : undefined}
       />
       <StakeholdersSection
         stakeholders={stakeholders}
