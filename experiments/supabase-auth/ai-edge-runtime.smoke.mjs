@@ -78,7 +78,18 @@ await import('./entry.ts')
     })
   }
   const endpoint = `${API_URL}/functions/v1/workshop-ai`
-  const send = (token, body = '{"transcript":"Fikcyjny proces"}') => fetch(endpoint, { method: 'POST', headers: { apikey: ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}), Origin: 'http://127.0.0.1:5173', 'Content-Type': 'application/json' }, body })
+  // Keep smoke requests independent while the local gateway switches Edge runtimes.
+  const send = (token, body = '{"transcript":"Fikcyjny proces"}') => fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      apikey: ANON_KEY,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      Origin: 'http://127.0.0.1:5173',
+      'Content-Type': 'application/json',
+      Connection: 'close',
+    },
+    body,
+  })
   let ready = false
   let exitCode = 'running'
   edge.on('exit', (code) => { exitCode = String(code) })
