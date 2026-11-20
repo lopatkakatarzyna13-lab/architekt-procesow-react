@@ -28,8 +28,8 @@ Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny
 
 | Pakiet | Sprawdzalny rezultat |
 | --- | --- |
-| 1. Lokalny warsztat bez internetu | Przygotowana wersja uruchamia się z laptopa. Chromium odtwarza zapisaną pracę po ponownym uruchomieniu przeglądarki i serwera, z zablokowanymi połączeniami zewnętrznymi. Ten scenariusz sprawdza CI. |
-| 2. Odbiór map i raportu przez IT lub AI | Osoba spoza spotkania wypełnia kartę odbioru. Wskazuje błędy, kontrolę człowieka, potrzebne dane i uzasadnia wybór walidacji, integracji lub OCR. Poprawki wynikają z jej uwag. |
+| 1. Lokalny warsztat bez internetu | Zakończony. CI sprawdza ponowny start serwera i przeglądarki. Kasia potwierdziła też zapis i ponowne otwarcie procesu po zamknięciu karty bez internetu na laptopie z Windows. |
+| 2. Odbiór map i raportu przez IT lub AI | Wstępnie odczytano pakiet skierowania według pytań z karty. Do ustalenia są zastępstwo przy wysyłce oraz obsługa sytuacji, w której zgłoszenie z formularza nie dociera do systemu HR. Odbiór przez osobę spoza projektu jest otwarty. |
 | 3. Odporność i kontrola dostępu w środowisku testowym | Wyjaśniona awaria pełnej próby lokalnego Supabase. Potwierdzone logowanie, przerwanie oczekiwania, wznowienie pracy i zachowanie po awarii. Przegląd SEC-04 wskazuje warunki dalszych prób. |
 | 4. Przegląd środowiska docelowego | Udokumentowane ustawienia dostępu, przetwarzania, retencji i kosztów oraz sposób wycofania. Testy hostowanego środowiska i ewentualne wdrożenie następują po decyzji Kasi. |
 | 5. Usprawnienia TO-BE, następnie transkrypcja i pomocnik warsztatowy | Rekomendacje można powiązać z ustaleniami i zatwierdzić. Transkrypcja i podpowiedzi mają osobne próby użyteczności, odporności i bezpieczeństwa. |
@@ -37,6 +37,8 @@ Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny
 GitHub Actions po aktualizacji gałęzi sprawdza kod, build i scenariusze Chromium. Zapisujemy wynik dla konkretnego commitu. Zadania programistyczne oddajemy do odbioru po zakończeniu pakietu, wraz z wynikiem testów, poprawkami i decyzjami, które należą do Kasi.
 
 Stan: **próba fikcyjnego warsztatu zakończona**, odporność, bezpieczeństwo oraz koszty w toku; uruchomienie docelowe w toku. Te punkty mają różną pracochłonność; nie należy traktować ich liczby jako procentu ukończenia. Zmiany wyłącznie na `feature/architekt-2-mvp`, bez prawdziwych danych i płatnego API przed osobną decyzją.
+
+[Przegląd odporności uzupełniony 20.11](odpornosc-warsztatu-2026-11-17.md) zawiera wynik próby na laptopie i zakres testu utraty odpowiedzi po przyjęciu analizy.
 
 Przegląd na 17.11: [ustalenia o danych warsztatowych](przeglad-danych-warsztatowych-2026-11-17.md). Odporność pozostaje otwarta: pełny test Supabase dla `e87c6df` nie przeszedł, mimo pomyślnych testów odzyskania i awarii procesu; przyczyna 503 pozostaje nieustalona. Nie używać danych klienta ani nie wdrażać hostowanego SQL lub Edge przed spełnieniem pozostałych warunków.
 

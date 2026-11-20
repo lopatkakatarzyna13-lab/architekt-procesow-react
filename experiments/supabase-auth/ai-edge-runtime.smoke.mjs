@@ -122,6 +122,12 @@ await import('./entry.ts')
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1366, height: 900 } })
   page.on('dialog', (dialog) => dialog.accept())
+  const signIn = async () => {
+    await page.getByLabel('E-mail do analizy AI').fill('ai-owner@example.test')
+    await page.getByLabel('Hasło do analizy AI').fill(password)
+    await page.getByRole('button', { name: 'Zaloguj do analizy AI' }).click()
+    await page.getByText('Zalogowano do analizy AI.').waitFor()
+  }
   await page.goto('http://127.0.0.1:5173/')
   await page.getByRole('button', { name: /Dodaj kroki samodzielnie/ }).click()
   await page.getByLabel(/Nazwa procesu/).fill('Fikcyjny warsztat Edge')
@@ -134,10 +140,7 @@ await import('./entry.ts')
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
   await page.getByText('Zaloguj się, aby uruchomić analizę AI.').waitFor()
   assert.equal((await query('SELECT count(*) FROM public.architekt_ai_admission')).stdout.trim(), '0')
-  await page.getByLabel('E-mail do analizy AI').fill('ai-owner@example.test')
-  await page.getByLabel('Hasło do analizy AI').fill(password)
-  await page.getByRole('button', { name: 'Zaloguj do analizy AI' }).click()
-  await page.getByText('Zalogowano do analizy AI.').waitFor()
+  await signIn()
   await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
   assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), 'Fikcyjny proces')
   assert.equal((await query('SELECT used FROM public.architekt_ai_admission')).stdout.trim(), '1')
@@ -153,9 +156,45 @@ await import('./entry.ts')
   assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), 'Fikcyjny proces')
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps.map((item) => item.name)), ['Fikcyjny proces'])
   assert.ok(await page.getByRole('button', { name: 'Zaloguj do analizy AI' }).isVisible(), 'session must not persist across reload')
+  console.log('PASS: browser login, real Edge adapter, fake provider, review, AS-IS save and reopen')
+
+  // Edge completes a fictional analysis, but the browser loses its response.
+  await signIn()
+  const attemptedAnalyses = []
+  await page.route(endpoint, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue()
+    const attempt = { status: null }
+    attemptedAnalyses.push(attempt)
+    try {
+      const response = await route.fetch()
+      attempt.status = response.status()
+      await response.dispose()
+    } catch {
+      attempt.status = 'network-error'
+    } finally {
+      await route.abort('internetdisconnected')
+    }
+  })
+  await page.getByRole('button', { name: 'Analizuj transkrypcję' }).click()
+  await page.getByText(/Nie otrzymano odpowiedzi.*ponowienie może zużyć kolejną próbę/).waitFor()
+  assert.deepEqual(attemptedAnalyses, [{ status: 200 }])
+  assert.equal((await query('SELECT used FROM public.architekt_ai_admission')).stdout.trim(), '2')
+  assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), 'Fikcyjny proces')
+  assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), 'Fikcyjny proces')
+  const manualStep = 'Ustalenie uzupełnione ręcznie po utracie odpowiedzi'
+  await page.getByRole('button', { name: 'Dodaj: kroki' }).click()
+  await page.getByLabel('Kroki — pozycja 2').fill(manualStep)
+  await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
+  await page.getByText('Propozycja zapisana na tym urządzeniu.').waitFor()
+  await page.reload()
+  assert.equal(await page.getByLabel('Kroki — pozycja 2').inputValue(), manualStep)
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps.map((item) => item.name)), ['Fikcyjny proces'])
+  await signIn()
+  assert.deepEqual(attemptedAnalyses, [{ status: 200 }], 'reopening and signing in must not replay the request')
+  assert.equal((await query('SELECT used FROM public.architekt_ai_admission')).stdout.trim(), '2')
+  console.log('PASS: a lost response after successful Edge analysis preserves saved work, counts one attempt and never replays on reload or login')
   await browser.close(); browser = null
   vite.kill('SIGTERM'); vite = null
-  console.log('PASS: browser login, real Edge adapter, fake provider, review, AS-IS save and reopen')
   for (let round = 1; round <= 5; round++) {
     if (round >= 1) {
       await query('DELETE FROM public.architekt_ai_admission')
