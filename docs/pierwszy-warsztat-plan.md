@@ -1,10 +1,12 @@
 # Pierwszy warsztat — lista do użycia aplikacji
 
-Aktualizacja: 17 listopada 2026. Cel: osobista praca konsultantki z tekstem warsztatu, weryfikacją propozycji AI i przygotowaniem AS-IS. Zakres tego etapu nie obejmuje transkrypcji na żywo ani formalnego BPMN 2.0. Faktyczne dane klientów i płatne API dopiero po osobnej decyzji oraz spełnieniu warunków bezpieczeństwa.
+Aktualizacja: 20 listopada 2026. Cel: praca konsultantki z ustaleniami warsztatu, przygotowanie AS-IS i TO-BE oraz przekazanie wyników IT i AI. Faktyczne dane klientów i płatne API wymagają osobnej decyzji oraz spełnienia warunków bezpieczeństwa.
 
 ## Rozpoczęcie spotkania bez transkrypcji
 
 W sekcji „Ustalenia warsztatowe” wybierz „Opracuj ręcznie”. Dodaj pozycje i kliknij „Zapisz propozycję”. Jeśli później uzyskasz tekst rozmowy, dodaj go przez „Zapisz transkrypcję”. Ustalenia rozpoczęte bez transkrypcji zachowują się obok niej w tej samej przeglądarce. Uruchomienie analizy AI, która ma je zastąpić, wymaga potwierdzenia.
+
+Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny.md). Zacznij od lokalnego adresu już na początku spotkania. Zapis pozostaje w tym samym profilu przeglądarki pod tym adresem.
 
 ## Punkt startowy — potwierdzone
 
@@ -21,6 +23,18 @@ W sekcji „Ustalenia warsztatowe” wybierz „Opracuj ręcznie”. Dodaj pozyc
 4. **Próba na fikcyjnym warsztacie — zakończona dla fikcyjnego scenariusza.** Przejść przygotowanie procesu, tekst, propozycje, sprawdzenie, przeniesienie do AS-IS, zapis, otwarcie i wynikowy raport. Oddzielić wynik fikcyjnego dostawcy od oceny rzeczywistego modelu. Gotowe, gdy zapisano wyniki i poprawiono blokujące problemy.
 5. **Przygotowanie docelowego uruchomienia — w toku.** Przygotować konkretną listę konfiguracji, sprawdzenia i wycofania zmian, następnie poprosić o wymaganą zgodę na wdrożenie funkcji i SQL. Po zgodzie zweryfikować działanie w docelowym środowisku i przekazać prostą instrukcję.
 6. **Rozbudowa i testy map BPMN dla IT i AI — wdrożono na gałęzi roboczej i sprawdzono na fikcyjnym przykładzie.** Odbiór przez osobę spoza warsztatu pozostaje do wykonania. [Wyniki próby](proba-bpmn-przekazanie-it-ai-2026-11-19.md).
+
+### Kolejne pakiety prac
+
+| Pakiet | Sprawdzalny rezultat |
+| --- | --- |
+| 1. Lokalny warsztat bez internetu | Przygotowana wersja uruchamia się z laptopa. Chromium odtwarza zapisaną pracę po ponownym uruchomieniu przeglądarki i serwera, z zablokowanymi połączeniami zewnętrznymi. Ten scenariusz sprawdza CI. |
+| 2. Odbiór map i raportu przez IT lub AI | Osoba spoza spotkania wypełnia kartę odbioru. Wskazuje błędy, kontrolę człowieka, potrzebne dane i uzasadnia wybór walidacji, integracji lub OCR. Poprawki wynikają z jej uwag. |
+| 3. Odporność i kontrola dostępu w środowisku testowym | Wyjaśniona awaria pełnej próby lokalnego Supabase. Potwierdzone logowanie, przerwanie oczekiwania, wznowienie pracy i zachowanie po awarii. Przegląd SEC-04 wskazuje warunki dalszych prób. |
+| 4. Przegląd środowiska docelowego | Udokumentowane ustawienia dostępu, przetwarzania, retencji i kosztów oraz sposób wycofania. Testy hostowanego środowiska i ewentualne wdrożenie następują po decyzji Kasi. |
+| 5. Usprawnienia TO-BE, następnie transkrypcja i pomocnik warsztatowy | Rekomendacje można powiązać z ustaleniami i zatwierdzić. Transkrypcja i podpowiedzi mają osobne próby użyteczności, odporności i bezpieczeństwa. |
+
+GitHub Actions po aktualizacji gałęzi sprawdza kod, build i scenariusze Chromium. Zapisujemy wynik dla konkretnego commitu. Zadania programistyczne oddajemy do odbioru po zakończeniu pakietu, wraz z wynikiem testów, poprawkami i decyzjami, które należą do Kasi.
 
 Stan: **próba fikcyjnego warsztatu zakończona**, odporność, bezpieczeństwo oraz koszty w toku; uruchomienie docelowe w toku. Te punkty mają różną pracochłonność; nie należy traktować ich liczby jako procentu ukończenia. Zmiany wyłącznie na `feature/architekt-2-mvp`, bez prawdziwych danych i płatnego API przed osobną decyzją.
 

@@ -367,7 +367,9 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
         <button type="button" className="back-button" disabled={analyzing} onClick={clearWorkshop}>Usuń dane warsztatu</button>
         <span>{transcript.length} / {MAX_TRANSCRIPT_LENGTH} znaków</span>
       </div>
-      {!analysisAvailable && <p>Analiza AI nie jest jeszcze dostępna w tym podglądzie. Możesz opracować ustalenia ręcznie.</p>}
+      {!analysisAvailable && <p>{import.meta.env.MODE === 'workshop-local'
+        ? 'Warsztat lokalny działa bez internetu. Analiza AI jest wyłączona.'
+        : 'Analiza AI nie jest jeszcze dostępna w tym podglądzie. Możesz opracować ustalenia ręcznie.'}</p>}
       {dirty && <p role="status">Masz niezapisane zmiany w transkrypcji.</p>}
       {message && <p role="status">{message}</p>}
       {!dirty && savedAt && !message && <p>Transkrypcja została wcześniej zapisana na tym urządzeniu.</p>}

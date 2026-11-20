@@ -346,15 +346,19 @@ function AppHeader({ onHome, onProcesses, onTestSupabase, supabaseTest }) {
         </span>
       </a>
      <div className="header-actions">
-  <button
-    type="button"
-    className="status-badge"
-    onClick={onTestSupabase}
-    disabled={supabaseTest.status === 'loading'}
-    aria-live="polite"
-  >
-    {testLabel}
-  </button>
+  {import.meta.env.MODE === 'workshop-local' ? (
+    <span>Warsztat lokalny · zapis w tej przeglądarce</span>
+  ) : (
+    <button
+      type="button"
+      className="status-badge"
+      onClick={onTestSupabase}
+      disabled={supabaseTest.status === 'loading'}
+      aria-live="polite"
+    >
+      {testLabel}
+    </button>
+  )}
 
   <button
     type="button"

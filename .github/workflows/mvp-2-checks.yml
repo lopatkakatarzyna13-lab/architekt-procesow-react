@@ -93,6 +93,15 @@ jobs:
           REFERRAL_WITH_POOLS=1 REFERRAL_PDF_PATH="$RUNNER_TEMP/referral-workshop-pools-report.pdf" node tests/browser-referral-workshop.mjs
           ACCOUNTING_PDF_PATH="$RUNNER_TEMP/accounting-handoff-report.pdf" node tests/browser-accounting-handoff.mjs
           CORRECTION_PDF_PATH="$RUNNER_TEMP/employee-correction-report.pdf" node tests/browser-employee-correction.mjs
+      - name: Resume a saved local workshop after a restart
+        env:
+          VITE_SUPABASE_URL: https://supabase.example.invalid
+          VITE_SUPABASE_PUBLISHABLE_KEY: fictional-ci-key
+          VITE_WORKSHOP_AI_MODE: supabase
+          VITE_WORKSHOP_AI_ENABLED: 'true'
+        run: |
+          npm run workshop:prepare
+          node tests/browser-local-workshop.mjs
       - name: Save fictional report for visual review
         uses: actions/upload-artifact@v4
         with:

@@ -8,6 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "workshop:prepare": "vite build --mode workshop-local",
+    "workshop:local": "vite preview --mode workshop-local",
     "workshop:server": "node --env-file-if-exists=.env server/index.js"
   },
   "dependencies": {
