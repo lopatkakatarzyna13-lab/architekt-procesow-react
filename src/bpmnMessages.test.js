@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addBpmnMessage, getBpmnMessages, removeBpmnMessage } from './bpmnMessages'
+import { addBpmnMessage, getBpmnMessages, removeBpmnMessage } from './bpmnMessages.js'
 
 const initial = () => [{ id: 'a', name: 'Wyślij dane' }, { id: 'b', name: 'Odbierz dokumenty' }]
 describe('BPMN collaboration messages', () => {

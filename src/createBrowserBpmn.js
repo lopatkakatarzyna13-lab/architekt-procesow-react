@@ -1,5 +1,5 @@
 import TextRenderer from 'bpmn-js/lib/draw/TextRenderer'
-import { defaultBpmnTaskSize } from './bpmnExport'
+import { defaultBpmnTaskSize } from './bpmnExport.js'
 import { createDecisionBpmn } from './bpmnDecisionExport'
 
 const textRenderer = new TextRenderer()

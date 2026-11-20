@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages'
+import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
 
 export default function BpmnExternalMessages({ steps, externalSteps, links, onChange, onDraftChange, variant }) {
   const [source, setSource] = useState('')

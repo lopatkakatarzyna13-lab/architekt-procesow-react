@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BpmnModdle } from 'bpmn-moddle'
-import { createLinearBpmn, getLinearBpmnError } from './bpmnExport'
+import { createLinearBpmn, getLinearBpmnError } from './bpmnExport.js'
 
 const steps = [{ id: 'a', name: 'Sprawdź dane <HR>' }, { id: 'b', name: 'Wyślij & potwierdź' }]
 

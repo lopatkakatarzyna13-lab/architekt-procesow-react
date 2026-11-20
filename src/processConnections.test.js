@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections } from './processConnections'
+import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections } from './processConnections.js'
 
 const steps = () => [{ id: 'a', name: 'Weryfikacja' }, { id: 'b', name: 'Uzupełnienie' }, { id: 'c', name: 'Zatwierdzenie' }]
 describe('additional process paths', () => {

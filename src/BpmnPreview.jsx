@@ -1,6 +1,6 @@
 import BpmnStepSummary from './BpmnStepSummary'
 import { useEffect, useRef, useState } from 'react'
-import { getBpmnMessages, getExternalPools } from './bpmnMessages'
+import { getBpmnMessages, getExternalPools } from './bpmnMessages.js'
 
 export default function BpmnPreview({ steps, externalSteps = [], externalLinks = [], scope, variant = 'as-is' }) {
   const canvasRef = useRef(null)

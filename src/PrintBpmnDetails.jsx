@@ -1,6 +1,6 @@
 import BpmnStepSummary from './BpmnStepSummary'
 import { bpmnStepFields, getBpmnDocuments } from './bpmnStepDetails'
-import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages'
+import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
 
 export default function PrintBpmnDetails({ steps, externalSteps, externalLinks = [], svg, error, variant = 'AS-IS' }) {
   const messages = getBpmnMessages(steps)

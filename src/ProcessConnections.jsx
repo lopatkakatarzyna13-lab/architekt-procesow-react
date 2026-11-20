@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getProcessConnections } from './processConnections'
+import { getProcessConnections } from './processConnections.js'
 
 export default function ProcessConnections({ steps, onAdd, onRemove, variant = 'AS-IS' }) {
   const [source, setSource] = useState('')
