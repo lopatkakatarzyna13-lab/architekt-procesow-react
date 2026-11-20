@@ -1841,6 +1841,18 @@ button {
   margin-top: 0;
 }
 
+.to-be-step-suggestion {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid #e1e2eb;
+  border-radius: 12px;
+  background: #f7f7fc;
+}
+
+.to-be-step-suggestion p {
+  margin: 8px 0;
+}
+
 .to-be-list-section {
   border-bottom: 1px solid #ececf3;
 }

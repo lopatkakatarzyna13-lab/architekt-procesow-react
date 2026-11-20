@@ -40,6 +40,7 @@ import PrintBpmnDetails from './PrintBpmnDetails'
 import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, emptyBpmnStep, getBpmnDocuments, getBpmnStepError, readBpmnStepDraft } from './bpmnStepDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
+import { findingCategories, getToBeStepSuggestion } from './toBeSuggestions'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages.js'
 import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections.js'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -57,16 +58,6 @@ const PROCESS_SECTION_STORAGE_KEYS = [
   ANALYSIS_STORAGE_KEY,
   TO_BE_STORAGE_KEY,
   REPORT_STORAGE_KEY,
-]
-
-const findingCategories = [
-  'Wąskie gardło',
-  'Ryzyko lub możliwość błędu',
-  'Zbędna lub powtarzalna czynność',
-  'Niejasna odpowiedzialność',
-  'Problem z komunikacją lub przekazaniem',
-  'Miejsce do automatyzacji',
-  'Inne',
 ]
 
 const impactLevels = ['Niski', 'Średni', 'Wysoki']
@@ -1840,10 +1831,12 @@ function ToBeStepEditor({
   onCancel,
   onCopy,
   onUseImprovement,
+  onUseSuggestion,
   onToggleAdditionalFinding,
 }) {
   const additionalOptions = findings.filter(({ id }) => id !== draft.findingId)
-  const idea = findings.find((finding) => finding.id === draft.findingId)?.improvement
+  const linkedFinding = findings.find((finding) => finding.id === draft.findingId)
+  const idea = linkedFinding?.improvement
   const improvement = typeof idea === 'string' ? idea.trim().replace(/\s+/g, ' ') : ''
   const useImprovement = () => {
     if (!improvement || improvement === draft.name.trim()) return
@@ -1856,6 +1849,10 @@ function ToBeStepEditor({
     value: finding.id,
     label: finding.name,
   }))
+  const suggestion = getToBeStepSuggestion(linkedFinding)
+  const suggestedFields = Object.fromEntries(
+    Object.entries(suggestion ?? {}).filter(([field]) => !draft[field]?.trim()),
+  )
 
   return (
     <section className="to-be-section to-be-steps-editor" aria-labelledby="to-be-step-title">
@@ -1975,6 +1972,17 @@ function ToBeStepEditor({
             placeholder=""
           />
         </div>
+        {suggestion && (
+          <aside className="to-be-step-suggestion" aria-label="Podpowiedź z analizy">
+            <strong>{suggestion.name}</strong>
+            <p>{suggestion.description}</p>
+            <p>{suggestion.result}</p>
+            <button type="button" className="back-button" disabled={!Object.keys(suggestedFields).length} onClick={() => {
+              onUseSuggestion(suggestedFields)
+              document.getElementById('toBeStepName')?.focus()
+            }}>Uzupełnij puste pola propozycją</button>
+          </aside>
+        )}
         <BpmnStepEditor draft={draft} onChange={onChange} prefix="to-be-bpmn" />
         {draft.name.trim() && error && <p className="error-message" role="alert">{error}</p>}
         <div className="step-form-actions">
@@ -2147,6 +2155,7 @@ function ToBeScreen({
   onToggleFinding,
   onStepChange,
   onUseImprovement,
+  onUseSuggestion,
   onToggleAdditionalFinding,
   onAddStep,
   onEditStep,
@@ -2214,6 +2223,7 @@ function ToBeScreen({
         copyError={copyError}
         onChange={onStepChange}
         onUseImprovement={onUseImprovement}
+        onUseSuggestion={onUseSuggestion}
         onToggleAdditionalFinding={onToggleAdditionalFinding}
         onAdd={onAddStep}
         onCancel={onCancelEdit}
@@ -4756,20 +4766,22 @@ try {
     updateToBeStepField(fieldMap[event.target.name], event.target.value)
   }
 
+  const changeToBeStepDraft = (updateDraft, clearError) => {
+    setToBeStepDraft(updateDraft)
+    if (clearError) setToBeStepError('')
+    setToBeSaved(false)
+    setToBeSaveError(false)
+    setCopyMessage('')
+  }
+
   const updateToBeStepField = (field, value) => {
-    setToBeStepDraft((current) => ({
+    changeToBeStepDraft((current) => ({
       ...current,
       [field]: typeof value === 'function' ? value(current[field]) : value,
       ...(field === 'findingId' && {
         additionalFindingIds: current.additionalFindingIds.filter((id) => id !== value),
       }),
-    }))
-    if (field === 'name' || field === 'bpmnDocuments') {
-      setToBeStepError('')
-    }
-    setToBeSaved(false)
-    setToBeSaveError(false)
-    setCopyMessage('')
+    }), field === 'name' || field === 'bpmnDocuments')
   }
 
   const toggleAdditionalToBeFinding = (findingId) => {
@@ -5399,6 +5411,7 @@ try {
             onToggleFinding={toggleToBeFinding}
             onStepChange={handleToBeStepChange}
             onUseImprovement={(name) => updateToBeStepField('name', name)}
+            onUseSuggestion={(fields) => changeToBeStepDraft((current) => ({ ...current, ...fields }), true)}
             onToggleAdditionalFinding={toggleAdditionalToBeFinding}
             onAddStep={addOrUpdateToBeStep}
             onEditStep={editToBeStep}

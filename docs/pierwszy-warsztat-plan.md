@@ -42,6 +42,12 @@ Stan: **próba fikcyjnego warsztatu zakończona**, odporność, bezpieczeństwo 
 
 Przegląd na 17.11: [ustalenia o danych warsztatowych](przeglad-danych-warsztatowych-2026-11-17.md). Odporność pozostaje otwarta: pełny test Supabase dla `e87c6df` nie przeszedł, mimo pomyślnych testów odzyskania i awarii procesu; przyczyna 503 pozostaje nieustalona. Nie używać danych klienta ani nie wdrażać hostowanego SQL lub Edge przed spełnieniem pozostałych warunków.
 
+### Podpowiedzi do TO-BE podczas warsztatu
+
+W edytorze kroku TO-BE wybierz „Powiązane usprawnienie”. Jeśli ustalenie ma kategorię i brakuje zapisanego pomysłu, edytor pokazuje podpowiedź opartą na tej kategorii, np. potwierdzenie odbioru przy problemie z przekazaniem. Przyciskiem „Uzupełnij puste pola propozycją” można przenieść nazwę, opis i rezultat do formularza. Wpisane wcześniej wartości zachowują się. Po przejrzeniu treści można ją poprawić, dodać krok i zapisać TO-BE zwykłą ścieżką. Kategoria „Inne” pozostawia miejsce na własny pomysł.
+
+Podpowiedzi działają lokalnie. Raport i BPMN korzystają z kroków zapisanych w procesie. Analiza transkrypcji i generowanie wariantów z AI pozostają do osobnej próby.
+
 Przegląd źródeł OpenAI i przykład kosztu: [AI — koszty i dane](ai-koszty-i-dane-2026-11-17.md). Ustawienia konta, rzeczywiste wydatki, warunki przetwarzania i zgoda na płatne API pozostają niezweryfikowane. Pełny test lokalnego Supabase dla `ac59f1d` nie przeszedł z powodu niedostępności lokalnej bazy; zob. https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44127165561.
 
 Próba fikcyjnego warsztatu i wybrane treści w PDF: [wyniki](proba-fikcyjnego-warsztatu-2026-11-17.md). Sprawdzono tekst wybranych elementów oraz wygląd czterech stron w jednym fikcyjnym przykładzie; nie oceniono wszystkich możliwych danych ani prawdziwego AI.

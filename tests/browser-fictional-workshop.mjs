@@ -209,6 +209,34 @@ try {
       await copyPage.locator('label.to-be-finding').filter({ hasText: name })
         .getByText('Powiązane kroki TO-BE: Uzgodnić ścieżkę kompletowania dokumentów', { exact: true }).waitFor()
     }
+    const handoffFinding = 'Brak potwierdzenia przyjęcia zgłoszenia przez biuro'
+    const handoffStep = 'Biuro potwierdza HR przyjęcie zgłoszenia'
+    await copyPage.getByRole('button', { name: 'Wróć do analizy' }).click()
+    await copyPage.getByLabel(/Kategoria/).selectOption({ label: 'Problem z komunikacją lub przekazaniem' })
+    await copyPage.getByLabel(/Nazwa problemu lub obserwacji/).fill(handoffFinding)
+    await copyPage.getByRole('button', { name: 'Dodaj ustalenie' }).click()
+    await copyPage.getByRole('button', { name: 'Zapisz analizę' }).click()
+    await copyPage.getByRole('button', { name: 'Przejdź do TO-BE' }).click()
+    await copyPage.getByLabel('Powiązane usprawnienie', { exact: true }).selectOption({ label: handoffFinding })
+    const suggestion = copyPage.getByRole('complementary', { name: 'Podpowiedź z analizy' })
+    await suggestion.getByText('Przekazanie danych z potwierdzeniem odbioru', { exact: true }).waitFor()
+    const stepName = copyPage.getByLabel(/Nazwa kroku/)
+    const description = copyPage.getByLabel('Opis czynności', { exact: true })
+    assert.equal(await stepName.inputValue(), '', 'showing a suggestion must not fill the draft')
+    assert.equal(await description.inputValue(), '')
+    await stepName.fill(handoffStep)
+    const applySuggestion = suggestion.getByRole('button', { name: 'Uzupełnij puste pola propozycją' })
+    await applySuggestion.click()
+    assert.equal(await stepName.inputValue(), handoffStep, 'a suggestion must preserve the entered name')
+    assert.ok((await description.inputValue()).includes(handoffFinding))
+    assert.equal(await copyPage.getByLabel('Rezultat kroku', { exact: true }).inputValue(), 'Potwierdzenie odbioru albo zgłoszenie braku przekazania.')
+    assert.equal(await copyPage.getByLabel('Osoba lub rola odpowiedzialna', { exact: true }).inputValue(), '')
+    await copyPage.getByRole('button', { name: 'Dodaj krok', exact: true }).click()
+    await copyPage.getByRole('button', { name: 'Zapisz proces TO-BE' }).click()
+    await copyPage.getByText('Proces TO-BE został zapisany', { exact: true }).waitFor()
+    await copyPage.reload()
+    await copyPage.locator('label.to-be-finding').filter({ hasText: handoffFinding })
+      .getByText(`Powiązane kroki TO-BE: ${handoffStep}`, { exact: true }).waitFor()
     const [bpmnCopy] = await Promise.all([
       copyPage.waitForEvent('download'),
       copyPage.getByRole('button', { name: 'Pobierz BPMN 2.0' }).click(),
@@ -219,7 +247,12 @@ try {
     const copiedCollaboration = copiedModel.rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
     assert.ok(copiedProcess.flowElements.some((item) => item.$type === 'bpmn:ExclusiveGateway' && item.name === 'Czy dane są kompletne?'))
     assert.ok(copiedProcess.flowElements.some((item) => item.$type === 'bpmn:Task' && item.name === 'Uzgodnić ścieżkę kompletowania dokumentów'))
+    assert.ok(copiedProcess.flowElements.some((item) => item.$type === 'bpmn:Task' && item.name === handoffStep))
     assert.ok(copiedCollaboration.messageFlows.some((flow) => flow.name === 'Fikcyjne dane do weryfikacji'))
+    await copyPage.getByRole('button', { name: 'Przejdź do raportu' }).click()
+    await copyPage.locator('.report-steps li').filter({ hasText: handoffStep })
+      .filter({ hasText: handoffFinding }).first().waitFor()
+    console.log('PASS: a TO-BE suggestion fills empty fields, survives reopening, and keeps its finding in the report and step in BPMN')
   } finally {
     await copyPage.close()
   }
