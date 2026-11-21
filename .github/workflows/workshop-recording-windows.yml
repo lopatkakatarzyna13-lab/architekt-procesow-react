@@ -29,9 +29,13 @@ jobs:
       - name: Prepare local workshop and Chromium
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           npm ci
-          npm install --no-save --package-lock=false playwright@1.56.1
-          npx playwright install chromium --only-shell
+          $tooling = Join-Path $env:RUNNER_TEMP 'architekt-browser'
+          npm install --prefix $tooling --no-save playwright@1.56.1
+          $package = Join-Path $tooling 'node_modules/playwright'
+          New-Item -ItemType Junction -Path 'node_modules/playwright' -Target $package | Out-Null
+          node (Join-Path $package 'cli.js') install chromium --only-shell
           npm run workshop:prepare
       - name: Prepare FFmpeg
         shell: pwsh
