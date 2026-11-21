@@ -32,7 +32,7 @@ Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny
 ## Pakiety po próbie z 21 listopada
 
 1. **Transkrypcja do szkicu AS-IS** — lokalne propozycje kroków z cytatami, wyjątkami i pytaniami do sprawdzenia. Sprawdzono poprawianie, zatwierdzanie, wybór, przeniesienie i ponowne otwarcie na dwóch fikcyjnych procesach. [Instrukcja i zakres próby](pilot-2.0/warsztat-lokalny.md#szkic-as-is-z-zapisanej-transkrypcji).
-2. **AS-IS i analiza do TO-BE** — przenieść istniejące kroki oraz umożliwić wybór usprawnień bez nadpisywania rozpoczętego TO-BE. W próbie skierowania uwzględnić walidację wymaganych pól, powrót do formularza i kontrolę człowieka.
+2. **AS-IS i analiza do TO-BE** — wybrane kroki można dodać do rozpoczętego projektu. Z ustalenia o brakach danych i planowanej pracy z formularzem można wypełnić pola walidacji lub kontroli merytorycznej. [Jak użyć propozycji](#podpowiedzi-do-to-be-podczas-warsztatu).
 3. **Próba od nagrania do raportu** — sprawdzić przebieg przez obie mapy BPMN, raport dla IT i przywrócenie pracy po utracie połączenia. Ocena techniczna i niezależny odbiór przez człowieka mają osobne wyniki.
 
 ## Punkt startowy — potwierdzone
@@ -77,6 +77,12 @@ Przegląd na 17.11: [ustalenia o danych warsztatowych](przeglad-danych-warsztato
 ### Podpowiedzi do TO-BE podczas warsztatu
 
 W edytorze kroku TO-BE wybierz „Powiązane usprawnienie”. Jeśli ustalenie ma kategorię i brakuje zapisanego pomysłu, edytor pokazuje podpowiedź opartą na tej kategorii, np. potwierdzenie odbioru przy problemie z przekazaniem. Przyciskiem „Uzupełnij puste pola propozycją” można przenieść nazwę, opis i rezultat do formularza. Wpisane wcześniej wartości zachowują się. Po przejrzeniu treści można ją poprawić, dodać krok i zapisać TO-BE zwykłą ścieżką. Kategoria „Inne” pozostawia miejsce na własny pomysł.
+
+W „Wybierz kroki z AS-IS” zaznacz potrzebne pozycje i dodaj je na końcu listy TO-BE. Lista wyboru uwzględnia dotychczasowe powiązania i nazwy kroków. W dodanym kroku zachowują się szczegóły wykonania i dokumenty. Kolejność, tory oraz połączenia w procesie docelowym ustaw po wybraniu kroków.
+
+Jeżeli powiązane ustalenie dotyczy braków lub kompletności danych, a w analizie lub założeniach występuje formularz, możesz wybrać walidację pól albo kontrolę merytoryczną przez człowieka. Propozycja walidacji zawiera regułę i wyjątek. Aby narysować powrót, w „Połączeniach” dodaj przejście z walidacji do formularza, a w „Decyzjach do eksportu BPMN” wpisz pytanie i warunek przejścia na podstawową ścieżkę do kontroli człowieka.
+
+Próba skierowania w Chromium obejmuje dodanie kroku AS-IS w trakcie edycji TO-BE, zachowanie wpisanych pól, ponowne otwarcie oraz walidację eksportu względem schematu BPMN 2.0. Test sprawdza powrót do formularza przy brakach oraz przejście przez kontrolę człowieka przed wygenerowaniem skierowania.
 
 Podpowiedzi działają lokalnie. Raport i BPMN korzystają z kroków zapisanych w procesie. Analiza transkrypcji i generowanie wariantów z AI pozostają do osobnej próby.
 

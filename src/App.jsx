@@ -21,7 +21,7 @@ import {
 } from './processIdentity'
 import { buildProcessSnapshot } from './processSnapshot'
 import { completedProcessExportStem } from './processExportName'
-import { compareProcessSteps, withDetectedStepChanges } from './processStepComparison'
+import { compareProcessSteps, getMissingToBeSteps, withDetectedStepChanges } from './processStepComparison'
 import { getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
 import { deleteSavedProcess } from './deleteSavedProcess'
@@ -41,7 +41,7 @@ import PrintBpmnDetails from './PrintBpmnDetails'
 import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, emptyBpmnStep, getBpmnDocuments, getBpmnStepError, readBpmnStepDraft } from './bpmnStepDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
-import { findingCategories, getToBeStepSuggestion } from './toBeSuggestions'
+import { findingCategories, getFormImprovementSuggestions, getToBeStepSuggestion } from './toBeSuggestions'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages.js'
 import { addProcessConnection, getNextProcessStepId, getProcessConnections, removeProcessConnection, removeStepConnections, setNextProcessStep, setProcessDecision, setProcessLane } from './processConnections.js'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -129,6 +129,21 @@ const emptyToBeStep = {
   findingId: '',
   additionalFindingIds: [],
   automatable: 'Nie',
+}
+
+function copyAsIsToBeStep(step, index) {
+  return {
+    ...emptyToBeStep,
+    ...readBpmnStepDraft(step),
+    name: step.name,
+    description: step.description ?? '',
+    owner: step.owner ?? '',
+    system: step.system ?? '',
+    result: step.result ?? '',
+    stepType: 'Bez zmian',
+    id: `as-is-copy-${step.id}-${index}`,
+    sourceAsIsStepId: step.id,
+  }
 }
 
 const emptyStakeholder = {
@@ -1819,13 +1834,42 @@ function IncludedFindings({
   )
 }
 
+function ToBeSourceSteps({ steps, onCopy }) {
+  const [selected, setSelected] = useState([])
+  const selectedIds = steps.filter(({ id }) => selected.includes(id)).map(({ id }) => id)
+  if (!steps.length) return null
+
+  return (
+    <details className="to-be-step-suggestion">
+      <summary>Wybierz kroki z AS-IS</summary>
+      <p>Wybrane kroki trafią na koniec listy TO-BE. Sprawdź ich kolejność i ustaw połączenia.</p>
+      <div className="step-side-fields">
+        {steps.map(({ id, name }) => (
+          <label key={id}>
+            <input type="checkbox" checked={selected.includes(id)} onChange={(event) => {
+              const checked = event.target.checked
+              setSelected((current) => checked ? [...current, id] : current.filter((item) => item !== id))
+            }} /> {name}
+          </label>
+        ))}
+      </div>
+      <button className="copy-steps-button" type="button" disabled={!selectedIds.length} onClick={() => {
+        onCopy(selectedIds)
+        setSelected([])
+      }}>Dodaj wybrane kroki z AS-IS</button>
+    </details>
+  )
+}
+
 function ToBeStepEditor({
   draft,
   error,
   findings,
+  assumptions,
+  asIsSteps,
+  toBeSteps,
   editingId,
   startMethod,
-  hasSteps,
   hasExternalParticipants,
   copyMessage,
   copyError,
@@ -1833,6 +1877,7 @@ function ToBeStepEditor({
   onAdd,
   onCancel,
   onCopy,
+  onCopySelected,
   onUseImprovement,
   onUseSuggestion,
   onToggleAdditionalFinding,
@@ -1852,10 +1897,11 @@ function ToBeStepEditor({
     value: finding.id,
     label: finding.name,
   }))
+  const sourceStep = startMethod === 'steps' ? asIsSteps.find(({ id }) => id === linkedFinding?.location) : undefined
+  const formSuggestions = getFormImprovementSuggestions(linkedFinding, sourceStep, assumptions)
   const suggestion = getToBeStepSuggestion(linkedFinding)
-  const suggestedFields = Object.fromEntries(
-    Object.entries(suggestion ?? {}).filter(([field]) => !draft[field]?.trim()),
-  )
+  const suggestions = formSuggestions.length ? formSuggestions : (suggestion ? [suggestion] : [])
+  const hasSteps = toBeSteps.length > 0
 
   return (
     <section className="to-be-section to-be-steps-editor" aria-labelledby="to-be-step-title">
@@ -1880,6 +1926,7 @@ function ToBeStepEditor({
         </div>}
       </div>
 
+      {startMethod === 'steps' && <ToBeSourceSteps steps={getMissingToBeSteps(asIsSteps, toBeSteps)} onCopy={onCopySelected} />}
       {copyMessage && (
         <div className="inline-message copied-message" role="status">
           <span aria-hidden="true">✓</span>
@@ -1975,17 +2022,22 @@ function ToBeStepEditor({
             placeholder=""
           />
         </div>
-        {suggestion && (
-          <aside className="to-be-step-suggestion" aria-label="Podpowiedź z analizy">
-            <strong>{suggestion.name}</strong>
-            <p>{suggestion.description}</p>
-            <p>{suggestion.result}</p>
-            <button type="button" className="back-button" disabled={!Object.keys(suggestedFields).length} onClick={() => {
-              onUseSuggestion(suggestedFields)
-              document.getElementById('toBeStepName')?.focus()
-            }}>Uzupełnij puste pola propozycją</button>
-          </aside>
-        )}
+        {suggestions.map((option) => {
+          const fields = Object.fromEntries(Object.entries(option).filter(([field]) => !draft[field]?.trim()))
+          return (
+            <aside key={option.name} className="to-be-step-suggestion" aria-label={suggestion === option ? 'Podpowiedź z analizy' : option.name}>
+              <strong>{option.name}</strong>
+              <p>{option.description}</p>
+              <p>{option.result}</p>
+              {option.bpmnException && <p>{option.bpmnException}</p>}
+              {option.bpmnHumanCheck && <p>{option.bpmnHumanCheck}</p>}
+              <button type="button" className="back-button" disabled={!Object.keys(fields).length} onClick={() => {
+                onUseSuggestion(fields)
+                document.getElementById('toBeStepName')?.focus()
+              }}>Uzupełnij puste pola propozycją</button>
+            </aside>
+          )
+        })}
         <BpmnStepEditor draft={draft} onChange={onChange} prefix="to-be-bpmn" />
         {draft.name.trim() && error && <p className="error-message" role="alert">{error}</p>}
         <div className="step-form-actions">
@@ -2166,6 +2218,7 @@ function ToBeScreen({
   onMoveStep,
   onCancelEdit,
   onCopySteps,
+  onCopySelectedSteps,
   onAddConnection,
   onSetNextStep,
   onRemoveConnection,
@@ -2219,9 +2272,11 @@ function ToBeScreen({
         draft={stepDraft}
         error={stepError}
         findings={findings}
+        assumptions={assumptions}
+        asIsSteps={asIsSteps}
+        toBeSteps={steps}
         editingId={editingStepId}
         startMethod={startMethod}
-        hasSteps={steps.length > 0}
         hasExternalParticipants={externalSteps.length > 0 || externalLinks.length > 0}
         copyMessage={copyMessage}
         copyError={copyError}
@@ -2232,6 +2287,7 @@ function ToBeScreen({
         onAdd={onAddStep}
         onCancel={onCancelEdit}
         onCopy={onCopySteps}
+        onCopySelected={onCopySelectedSteps}
       />
       <ToBeStepsList
         steps={displaySteps}
@@ -4921,18 +4977,7 @@ try {
       return
     }
 
-    const copiedSteps = steps.map((step, index) => ({
-      ...emptyToBeStep,
-      ...readBpmnStepDraft(step),
-      name: step.name,
-      description: step.description,
-      owner: step.owner,
-      system: step.system,
-      result: step.result,
-      stepType: 'Bez zmian',
-      id: `as-is-copy-${step.id}-${index}`,
-      sourceAsIsStepId: step.id,
-    }))
+    const copiedSteps = steps.map(copyAsIsToBeStep)
     if (includeBpmn) {
       try {
         const copy = copyAsIsBpmn(steps, externalSteps, externalLinks, copiedSteps)
@@ -4952,6 +4997,20 @@ try {
       : 'Kroki AS-IS zostały skopiowane do procesu TO-BE.')
     setToBeError('')
     setToBeSaved(false)
+  }
+
+  const copySelectedAsIsSteps = (ids) => {
+    const toCopy = new Set(getMissingToBeSteps(steps, toBeSteps)
+      .filter(({ id }) => ids.includes(id)).map(({ id }) => id))
+    const copiedSteps = steps.flatMap((step, index) => toCopy.has(step.id) ? [copyAsIsToBeStep(step, index)] : [])
+    if (!copiedSteps.length) return
+    setToBeSteps((current) => [...current, ...copiedSteps])
+    setCopiedFromAsIs(true)
+    setCopyError('')
+    setCopyMessage(`Dodano do TO-BE kroki z AS-IS (${copiedSteps.length}).`)
+    setToBeError('')
+    setToBeSaved(false)
+    setToBeSaveError(false)
   }
 
   const changeToBeConnections = (change, ...args) => {
@@ -5446,6 +5505,7 @@ try {
             onMoveStep={moveToBeStep}
             onCancelEdit={cancelToBeStepEdit}
             onCopySteps={copyAsIsSteps}
+            onCopySelectedSteps={copySelectedAsIsSteps}
             onAddConnection={(...args) => changeToBeConnections(addProcessConnection, ...args)}
             onSetNextStep={(...args) => changeToBeConnections(setNextProcessStep, ...args)}
             onRemoveConnection={(...args) => changeToBeConnections(removeProcessConnection, ...args)}

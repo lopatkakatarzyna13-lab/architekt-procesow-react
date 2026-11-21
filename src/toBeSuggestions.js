@@ -43,3 +43,29 @@ export function getToBeStepSuggestion(finding) {
     description: `Ustalenie z analizy „${name}”. ${step.description}`,
   }
 }
+
+export function getFormImprovementSuggestions(finding, sourceStep, assumptions) {
+  if (!finding) return []
+  const context = [finding.name, finding.situation, finding.cause, finding.improvement].join(' ')
+  const plannedChange = [context, assumptions?.changeGoal, assumptions?.expectedResult].join(' ')
+  if (!/formularz/iu.test(plannedChange) || !/walidac|obowiązkow|wymagan|kompletn|brak|uzupełn/iu.test(context)) return []
+
+  return [
+    {
+      name: 'Walidacja pól obowiązkowych',
+      description: 'Formularz sprawdza kompletność zgłoszenia przed wysłaniem.',
+      result: 'Kompletne zgłoszenie gotowe do przekazania.',
+      bpmnTaskType: 'service',
+      bpmnRule: 'Przekaż zgłoszenie dalej po uzupełnieniu wszystkich wymaganych pól.',
+      bpmnException: 'Przy brakach wskaż pola do poprawy i wróć do formularza.',
+      ...(sourceStep?.bpmnRequiredData && { bpmnRequiredData: sourceStep.bpmnRequiredData }),
+    },
+    {
+      name: 'Kontrola merytoryczna zgłoszenia przez człowieka',
+      description: 'Osoba odpowiedzialna ocenia zgłoszenie po walidacji formularza.',
+      result: 'Zatwierdzone zgłoszenie lub wskazanie danych do poprawy.',
+      bpmnTaskType: 'user',
+      bpmnHumanCheck: 'Osoba odpowiedzialna zatwierdza merytorycznie zgłoszenie przed przekazaniem do kolejnego kroku.',
+    },
+  ]
+}

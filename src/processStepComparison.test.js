@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { compareProcessSteps } from './processStepComparison'
+import { compareProcessSteps, getMissingToBeSteps } from './processStepComparison'
 
 it('compares tracked fields by source, keeps legacy copies linked and does not match names alone', () => {
   const asIs = [
@@ -31,4 +31,19 @@ it('keeps a copied step visible when its source was removed', () => {
   expect(compareProcessSteps([], toBe)).toEqual({
     changed: [], unmatchedAsIs: [], unmatchedToBe: toBe,
   })
+})
+
+it('treats source links and existing names as individual matches when choosing steps to copy', () => {
+  const asIs = [
+    { id: 'a', name: 'Kontrola danych' },
+    { id: 'b', name: 'Kontrola danych' },
+    { id: 'c', name: 'Kontrola danych' },
+    { id: 'send', name: 'Wysyłka skierowania' },
+  ]
+  const toBe = [
+    { id: 'as-is-copy-b-1', name: 'Kontrola po walidacji' },
+    { id: 'new', name: ' KONTROLA   DANYCH ' },
+    { id: 'as-is-copy-removed-1', name: 'Wysyłka skierowania' },
+  ]
+  expect(getMissingToBeSteps(asIs, toBe)).toEqual([asIs[2]])
 })

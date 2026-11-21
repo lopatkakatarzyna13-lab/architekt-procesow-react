@@ -104,6 +104,8 @@ jobs:
           node tests/browser-local-workshop.mjs
       - name: Prepare, review and resume local AS-IS proposals
         run: node tests/browser-local-workshop-proposal.mjs
+      - name: Combine selected AS-IS steps and improvements in local TO-BE
+        run: node tests/browser-tobe-improvements.mjs
       - name: Save fictional report for visual review
         uses: actions/upload-artifact@v4
         with:
