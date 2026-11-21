@@ -76,6 +76,25 @@ describe('local transcript suggestions', () => {
     ])
   })
 
+  it('recognizes spoken transitions between the current and target process', () => {
+    const transcript = [
+      'Kierownik wysyła zgłoszenie mailem.',
+      'W docelowym procesie formularz sprawdzi pola obowiązkowe.',
+      'Rejestr BHP udostępni aktualną kartę stanowiska.',
+      'Nie znamy miesięcznej liczby zgłoszeń.',
+      'W procesie obecnym kadry odbierają wiadomość.',
+      'W procesie docelowym system generuje przypomnienie.',
+      'W obecnym procesie kadry zatwierdzają dane.',
+    ].join('\n')
+    const { steps, questions } = proposeLocalWorkshop(transcript)
+    expect(steps.map(({ text }) => text)).toEqual([
+      'Kierownik wysyła zgłoszenie mailem',
+      'W procesie obecnym kadry odbierają wiadomość',
+      'W obecnym procesie kadry zatwierdzają dane',
+    ])
+    expect(questions.map(({ text }) => text)).toEqual(['Do wyjaśnienia — Nie znamy miesięcznej liczby zgłoszeń.'])
+  })
+
   it('reports when no action was recognized instead of turning questions into steps', () => {
     const { steps, questions } = proposeLocalWorkshop('Może kadry wysyłają dokument. Czy pracownik potwierdza odbiór?')
     expect(steps).toEqual([])

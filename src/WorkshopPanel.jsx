@@ -377,7 +377,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
   }
 
   const editItem = (category, index, value) => {
-    if (category === 'steps') setSelectedSteps([])
+    if (category === 'steps') setSelectedSteps((current) => current.filter((itemIndex) => itemIndex !== index))
     updateItem(category, index, (item) => ({
       ...item,
       text: value,
