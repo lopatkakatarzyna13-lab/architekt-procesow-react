@@ -1,6 +1,6 @@
 # Pierwszy warsztat — lista do użycia aplikacji
 
-Aktualizacja: 20 listopada 2026. Cel: praca konsultantki z ustaleniami warsztatu, przygotowanie AS-IS i TO-BE oraz przekazanie wyników IT i AI. Faktyczne dane klientów i płatne API wymagają osobnej decyzji oraz spełnienia warunków bezpieczeństwa.
+Aktualizacja: 21 listopada 2026. Cel: praca konsultantki z ustaleniami warsztatu, przygotowanie AS-IS i TO-BE oraz przekazanie wyników IT i AI. Faktyczne dane klientów i płatne API wymagają osobnej decyzji oraz spełnienia warunków bezpieczeństwa.
 
 ## Rozpoczęcie spotkania bez transkrypcji
 
@@ -12,17 +12,17 @@ W trybie lokalnym sekcja „Nagranie warsztatu” pozwala uruchomić mikrofon, z
 
 ### Transkrypcja pobranego nagrania
 
-Polecenie `npm run workshop:transcribe -- "nagranie.webm" "ggml-base.bin"` rozpoznaje mowę po polsku i zapisuje TXT obok nagrania. Możesz podać trzeci argument z inną ścieżką pliku TXT. Skrypt wymaga zainstalowanych FFmpeg i `whisper-cli` oraz pobranego wcześniej wielojęzycznego modelu, np. `ggml-base.bin`. Programy można dodać do PATH albo wskazać ścieżki w zmiennych `FFMPEG_PATH` i `WHISPER_CLI_PATH`. Po przygotowaniu tych plików przetwarzanie odbywa się lokalnie. [FFmpeg](https://ffmpeg.org/download.html) · [Whisper.cpp](https://github.com/ggml-org/whisper.cpp)
+Polecenie `npm run workshop:transcribe -- "nagranie.webm" "ggml-small-q5_1.bin"` rozpoznaje mowę po polsku i zapisuje TXT obok nagrania. Możesz podać trzeci argument z inną ścieżką pliku TXT. Skrypt wymaga FFmpeg, `whisper-cli` i pobranego wcześniej modelu wielojęzycznego. Do pilotażu wybierz `ggml-small-q5_1.bin`. Możesz też użyć szybszego w tej próbie `ggml-base.bin`. Programy można dodać do PATH albo wskazać ścieżki w zmiennych `FFMPEG_PATH` i `WHISPER_CLI_PATH`. Po przygotowaniu plików przetwarzanie odbywa się lokalnie. [FFmpeg](https://ffmpeg.org/download.html) · [Whisper.cpp](https://github.com/ggml-org/whisper.cpp) · [Pobranie modelu](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-small-q5_1.bin)
 
 W PowerShellu, po rozpakowaniu programów, dostosuj przykładowe ścieżki i uruchom polecenie z katalogu aplikacji.
 
 ```powershell
 $env:FFMPEG_PATH = 'C:\Narzedzia\ffmpeg\bin\ffmpeg.exe'
 $env:WHISPER_CLI_PATH = 'C:\Narzedzia\whisper\whisper-cli.exe'
-npm.cmd run workshop:transcribe -- "C:\Warsztat\nagranie.webm" "C:\Narzedzia\whisper\ggml-base.bin"
+npm.cmd run workshop:transcribe -- "C:\Warsztat\nagranie.webm" "C:\Narzedzia\whisper\ggml-small-q5_1.bin"
 ```
 
-Wczytaj zapisany TXT w „Ustaleniach warsztatowych” i sprawdź kluczowe ustalenia przed zapisem. Rozpoznawanie odbywa się po nagraniu, z poziomu terminala.
+Wczytaj zapisany TXT w „Ustaleniach warsztatowych” i sprawdź kluczowe ustalenia przed zapisem. Porównaj z nagraniem zwłaszcza role, terminy, warunki i skróty. Rozpoznawanie odbywa się po nagraniu, z poziomu terminala. [Wyniki i dialog do powtórzenia próby](pilot-2.0/proba-transkrypcji-lokalnej.md)
 
 Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny.md). Zacznij od lokalnego adresu już na początku spotkania. Zapis pozostaje w tym samym profilu przeglądarki pod tym adresem.
 

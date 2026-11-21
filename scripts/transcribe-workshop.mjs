@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { extname, join, parse, resolve } from 'node:path'
 import { MAX_TRANSCRIPT_LENGTH } from '../src/workshop.js'
 
-const usage = 'npm run workshop:transcribe -- "nagranie.webm" "ggml-base.bin" ["transkrypcja.txt"]'
+const usage = 'npm run workshop:transcribe -- "nagranie.webm" "ggml-small-q5_1.bin" ["transkrypcja.txt"]'
 
 function run(executable, args, signal) {
   return new Promise((accept, reject) => {
@@ -59,8 +59,9 @@ async function transcribe([audio, model, target, ...extra]) {
       '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wave,
     ], controller.signal)
     console.log('Rozpoznaję mowę po polsku na tym komputerze.')
+    // Keep timestamp predictions for segment boundaries. Whisper's TXT output omits timestamps.
     await run(process.env.WHISPER_CLI_PATH || 'whisper-cli', [
-      '-m', modelPath, '-f', wave, '-l', 'pl', '-ng', '-nt', '-otxt', '-of', result,
+      '-m', modelPath, '-f', wave, '-l', 'pl', '-ng', '-otxt', '-of', result,
     ], controller.signal)
     const transcriptFile = `${result}.txt`
     const transcript = await readFile(transcriptFile, 'utf8').catch((error) => {
