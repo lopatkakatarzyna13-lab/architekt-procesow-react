@@ -1,12 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import localTranscriptionPreview from './scripts/local-transcription-preview.mjs'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const workshopLocal = mode === 'workshop-local'
 
   return {
-    plugins: [react()],
+    plugins: workshopLocal ? [react(), localTranscriptionPreview()] : [react()],
     optimizeDeps: {
       include: ['bpmn-js/lib/draw/TextRenderer', 'bpmn-js/lib/NavigatedViewer', 'bpmn-js/lib/Viewer', 'bpmn-moddle'],
     },

@@ -28,6 +28,16 @@ Test w GitHub Actions uruchamia Chromium na Windows Server 2022 z wirtualnym mik
 
 Próba w CI sprawdza Windows i Chromium w kontrolowanych warunkach. Na laptopie używanym podczas spotkania pozostaje sprawdzenie fizycznego mikrofonu oraz zachowania przeglądarki przy ustawieniach zasilania tego urządzenia.
 
+## Lokalna transkrypcja nagrania
+
+Przed pierwszym użyciem przygotuj FFmpeg, `whisper-cli` i wielojęzyczny model `ggml-small-q5_1.bin`. Programy mogą być w PATH. Umieść model w podfolderze `.local` katalogu aplikacji lub ustaw `WORKSHOP_WHISPER_MODEL` na jego pełną ścieżkę. Jeśli programów nie ma w PATH, ustaw też `FFMPEG_PATH` i `WHISPER_CLI_PATH` w tym samym terminalu przed uruchomieniem warsztatu. [Pobranie i przykładowa konfiguracja na Windows](../pierwszy-warsztat-plan.md#transkrypcja-pobranego-nagrania)
+
+1. Zatrzymaj nagranie albo otwórz proces z odzyskanym plikiem. Kliknij „Utwórz transkrypcję”. Przeglądarka przekazuje dźwięk do lokalnego programu na tym samym laptopie.
+2. Pozostań w widoku warsztatu do zakończenia. Możesz przerwać rozpoznawanie przyciskiem „Anuluj transkrypcję”. Nagranie pozostaje dostępne do kolejnej próby.
+3. Porównaj tekst z dźwiękiem i kliknij „Zapisz transkrypcję”. Jeśli tekst już istnieje, aplikacja prosi o zgodę na zastąpienie. Jeżeli w trakcie rozpoznawania zmienisz tekst lub ustalenia, aplikacja nie podmienia ich automatycznie.
+
+Przycisk działa pod `http://127.0.0.1:4173` po uruchomieniu `npm run workshop:local`. Plik może mieć do 160 MiB, a wynik do 100 000 znaków. W przypadku dłuższego nagrania dostępna jest także [transkrypcja pobranego pliku z terminala](../pierwszy-warsztat-plan.md#transkrypcja-pobranego-nagrania).
+
 ## Potwierdzenie techniczne
 
 Test w GitHub Actions uruchamia przygotowany build w Chromium, blokuje żądania poza aplikacją i sprawdza zapis tekstu, propozycji i kroków AS-IS. Następnie ponownie uruchamia serwer oraz przeglądarkę, odczytuje proces z biblioteki i dopisuje kolejne ustalenie. Konfiguracja testu zawiera fikcyjne zmienne zdalnych usług, żeby sprawdzić izolację wersji lokalnej.

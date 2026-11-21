@@ -54,6 +54,8 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
   const revision = useRef(0)
   const activeAnalysis = useRef(null)
   const transcriptImport = useRef(0)
+  const localTranscription = useRef(null)
+  const [transcribing, setTranscribing] = useState(false)
   const dirty = transcript !== savedTranscript
 
   useEffect(() => {
@@ -93,6 +95,8 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
   useEffect(() => () => {
     activeAnalysis.current?.abort()
     activeAnalysis.current = null
+    localTranscription.current?.abort()
+    localTranscription.current = null
     transcriptImport.current += 1
   }, [])
   const signInAi = async (event) => {
@@ -202,16 +206,57 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       setMessage(limitMessage)
       return
     }
+    applyImportedTranscript(value, 'plik')
+  }
+
+  const applyImportedTranscript = (value, source) => {
     if (value === transcript) return
     const replacesProposal = !manualReview && analysis
     if (transcript || savedTranscript || replacesProposal) {
-      const prompt = replacesProposal
-        ? 'Wczytać plik w miejsce bieżącej transkrypcji? Propozycja powiązana z poprzednim tekstem zniknie z edytora.'
-        : 'Wczytać plik w miejsce bieżącej transkrypcji?'
-      if (!window.confirm(prompt)) return
+      const action = source === 'plik' ? 'Wczytać plik w miejsce bieżącej transkrypcji?' : 'Wczytać wynik rozpoznawania w miejsce bieżącej transkrypcji?'
+      if (!window.confirm(replacesProposal ? action + ' Propozycja powiązana z poprzednim tekstem zniknie z edytora.' : action)) return
     }
     changeTranscript(value, true)
-    setMessage('Wczytano tekst z pliku. Sprawdź go i wybierz „Zapisz transkrypcję”.')
+    setMessage(source === 'plik'
+      ? 'Wczytano tekst z pliku. Sprawdź go i wybierz „Zapisz transkrypcję”.'
+      : 'Utworzono lokalną transkrypcję. Sprawdź ją i wybierz „Zapisz transkrypcję”.')
+  }
+
+  const transcribeRecording = async (audio) => {
+    if (localTranscription.current || readError || analyzing) return
+    const controller = new AbortController()
+    const request = ++transcriptImport.current
+    const startRevision = revision.current
+    const isCurrent = () => request === transcriptImport.current && startRevision === revision.current && !controller.signal.aborted
+    localTranscription.current = controller
+    setTranscribing(true)
+    setMessage('')
+    try {
+      const response = await fetch('/api/local-workshop-transcript', {
+        method: 'POST', headers: { 'X-Architekt-Local': 'transcribe' }, body: audio, signal: controller.signal,
+      })
+      if (!response.headers.get('content-type')?.includes('application/json')) {
+        throw new Error('Lokalna transkrypcja jest niedostępna. Uruchom aktualną wersję przez npm run workshop:local.')
+      }
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Nie udało się utworzyć lokalnej transkrypcji.')
+      const value = result.transcript?.replace(/\r\n?/g, '\n')
+      if (!value?.trim() || value.includes('\0') || value.length > MAX_TRANSCRIPT_LENGTH) {
+        throw new Error('Rozpoznany tekst jest pusty lub przekracza limit transkrypcji.')
+      }
+      if (isCurrent()) applyImportedTranscript(value, 'nagranie')
+      else if (!controller.signal.aborted && localTranscription.current === controller) {
+        setMessage('Tekst warsztatu zmienił się w trakcie rozpoznawania. Utwórz transkrypcję ponownie, aby ją wczytać.')
+      }
+    } catch (error) {
+      if (isCurrent()) setMessage(error.message)
+    } finally {
+      if (localTranscription.current === controller) {
+        localTranscription.current = null
+        setTranscribing(false)
+        if (controller.signal.aborted) setMessage('Anulowano lokalną transkrypcję.')
+      }
+    }
   }
 
   const replaceReview = () => {
@@ -409,7 +454,9 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
         </form>}
         {authMessage && <p role="status">{authMessage}</p>}
       </div>}
-      {import.meta.env.MODE === 'workshop-local' && <WorkshopRecorder processId={processId} recordingRef={recordingRef} />}
+      {import.meta.env.MODE === 'workshop-local' && <WorkshopRecorder processId={processId} recordingRef={recordingRef}
+        onTranscribe={readError || analyzing ? undefined : transcribeRecording} transcribing={transcribing}
+        onCancelTranscription={() => localTranscription.current?.abort()} />}
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
       <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(readError)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
       <label htmlFor="workshop-transcript-file">Wczytaj transkrypcję z pliku TXT</label>

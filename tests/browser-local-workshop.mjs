@@ -10,6 +10,9 @@ const name = 'Fikcyjny warsztat bez internetu'
 const transcript = 'Kierownik przekazuje formularz.\nHR sprawdza kompletność.'
 const step = 'Sprawdzenie kompletności formularza'
 const nextStep = 'Przekazanie potwierdzenia'
+const fixture = process.env.WORKSHOP_TEST_AUDIO_PATH
+const transcriptionEndpoint = '/api/local-workshop-transcript'
+const recognizedText = 'Kadry proszą o uzupełnienie dokumentu.'
 const profile = await mkdtemp(join(tmpdir(), 'architekt-local-workshop-'))
 const remoteRequests = []
 let server
@@ -19,7 +22,8 @@ async function openWorkshop() {
   server = await preview({ mode: 'workshop-local' })
   context = await chromium.launchPersistentContext(profile, {
     headless: true,
-    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
+      ...(fixture ? [`--use-file-for-fake-audio-capture=${fixture}`] : [])],
   })
   await context.addInitScript(() => {
     const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
@@ -31,6 +35,13 @@ async function openWorkshop() {
   })
   await context.route('**/*', (route) => {
     const { origin: requestOrigin, pathname } = new URL(route.request().url())
+    if (requestOrigin === origin && pathname === transcriptionEndpoint) {
+      if (fixture) return route.continue()
+      assert.equal(route.request().method(), 'POST')
+      assert.equal(route.request().headers()['x-architekt-local'], 'transcribe')
+      assert.ok(route.request().postDataBuffer()?.length)
+      return route.fulfill({ json: { transcript: recognizedText } })
+    }
     if (requestOrigin === origin && !pathname.startsWith('/api/')) return route.continue()
     remoteRequests.push(route.request().url())
     return route.abort('internetdisconnected')
@@ -54,6 +65,11 @@ async function closeWorkshop() {
 
 try {
   let page = await openWorkshop()
+  const endpoint = origin + transcriptionEndpoint
+  assert.equal((await fetch(endpoint, { method: 'POST', body: 'audio' })).status, 403)
+  assert.equal((await fetch(endpoint, {
+    method: 'POST', headers: { Origin: origin, 'X-Architekt-Local': 'transcribe' }, body: 'audio',
+  })).status, 415)
   await page.getByRole('button', { name: /Dodaj kroki samodzielnie/ }).click()
   await page.getByLabel(/Nazwa procesu/).fill(name)
   await page.getByLabel(/Cel procesu/).fill('Potwierdzenie przyjęcia formularza')
@@ -161,9 +177,29 @@ try {
   await page.reload()
   await expect(page.getByRole('button', { name: 'Rozpocznij nagranie' })).toBeEnabled()
   assert.equal(await page.getByRole('link', { name: 'Pobierz nagranie' }).count(), 0)
+  await page.getByRole('button', { name: 'Rozpocznij nagranie' }).click()
+  await page.getByText('Trwa nagrywanie.', { exact: true }).waitFor()
+  await new Promise((resolve) => setTimeout(resolve, fixture ? 9000 : 350))
+  await page.getByRole('button', { name: 'Zatrzymaj nagranie' }).click()
+  const createTranscript = page.getByRole('button', { name: 'Utwórz transkrypcję' })
+  const reopenedTranscript = page.getByLabel('Tekst rozmowy', { exact: true })
+  const keepExisting = page.waitForEvent('dialog').then(async (prompt) => {
+    assert.match(prompt.message(), /Wczytać wynik rozpoznawania w miejsce bieżącej transkrypcji/)
+    await prompt.dismiss()
+  })
+  await createTranscript.click()
+  await keepExisting
+  assert.equal(await reopenedTranscript.inputValue(), transcript)
+  page.once('dialog', (prompt) => prompt.accept())
+  await createTranscript.click()
+  await page.getByText(/Utworzono lokalną transkrypcję/).waitFor()
+  assert.match(await reopenedTranscript.inputValue(), fixture ? /brakuje dokumentu|skierowanie/i : new RegExp(recognizedText))
+  await page.getByRole('button', { name: 'Zapisz transkrypcję' }).click()
+  await page.getByText('Transkrypcja zapisana na tym urządzeniu.').waitFor()
   assert.deepEqual(remoteRequests, [])
   console.log('PASS: offline recording, persistence after restart, interrupted recording recovery, playback, download and removal')
   console.log('PASS: offline TXT import and validation, cancelled replacement, and workshop recovery after browser and server restart')
+  console.log(`PASS: local transcription, replacement confirmation and explicit save (${fixture ? 'Whisper' : 'fixture response'})`)
 } finally {
   try {
     await closeWorkshop()

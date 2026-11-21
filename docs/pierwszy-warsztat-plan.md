@@ -12,6 +12,8 @@ W trybie lokalnym sekcja „Nagranie warsztatu” pozwala uruchomić mikrofon, z
 
 ### Transkrypcja pobranego nagrania
 
+Po pierwszej konfiguracji narzędzi możesz przetwarzać nagrania bezpośrednio w lokalnym Architekcie przyciskiem „Utwórz transkrypcję”. [Kroki w aplikacji](pilot-2.0/warsztat-lokalny.md#lokalna-transkrypcja-nagrania)
+
 Polecenie `npm run workshop:transcribe -- "nagranie.webm" "ggml-small-q5_1.bin"` rozpoznaje mowę po polsku i zapisuje TXT obok nagrania. Możesz podać trzeci argument z inną ścieżką pliku TXT. Skrypt wymaga FFmpeg, `whisper-cli` i pobranego wcześniej modelu wielojęzycznego. Do pilotażu wybierz `ggml-small-q5_1.bin`. Możesz też użyć szybszego w tej próbie `ggml-base.bin`. Programy można dodać do PATH albo wskazać ścieżki w zmiennych `FFMPEG_PATH` i `WHISPER_CLI_PATH`. Po przygotowaniu plików przetwarzanie odbywa się lokalnie. [FFmpeg](https://ffmpeg.org/download.html) · [Whisper.cpp](https://github.com/ggml-org/whisper.cpp) · [Pobranie modelu](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-small-q5_1.bin)
 
 W PowerShellu, po rozpakowaniu programów, dostosuj przykładowe ścieżki i uruchom polecenie z katalogu aplikacji.
@@ -19,6 +21,7 @@ W PowerShellu, po rozpakowaniu programów, dostosuj przykładowe ścieżki i uru
 ```powershell
 $env:FFMPEG_PATH = 'C:\Narzedzia\ffmpeg\bin\ffmpeg.exe'
 $env:WHISPER_CLI_PATH = 'C:\Narzedzia\whisper\whisper-cli.exe'
+$env:WORKSHOP_WHISPER_MODEL = 'C:\Narzedzia\whisper\ggml-small-q5_1.bin'
 npm.cmd run workshop:transcribe -- "C:\Warsztat\nagranie.webm" "C:\Narzedzia\whisper\ggml-small-q5_1.bin"
 ```
 
@@ -45,7 +48,7 @@ Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny
 
    - **Automatyczny zapis nagrania — wdrożony dla WebM w trybie lokalnym.** Krótka próba Chromium potwierdziła zapis, odzyskanie po zamknięciu karty, odsłuch, pobranie i usunięcie nagrania.
    - **Próba 60 minut na Windows.** Nagrać fikcyjny warsztat bez internetu. W osobnej próbie celowo zamknąć kartę w trakcie nagrywania i ponownie otworzyć proces. W obu próbach sprawdzić długość, odtwarzanie oraz przetworzenie dostępnego dźwięku. W próbie z przerwaniem zapisać także wielkość utraconego fragmentu.
-   - **Przycisk „Utwórz transkrypcję”.** Po zakończeniu prób zapisu podłączyć istniejący lokalny silnik Whisper. Tekst ma trafić do sprawdzenia w „Ustaleniach warsztatowych”, bez terminala i wysyłania nagrania poza laptop.
+   - **Przycisk „Utwórz transkrypcję” — dodany w trybie lokalnym.** Istniejący silnik Whisper przetwarza nagranie na laptopie. Tekst trafia do sprawdzenia w „Ustaleniach warsztatowych”. Przed pierwszym użyciem trzeba jeszcze przygotować model i programy na docelowym laptopie.
 
 ### Kolejne pakiety prac
 

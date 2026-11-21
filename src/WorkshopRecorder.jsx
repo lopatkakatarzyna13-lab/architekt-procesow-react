@@ -5,7 +5,7 @@ const formats = [['audio/webm', 'webm'], ['audio/mp4', 'm4a'], ['audio/ogg', 'og
 const saveInterval = 5000
 const releaseMicrophone = (stream) => stream?.getTracks().forEach((track) => track.stop())
 
-export default function WorkshopRecorder({ processId, recordingRef }) {
+export default function WorkshopRecorder({ processId, recordingRef, onTranscribe, transcribing, onCancelTranscription }) {
   const active = useRef(null)
   const audioUrl = useRef('')
   const mounted = useRef(false)
@@ -32,7 +32,7 @@ export default function WorkshopRecorder({ processId, recordingRef }) {
     if (audioUrl.current) URL.revokeObjectURL(audioUrl.current)
     audioUrl.current = entry ? URL.createObjectURL(entry.blob) : ''
     setRecording(entry ? {
-      id: entry.id, url: audioUrl.current, filename: entry.filename, local,
+      id: entry.id, url: audioUrl.current, filename: entry.filename, blob: entry.blob, local,
       interrupted: !entry.finished, downloaded: false,
     } : null)
   }
@@ -180,12 +180,13 @@ export default function WorkshopRecorder({ processId, recordingRef }) {
         ? 'Po uzgodnieniu nagrania z uczestnikami uruchom mikrofon. Aplikacja zapisuje dźwięk w tej przeglądarce.'
         : 'Po uzgodnieniu nagrania z uczestnikami uruchom mikrofon. W tej przeglądarce pobierz plik przed opuszczeniem ekranu.'}</p>
       <div className="workshop-actions">
-        <button type="button" className="back-button" disabled={phase !== 'idle'} onClick={start}>Rozpocznij nagranie</button>
+        <button type="button" className="back-button" disabled={phase !== 'idle' || transcribing} onClick={start}>Rozpocznij nagranie</button>
         <button type="button" className="back-button" disabled={phase !== 'recording'} onClick={stop}>Zatrzymaj nagranie</button>
       </div>
       {phase === 'recording' && <p role="status">{saved ? 'Trwa nagrywanie. Fragment zapisany.' : 'Trwa nagrywanie.'}</p>}
       {phase === 'requesting' && <p role="status">Oczekiwanie na dostęp do mikrofonu.</p>}
       {phase === 'stopping' && <p role="status">Przygotowywanie nagrania.</p>}
+      {transcribing && <p role="status">Rozpoznaję mowę lokalnie. Możesz dalej pracować w tym widoku.</p>}
       {error && <p role="alert">{error}</p>}
       {recording && phase === 'idle' && <>
         {recording.local && <p>{recording.interrupted ? 'Dostępna zapisana część przerwanego nagrania.' : 'Nagranie zapisane w tej przeglądarce.'}</p>}
@@ -193,7 +194,10 @@ export default function WorkshopRecorder({ processId, recordingRef }) {
           <audio controls src={recording.url} aria-label="Odsłuch nagrania warsztatu" />
           <a className="back-button" href={recording.url} download={recording.filename}
             onClick={() => setRecording((previous) => ({ ...previous, downloaded: true }))}>Pobierz nagranie</a>
-          {recording.local && <button type="button" className="back-button" onClick={remove}>Usuń nagranie</button>}
+          {recording.local && <button type="button" className="back-button" disabled={transcribing} onClick={remove}>Usuń nagranie</button>}
+          {onTranscribe && !transcribing && <button type="button" className="back-button"
+            onClick={() => onTranscribe(recording.blob)}>Utwórz transkrypcję</button>}
+          {transcribing && <button type="button" className="back-button" onClick={onCancelTranscription}>Anuluj transkrypcję</button>}
         </div>
       </>}
     </section>
