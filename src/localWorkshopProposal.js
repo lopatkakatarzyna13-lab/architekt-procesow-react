@@ -4,7 +4,8 @@ const timestamp = /^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/
 const phaseLabel = /^(?:as[- ]is|to[- ]be)\s*[:–-]\s*/iu
 const currentProcess = /^(?:as[- ]is\b|(?:obecnie|dzisiaj|w obecnym procesie|teraz)\b)/iu
 const futureProcess = /^(?:to[- ]be\b|docelowo\b|proponuj\p{L}*|(?:zapiszmy\s+)?(?:też\s+)?(?:propozycj\p{L}*|pomysł\p{L}*)\s+usprawnieni\p{L}*)/iu
-const uncertain = /(?<!\p{L})(?:nie (?:wiem(?:y)?|wiadomo|znamy|pamiętam(?:y)?|ustalono|ustaliliśmy|ustaliłyśmy|mamy (?:jeszcze )?ustalon\p{L}*|ma (?:jeszcze )?(?:ustalon\p{L}*|procedury|zasad\p{L}*))|(?:trzeba|musimy) (?:to )?(?:ustalić|wyjaśnić|sprawdzić z)|do (?:ustalenia|wyjaśnienia|potwierdzenia)|nie (?:jest|jesteśmy) pewn\p{L}*)(?!\p{L})/iu
+const uncertain = /(?<!\p{L})(?:nie (?:wiem(?:y)?|wiadomo|znamy|pamiętam(?:y)?|ustalono|ustaliliśmy|ustaliłyśmy|mamy (?:jeszcze )?ustalon\p{L}*|ma (?:jeszcze )?(?:ustalon\p{L}*|procedury|zasad\p{L}*))|(?:trzeba|musimy) (?:to )?(?:ustalić|wyjaśnić|sprawdzić z)|nie (?:jest|jesteśmy) pewn\p{L}*)(?!\p{L})/iu
+const followUpNote = /(?<!\p{L})do (?:ustalenia|wyjaśnienia|potwierdzenia)(?!\p{L})/iu
 const hypothetical = /(?<!\p{L})(?:gdyby|można by|może|możemy|moglibyśmy|powin\p{L}*|warto|planuj\p{L}*|żeby|chciał\p{L}*)(?!\p{L})/iu
 const condition = /^(?:jeśli|jeżeli|gdy|kiedy|w przypadku|przy braku|po otrzymaniu|po zatwierdzeniu|dopiero po)\b/iu
 const action = new RegExp(String.raw`(?<!\p{L})(?:${[
@@ -61,7 +62,7 @@ export function proposeLocalWorkshop(transcript) {
         pendingQuestion = null
       }
 
-      if (uncertain.test(text)) {
+      if (uncertain.test(text) || (followUpNote.test(text) && !action.test(text))) {
         add('questions', pendingQuestion?.text ?? `Do wyjaśnienia — ${text}`, evidence)
         pendingQuestion = null
         continue

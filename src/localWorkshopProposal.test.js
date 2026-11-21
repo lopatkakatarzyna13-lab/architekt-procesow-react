@@ -51,6 +51,12 @@ describe('local transcript suggestions', () => {
     ])
   })
 
+  it('distinguishes a confirmation task from a note about missing details', () => {
+    const { steps, questions } = proposeLocalWorkshop('HR przekazuje formularz do potwierdzenia. Termin odbioru do ustalenia.')
+    expect(steps.map(({ text }) => text)).toEqual(['HR przekazuje formularz do potwierdzenia'])
+    expect(questions.map(({ text }) => text)).toEqual(['Do wyjaśnienia — Termin odbioru do ustalenia.'])
+  })
+
   it('deduplicates with Polish casing and shows when proposal limits are exceeded', () => {
     const transcript = [
       'MENEDŻER wysyła zgłoszenie.',
