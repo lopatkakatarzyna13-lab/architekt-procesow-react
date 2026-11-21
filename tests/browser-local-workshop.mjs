@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { chromium } from 'playwright'
+import { chromium, expect } from 'playwright/test'
 import { preview } from 'vite'
 
 const origin = 'http://127.0.0.1:4173'
@@ -112,7 +112,7 @@ try {
   await page.getByText('Trwa nagrywanie.', { exact: true }).waitFor()
   assert.equal(await page.evaluate(() => window.testMicrophoneTrack.readyState), 'live')
   const leave = page.waitForEvent('dialog').then(async (prompt) => {
-    assert.match(prompt.message(), /Nagranie dostępne tylko na tym ekranie/)
+    assert.match(prompt.message(), /Niezapisana część nagrania może zostać utracona/)
     await prompt.dismiss()
   })
   await page.getByRole('button', { name: 'Moje procesy' }).click()
@@ -125,9 +125,44 @@ try {
   assert.equal(await page.evaluate(() => window.testMicrophoneTrack.readyState), 'ended')
   const [download] = await Promise.all([page.waitForEvent('download'), recording.click()])
   assert.match(download.suggestedFilename(), /^warsztat-.*\.webm$/)
-  assert.ok((await stat(await download.path())).size > 0)
+  const shortRecordingSize = (await stat(await download.path())).size
+  assert.ok(shortRecordingSize > 0)
+  await closeWorkshop()
+
+  page = await openWorkshop()
+  await page.getByRole('button', { name: 'Moje procesy' }).click()
+  await page.locator('.process-card').filter({ hasText: name }).getByRole('button', { name: 'Otwórz proces' }).click()
+  await page.getByText('Nagranie zapisane w tej przeglądarce.').waitFor()
+  assert.equal(await page.getByRole('link', { name: 'Pobierz nagranie' }).getAttribute('download'), download.suggestedFilename())
+  page.once('dialog', (prompt) => prompt.accept())
+  await page.getByRole('button', { name: 'Rozpocznij nagranie' }).click()
+  await page.getByText('Trwa nagrywanie. Fragment zapisany.').waitFor()
+  await page.close()
+  await closeWorkshop()
+
+  page = await openWorkshop()
+  await page.getByRole('button', { name: 'Moje procesy' }).click()
+  await page.locator('.process-card').filter({ hasText: name }).getByRole('button', { name: 'Otwórz proces' }).click()
+  await page.getByText('Dostępna zapisana część przerwanego nagrania.').waitFor()
+  const audio = page.getByLabel('Odsłuch nagrania warsztatu')
+  await audio.evaluate((player) => player.play())
+  await page.waitForFunction(() => document.querySelector('audio').currentTime > 0.2)
+  const [recovered] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('link', { name: 'Pobierz nagranie' }).click(),
+  ])
+  assert.match(recovered.suggestedFilename(), /^warsztat-.*\.webm$/)
+  assert.ok((await stat(await recovered.path())).size > shortRecordingSize)
+  if (process.env.WORKSHOP_RECOVERED_AUDIO_PATH) await recovered.saveAs(process.env.WORKSHOP_RECOVERED_AUDIO_PATH)
+  page.once('dialog', (prompt) => prompt.accept())
+  await page.getByRole('button', { name: 'Usuń nagranie' }).click()
+  await expect(page.getByRole('button', { name: 'Rozpocznij nagranie' })).toBeEnabled()
+  await page.getByRole('link', { name: 'Pobierz nagranie' }).waitFor({ state: 'hidden' })
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Rozpocznij nagranie' })).toBeEnabled()
+  assert.equal(await page.getByRole('link', { name: 'Pobierz nagranie' }).count(), 0)
   assert.deepEqual(remoteRequests, [])
-  console.log('PASS: local microphone recording, navigation protection, microphone release and audio download with external requests blocked')
+  console.log('PASS: offline recording, persistence after restart, interrupted recording recovery, playback, download and removal')
   console.log('PASS: offline TXT import and validation, cancelled replacement, and workshop recovery after browser and server restart')
 } finally {
   try {

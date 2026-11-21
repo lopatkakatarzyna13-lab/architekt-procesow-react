@@ -28,6 +28,7 @@ import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
+import { deleteWorkshopRecording } from './workshopRecordings'
 import { appendWorkshopSteps, getWorkshopStorageKeys, loadWorkshop, loadWorkshopReview } from './workshop'
 import ProcessConnections from './ProcessConnections.jsx'
 import BpmnExport from './BpmnExport.jsx'
@@ -3546,7 +3547,7 @@ function App() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [decisionDraftDirty])
   const canLeaveWorkshop = () => {
-    if (workshopRecordingRef.current && !window.confirm('Opuścić warsztat? Nagranie dostępne tylko na tym ekranie zostanie utracone.')) return false
+    if (workshopRecordingRef.current && !window.confirm('Opuścić warsztat? Niezapisana część nagrania może zostać utracona.')) return false
     if (!workshopDirtyRef.current && !decisionDraftDirty) return true
     if (!window.confirm('Transkrypcja, propozycja warsztatu albo ustawienia BPMN mają niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')) return false
     setDecisionDraftFlags({})
@@ -4003,13 +4004,21 @@ const startNewProcess = () => {
   window.location.reload()
 }
 
-const removeSavedProcess = (process) => {
+const removeSavedProcess = async (process) => {
   if (!isValidProcessId(process?.id)) { setLibraryMessage('Nie można usunąć procesu bez poprawnego identyfikatora.'); return }
   if (processIdentityState.id?.toLowerCase() === process.id.toLowerCase()) { setLibraryMessage('To obecnie otwarty proces. Rozpocznij lub otwórz inny proces przed usunięciem.'); return }
-  if (!window.confirm(`Usunąć proces „${process.name}” z biblioteki oraz jego zapisany tekst warsztatu i propozycję w tej przeglądarce? Operacji nie można cofnąć. Inne procesy i wyeksportowane pliki pozostaną bez zmian.`)) return
+  if (!window.confirm(`Usunąć proces „${process.name}” z biblioteki oraz jego zapisany tekst warsztatu, propozycję i nagranie w tej przeglądarce? Operacji nie można cofnąć. Inne procesy i wyeksportowane pliki pozostaną bez zmian.`)) return
   try {
     const remaining = deleteSavedProcess(localStorage, process.id, savedProcesses)
     updateLibrary(remaining)
+    if (import.meta.env.MODE === 'workshop-local') {
+      try {
+        await deleteWorkshopRecording(process.id.toLowerCase())
+      } catch {
+        setLibraryMessage('Proces usunięto z biblioteki. Nie udało się potwierdzić usunięcia lokalnego nagrania.')
+        return
+      }
+    }
     setLibraryMessage('Proces i zapisane dane jego warsztatu zostały usunięte z tej przeglądarki. Wyeksportowane pliki pozostają bez zmian.')
   } catch (error) {
     if (error.code === 'DELETE_ROLLBACK_FAILED') setLibraryStorageUncertain(true)

@@ -8,7 +8,7 @@ W sekcji „Ustalenia warsztatowe” wybierz „Opracuj ręcznie”. Dodaj pozyc
 
 Gotowy tekst można też wczytać przez „Wczytaj transkrypcję z pliku TXT”. Import obsługuje UTF-8 i działa lokalnie. Sprawdź tekst w edytorze i kliknij „Zapisz transkrypcję”. Przy podmianie tekstu aplikacja prosi o potwierdzenie.
 
-W trybie lokalnym sekcja „Nagranie warsztatu” pozwala uruchomić mikrofon, zatrzymać nagrywanie i odsłuchać materiał. Aplikacja przetwarza dźwięk w karcie przeglądarki. Pobierz plik przed zmianą widoku lub zamknięciem karty, aby zachować nagranie.
+W trybie lokalnym sekcja „Nagranie warsztatu” pozwala uruchomić mikrofon, zatrzymać nagrywanie i odsłuchać materiał. Gdy przeglądarka obsługuje zapis WebM, aplikacja zapisuje fragmenty w trakcie nagrania. Zachowany dźwięk można odsłuchać lub pobrać po ponownym otwarciu procesu. [Nagrywanie i odzyskiwanie dźwięku](pilot-2.0/warsztat-lokalny.md#nagrywanie-i-odzyskiwanie-dźwięku)
 
 ### Transkrypcja pobranego nagrania
 
@@ -41,9 +41,9 @@ Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny
 4. **Próba na fikcyjnym warsztacie — zakończona dla fikcyjnego scenariusza.** Przejść przygotowanie procesu, tekst, propozycje, sprawdzenie, przeniesienie do AS-IS, zapis, otwarcie i wynikowy raport. Oddzielić wynik fikcyjnego dostawcy od oceny rzeczywistego modelu. Gotowe, gdy zapisano wyniki i poprawiono blokujące problemy.
 5. **Przygotowanie docelowego uruchomienia — w toku.** Przygotować konkretną listę konfiguracji, sprawdzenia i wycofania zmian, następnie poprosić o wymaganą zgodę na wdrożenie funkcji i SQL. Po zgodzie zweryfikować działanie w docelowym środowisku i przekazać prostą instrukcję.
 6. **Rozbudowa i testy map BPMN dla IT i AI — wdrożono na gałęzi roboczej i sprawdzono na fikcyjnym przykładzie.** Odbiór przez osobę spoza warsztatu pozostaje do wykonania. [Wyniki próby](proba-bpmn-przekazanie-it-ai-2026-11-19.md).
-7. **Nagranie całego warsztatu i lokalna transkrypcja w Architekcie — do wykonania.**
+7. **Nagranie całego warsztatu i lokalna transkrypcja w Architekcie — w toku.**
 
-   - **Automatyczny zapis nagrania.** Po jednokrotnym uruchomieniu nagrywania aplikacja zapisuje kolejne fragmenty lokalnie. Po ponownym otwarciu pokazuje, co udało się zachować, i umożliwia odsłuch oraz pobranie odzyskanego dźwięku.
+   - **Automatyczny zapis nagrania — wdrożony dla WebM w trybie lokalnym.** Krótka próba Chromium potwierdziła zapis, odzyskanie po zamknięciu karty, odsłuch, pobranie i usunięcie nagrania.
    - **Próba 60 minut na Windows.** Nagrać fikcyjny warsztat bez internetu. W osobnej próbie celowo zamknąć kartę w trakcie nagrywania i ponownie otworzyć proces. W obu próbach sprawdzić długość, odtwarzanie oraz przetworzenie dostępnego dźwięku. W próbie z przerwaniem zapisać także wielkość utraconego fragmentu.
    - **Przycisk „Utwórz transkrypcję”.** Po zakończeniu prób zapisu podłączyć istniejący lokalny silnik Whisper. Tekst ma trafić do sprawdzenia w „Ustaleniach warsztatowych”, bez terminala i wysyłania nagrania poza laptop.
 

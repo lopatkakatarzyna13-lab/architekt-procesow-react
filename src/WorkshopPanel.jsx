@@ -409,7 +409,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
         </form>}
         {authMessage && <p role="status">{authMessage}</p>}
       </div>}
-      {import.meta.env.MODE === 'workshop-local' && <WorkshopRecorder recordingRef={recordingRef} />}
+      {import.meta.env.MODE === 'workshop-local' && <WorkshopRecorder processId={processId} recordingRef={recordingRef} />}
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
       <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(readError)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
       <label htmlFor="workshop-transcript-file">Wczytaj transkrypcję z pliku TXT</label>
