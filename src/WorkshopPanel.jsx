@@ -52,6 +52,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
   const openQuestionFilter = useRef(null)
   const revision = useRef(0)
   const activeAnalysis = useRef(null)
+  const transcriptImport = useRef(0)
   const dirty = transcript !== savedTranscript
 
   useEffect(() => {
@@ -88,7 +89,11 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
     })
     return () => { active = false }
   }, [analysis, autosaveDraft, dirty, dirtyRef, manualReview, processId, readError, reviewDirty, reviewLoadError, savedTranscript, storageUncertain, transcript])
-  useEffect(() => () => { activeAnalysis.current?.abort(); activeAnalysis.current = null }, [])
+  useEffect(() => () => {
+    activeAnalysis.current?.abort()
+    activeAnalysis.current = null
+    transcriptImport.current += 1
+  }, [])
   const signInAi = async (event) => {
     event.preventDefault()
     if (!workshopAiClient || authBusy) return
@@ -126,6 +131,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
   const clearWorkshop = () => {
     if (analyzing) return
     if (!window.confirm('Usunąć transkrypcję i propozycję tego warsztatu z tej przeglądarki? Zapisane kroki AS-IS i biblioteka procesów pozostaną bez zmian. Tej operacji nie można cofnąć.')) return
+    transcriptImport.current += 1
     try {
       deleteWorkshop(localStorage, processId)
       revision.current += 1
@@ -148,8 +154,8 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
     }
   }
 
-  const changeTranscript = (value) => {
-    if (!manualReview && reviewDirty && !window.confirm('Masz niezapisaną propozycję. Zmiana transkrypcji ją usunie. Kontynuować?')) return
+  const changeTranscript = (value, confirmed = false) => {
+    if (!confirmed && !manualReview && reviewDirty && !window.confirm('Masz niezapisaną propozycję. Zmiana transkrypcji ją usunie. Kontynuować?')) return
     setTranscript(value)
     revision.current += 1
     setMessage('')
@@ -162,6 +168,49 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
     setSelectedSteps([])
     setAnalysis(null)
     setAnalysisMessage('')
+  }
+
+  const importTranscript = async (event) => {
+    const [file] = event.target.files
+    event.target.value = ''
+    if (!file || readError || analyzing) return
+    const request = ++transcriptImport.current
+    const startRevision = revision.current
+    const isCurrent = () => request === transcriptImport.current && startRevision === revision.current
+    if (!/\.txt$/i.test(file.name)) {
+      setMessage('Wybierz plik TXT zapisany w UTF-8.')
+      return
+    }
+    const limitMessage = `Plik przekracza limit ${MAX_TRANSCRIPT_LENGTH} znaków. Wybierz krótszy fragment rozmowy.`
+    if (file.size > 4 * MAX_TRANSCRIPT_LENGTH + 3) {
+      setMessage(limitMessage)
+      return
+    }
+    let value
+    try { value = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()).replace(/\r\n?/g, '\n') }
+    catch {
+      if (isCurrent()) setMessage('Nie udało się odczytać pliku TXT w UTF-8.')
+      return
+    }
+    if (!isCurrent()) return
+    if (value.includes('\0') || !value.trim()) {
+      setMessage('Wybierz plik TXT w UTF-8 zawierający tekst rozmowy.')
+      return
+    }
+    if (value.length > MAX_TRANSCRIPT_LENGTH) {
+      setMessage(limitMessage)
+      return
+    }
+    if (value === transcript) return
+    const replacesProposal = !manualReview && analysis
+    if (transcript || savedTranscript || replacesProposal) {
+      const prompt = replacesProposal
+        ? 'Wczytać plik w miejsce bieżącej transkrypcji? Propozycja powiązana z poprzednim tekstem zniknie z edytora.'
+        : 'Wczytać plik w miejsce bieżącej transkrypcji?'
+      if (!window.confirm(prompt)) return
+    }
+    changeTranscript(value, true)
+    setMessage('Wczytano tekst z pliku. Sprawdź go i wybierz „Zapisz transkrypcję”.')
   }
 
   const replaceReview = () => {
@@ -187,6 +236,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
     if (!replaceReview()) return
     if (workshopAiRemote && !aiSession) { setAnalysisMessage('Zaloguj się, aby uruchomić analizę AI.'); return }
     if (!window.confirm('Transkrypcja zostanie wysłana do OpenAI w celu analizy. Użycie API może być płatne. Czy chcesz kontynuować?')) return
+    transcriptImport.current += 1
     const currentRevision = revision.current
     const controller = new AbortController()
     activeAnalysis.current = controller
@@ -359,6 +409,8 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
       </div>}
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
       <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(readError)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
+      <label htmlFor="workshop-transcript-file">Wczytaj transkrypcję z pliku TXT</label>
+      <input id="workshop-transcript-file" type="file" accept=".txt,text/plain" disabled={Boolean(readError) || analyzing} onChange={importTranscript} />
       <div className="workshop-actions">
         <button type="button" className="save-button" disabled={Boolean(readError) || !dirty} onClick={save}>Zapisz transkrypcję</button>
         <button type="button" className="save-button" disabled={Boolean(readError) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>

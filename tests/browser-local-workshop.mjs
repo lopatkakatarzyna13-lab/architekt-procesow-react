@@ -7,7 +7,7 @@ import { preview } from 'vite'
 
 const origin = 'http://127.0.0.1:4173'
 const name = 'Fikcyjny warsztat bez internetu'
-const transcript = 'Kierownik przekazuje formularz. HR sprawdza kompletność.'
+const transcript = 'Kierownik przekazuje formularz.\nHR sprawdza kompletność.'
 const step = 'Sprawdzenie kompletności formularza'
 const nextStep = 'Przekazanie potwierdzenia'
 const profile = await mkdtemp(join(tmpdir(), 'architekt-local-workshop-'))
@@ -49,7 +49,10 @@ try {
   await page.getByLabel(/Co rozpoczyna proces/).fill('Przekazanie formularza')
   await page.getByLabel(/Co kończy proces/).fill('Potwierdzenie przyjęcia')
   await page.getByRole('button', { name: 'Zapisz zakres i przejdź dalej' }).click()
-  await page.getByLabel('Tekst rozmowy').fill(transcript)
+  const upload = page.getByLabel('Wczytaj transkrypcję z pliku TXT')
+  await upload.setInputFiles({ name: 'warsztat.txt', mimeType: 'text/plain', buffer: Buffer.from('\ufeff' + transcript.replace('\n', '\r\n')) })
+  await page.getByText(/Wczytano tekst z pliku/).waitFor()
+  assert.equal(await page.getByLabel('Tekst rozmowy', { exact: true }).inputValue(), transcript)
   await page.getByRole('button', { name: 'Zapisz transkrypcję' }).click()
   await page.getByText('Transkrypcja zapisana na tym urządzeniu.').waitFor()
   assert.equal(await page.getByRole('button', { name: 'Analizuj transkrypcję' }).isDisabled(), true)
@@ -70,16 +73,32 @@ try {
   const card = page.locator('.process-card').filter({ hasText: name })
   await card.getByText('Wersja 1 · W toku').waitFor()
   await card.getByRole('button', { name: 'Otwórz proces' }).click()
-  assert.equal(await page.getByLabel('Tekst rozmowy').inputValue(), transcript)
+  const transcriptField = page.getByLabel('Tekst rozmowy', { exact: true })
+  assert.equal(await transcriptField.inputValue(), transcript)
   assert.equal(await page.getByLabel('Kroki — pozycja 1').inputValue(), step)
   await page.locator('ol.steps-list').getByText(step, { exact: true }).waitFor()
+
+  const replacement = page.getByLabel('Wczytaj transkrypcję z pliku TXT')
+  const dialog = page.waitForEvent('dialog').then(async (prompt) => {
+    assert.match(prompt.message(), /Wczytać plik w miejsce bieżącej transkrypcji/)
+    await prompt.dismiss()
+  })
+  await replacement.setInputFiles({ name: 'fragment.txt', mimeType: 'text/plain', buffer: Buffer.from('Inny fragment rozmowy') })
+  await dialog
+  assert.equal(await transcriptField.inputValue(), transcript)
+  await replacement.setInputFiles({ name: 'za-duzy.txt', mimeType: 'text/plain', buffer: Buffer.from('a'.repeat(100_001)) })
+  await page.getByText(/Plik przekracza limit 100000 znaków/).waitFor()
+  assert.equal(await transcriptField.inputValue(), transcript)
+  await replacement.setInputFiles({ name: 'bledny.txt', mimeType: 'text/plain', buffer: Buffer.from([0xc3, 0x28]) })
+  await page.getByText('Nie udało się odczytać pliku TXT w UTF-8.').waitFor()
+  assert.equal(await transcriptField.inputValue(), transcript)
 
   await page.getByRole('button', { name: 'Dodaj: kroki' }).click()
   await page.getByLabel('Kroki — pozycja 2').fill(nextStep)
   await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
   await page.getByText('Propozycja zapisana na tym urządzeniu.').waitFor()
   assert.deepEqual(remoteRequests, [])
-  console.log('PASS: the local build starts with external requests blocked, resumes a saved workshop after restarting both processes, and saves further edits')
+  console.log('PASS: offline TXT import and validation, cancelled replacement, and workshop recovery after browser and server restart')
 } finally {
   try {
     await closeWorkshop()

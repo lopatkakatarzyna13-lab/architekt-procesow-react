@@ -6,6 +6,8 @@ Aktualizacja: 20 listopada 2026. Cel: praca konsultantki z ustaleniami warsztatu
 
 W sekcji „Ustalenia warsztatowe” wybierz „Opracuj ręcznie”. Dodaj pozycje i kliknij „Zapisz propozycję”. Jeśli później uzyskasz tekst rozmowy, dodaj go przez „Zapisz transkrypcję”. Ustalenia rozpoczęte bez transkrypcji zachowują się obok niej w tej samej przeglądarce. Uruchomienie analizy AI, która ma je zastąpić, wymaga potwierdzenia.
 
+Gotowy tekst można też wczytać przez „Wczytaj transkrypcję z pliku TXT”. Import obsługuje UTF-8 i działa lokalnie. Sprawdź tekst w edytorze i kliknij „Zapisz transkrypcję”. Przy podmianie tekstu aplikacja prosi o potwierdzenie.
+
 Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny.md). Zacznij od lokalnego adresu już na początku spotkania. Zapis pozostaje w tym samym profilu przeglądarki pod tym adresem.
 
 ## Punkt startowy — potwierdzone
