@@ -3,6 +3,40 @@ import { proposeLocalWorkshop } from './localWorkshopProposal'
 import { validateWorkshopReview } from './workshop'
 
 describe('local transcript suggestions', () => {
+  it('splits the actions from the short referral recording and retains its deadline and unclear condition', () => {
+    const firstSentence = 'Kierownik wysyła zgłoszenie, kadry sprawdzają kompletność danych, jeśli czegoś brakuje.'
+    const deadline = 'Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia.'
+    const lastSentence = 'Po ponownej kontroli kadry zatwierdzają dane i generują skierowanie.'
+    const transcript = `${firstSentence} ${deadline}\n${lastSentence}`
+    const proposal = { roles: [], systems: [], decisions: [], ...proposeLocalWorkshop(transcript) }
+
+    expect(validateWorkshopReview(proposal, transcript)).toEqual([])
+    expect(proposal.steps.map(({ text, evidence }) => [text, evidence])).toEqual([
+      ['Kierownik wysyła zgłoszenie', firstSentence],
+      ['Kadry sprawdzają kompletność danych', firstSentence],
+      ['Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia', deadline],
+      ['Po ponownej kontroli kadry zatwierdzają dane', lastSentence],
+      ['Po ponownej kontroli kadry generują skierowanie', lastSentence],
+    ])
+    expect(proposal.exceptions).toEqual([{ text: 'jeśli czegoś brakuje.', evidence: firstSentence, status: 'supported' }])
+    expect(proposal.questions).toEqual([{
+      text: 'Którego kroku dotyczy warunek „jeśli czegoś brakuje”?',
+      evidence: firstSentence,
+      status: 'question',
+    }])
+  })
+
+  it('keeps the object of a check and the clear condition for a single action', () => {
+    const transcript = 'Kadry sprawdzają, czy kierownik wysyła formularz i dołącza kartę. Kadry wysyłają przypomnienie, jeśli brakuje potwierdzenia.'
+    const { steps, exceptions, questions } = proposeLocalWorkshop(transcript)
+    expect(steps.map(({ text }) => text)).toEqual([
+      'Kadry sprawdzają, czy kierownik wysyła formularz i dołącza kartę',
+      'Kadry wysyłają przypomnienie, jeśli brakuje potwierdzenia',
+    ])
+    expect(exceptions.map(({ text }) => text)).toEqual(['jeśli brakuje potwierdzenia.'])
+    expect(questions).toEqual([])
+  })
+
   it('retains exact evidence with Polish speaker labels and identifies conditional work', () => {
     const transcript = [
       '1. [00:12] HR: Kadry sprawdzają dane. Kierownik dopisuje stanowisko.',

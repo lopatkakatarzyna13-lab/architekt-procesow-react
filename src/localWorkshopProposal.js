@@ -8,6 +8,11 @@ const uncertain = /(?<!\p{L})(?:nie (?:wiem(?:y)?|wiadomo|znamy|pamiętam(?:y)?|
 const followUpNote = /(?<!\p{L})do (?:ustalenia|wyjaśnienia|potwierdzenia)(?!\p{L})/iu
 const hypothetical = /(?<!\p{L})(?:gdyby|można by|może|możemy|moglibyśmy|powin\p{L}*|warto|planuj\p{L}*|żeby|chciał\p{L}*)(?!\p{L})/iu
 const condition = /^(?:jeśli|jeżeli|gdy|kiedy|w przypadku|przy braku|po otrzymaniu|po zatwierdzeniu|dopiero po)\b/iu
+const trailingCondition = /,\s*((?:jeśli|jeżeli|gdy|kiedy|w przypadku|przy braku)\b.*)$/iu
+const dependentClause = /^(?:czy|że|żeby|aby|bo|ponieważ|choć|chociaż|który|która|które|którego|jak|co|zanim|gdyby)\b/iu
+const activitySeparator = /,\s*|\s+(?:i|oraz)\s+/giu
+const negation = /(?:^|\s)nie\s+$/iu
+const deadlineAction = /(?<!\p{L})(?:mam|ma|mają|mamy|masz|macie)\s+(?:(?:\d+|jeden|jedną|dwa|dwie|trzy|cztery|pięć|sześć|siedem|osiem|dziewięć|dziesięć|kilka|kilkanaście)\s+)?(?:minut\p{L}*|godzin\p{L}*|dni|dzień|tygodn\p{L}*|tydzień|miesiąc\p{L}*|miesięc\p{L}*|dob\p{L}*)(?:\s+(?:robocz\p{L}*|kalendarzow\p{L}*))?\s+na\s+\p{L}/iu
 const action = new RegExp(String.raw`(?<!\p{L})(?:${[
   'wysył', 'przesył', 'sprawdz', 'zatwierdz', 'uzupełni', 'wypełni', 'rozpatruj', 'weryfikuj', 'generuj', 'przekazuj',
   'odsył', 'zwrac', 'wrac', 'zapisuj', 'wpisuj', 'dopisuj', 'wprowadz', 'rejestruj', 'potwierdz', 'informuj', 'otrzymuj',
@@ -23,6 +28,37 @@ const maxExceptions = 20
 
 function tidy(text) {
   return text.trim().replace(/\s+/g, ' ')
+}
+
+function findAction(text) {
+  const verb = action.exec(text)
+  const deadline = deadlineAction.exec(text)
+  return deadline && (!verb || deadline.index < verb.index) ? deadline : verb
+}
+
+function splitActivities(text) {
+  const activities = []
+  let start = 0
+  let sharedPrefix = ''
+  for (const separator of text.matchAll(activitySeparator)) {
+    const nextStart = separator.index + separator[0].length
+    const tail = text.slice(nextStart)
+    if (condition.test(tail) || dependentClause.test(tail)) break
+    const following = findAction(tail.split(activitySeparator, 1)[0])
+    if (!following) continue
+    const current = text.slice(start, separator.index).trim()
+    const verb = findAction(current)
+    if (!verb) continue
+
+    const prefix = current.slice(0, verb.index)
+    const comma = separator[0].startsWith(',')
+    if (!comma && (following.index !== 0 || !(sharedPrefix || prefix) || negation.test(prefix))) continue
+    activities.push(sharedPrefix + current)
+    sharedPrefix = comma ? '' : sharedPrefix || prefix
+    start = nextStart
+  }
+  activities.push(sharedPrefix + text.slice(start))
+  return activities
 }
 
 export function proposeLocalWorkshop(transcript) {
@@ -62,7 +98,7 @@ export function proposeLocalWorkshop(transcript) {
         pendingQuestion = null
       }
 
-      if (uncertain.test(text) || (followUpNote.test(text) && !action.test(text))) {
+      if (uncertain.test(text) || (followUpNote.test(text) && !findAction(text))) {
         add('questions', pendingQuestion?.text ?? `Do wyjaśnienia — ${text}`, evidence)
         pendingQuestion = null
         continue
@@ -76,7 +112,7 @@ export function proposeLocalWorkshop(transcript) {
       const conditional = condition.test(text)
       const clauseStart = conditional ? text.indexOf(',') + 1 : 0
       const clause = text.slice(clauseStart)
-      const verb = action.exec(clause)
+      const verb = findAction(clause)
       if (conditional && !verb && /^dopiero po /iu.test(text)) {
         add('exceptions', text, evidence)
         pendingQuestion = null
@@ -84,9 +120,34 @@ export function proposeLocalWorkshop(transcript) {
       if (!verb || hypothetical.test(text.slice(0, clauseStart + verb.index))) continue
       pendingQuestion = null
 
-      const negated = /(?:^|\s)nie\s+$/iu.test(clause.slice(0, verb.index))
+      const negated = negation.test(clause.slice(0, verb.index))
       if (negated || conditional) add('exceptions', text, evidence)
-      if (!negated) add('steps', text.replace(/[.!]+$/, ''), evidence)
+      if (negated) continue
+
+      const activities = conditional ? [text] : splitActivities(text)
+      const lastIndex = activities.length - 1
+      const finalCondition = conditional ? null : trailingCondition.exec(activities[lastIndex])
+      if (finalCondition) {
+        add('exceptions', finalCondition[1], evidence)
+        if (activities.length > 1) {
+          activities[lastIndex] = activities[lastIndex].slice(0, finalCondition.index)
+          const wording = finalCondition[1].replace(/[.!]+$/, '')
+          add('questions', `Którego kroku dotyczy warunek „${wording}”?`, evidence)
+        }
+      }
+      for (const activity of activities) {
+        // Each suggestion retains the full original sentence as evidence.
+        const activityVerb = findAction(activity)
+        if (!activityVerb) continue
+        const prefix = activity.slice(0, activityVerb.index)
+        if (hypothetical.test(prefix)) continue
+        if (!conditional && negation.test(prefix)) {
+          add('exceptions', activity, evidence)
+          continue
+        }
+        const name = activity[0].toLocaleUpperCase('pl') + activity.slice(1).replace(/[.!]+$/, '')
+        add('steps', name, evidence)
+      }
     }
   }
   if (pendingQuestion) add('questions', pendingQuestion.text, pendingQuestion.evidence)

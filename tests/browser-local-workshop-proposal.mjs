@@ -31,7 +31,24 @@ const scenarios = [
     exception: /po otrzymaniu uzupełnienia ponownie sprawdzam kompletność/i,
     outsideAsIs: /naliczanie wynagrodzeń|ścieżka eskalacji/i,
   },
+  {
+    name: 'Krótka próba skierowania',
+    transcript: 'Kierownik wysyła zgłoszenie, kadry sprawdzają kompletność danych, jeśli czegoś brakuje. Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia.\nPo ponownej kontroli kadry zatwierdzają dane i generują skierowanie.',
+    first: 'Kierownik wysyła zgłoszenie',
+    corrected: 'Kierownik wysyła zgłoszenie do kadr',
+    next: 'Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia',
+    question: /którego kroku dotyczy warunek/i,
+    exception: /jeśli czegoś brakuje/,
+    outsideAsIs: /sprawdzają kompletność danych, jeśli czegoś brakuje/i,
+  },
 ]
+
+async function readTranscript(scenario) {
+  if (scenario.transcript) return scenario.transcript
+  const doc = await readFile(new URL(`../docs/pilot-2.0/${scenario.file}`, import.meta.url), 'utf8')
+  return doc.split(`## ${scenario.heading}\n\n`)[1].split('\n## ')[0].trim()
+    .replace(/\*\*Głos ([AB])\.\*\*/g, 'Głos $1:')
+}
 
 async function openWorkshop(profile) {
   const context = await chromium.launchPersistentContext(profile, { headless: true })
@@ -51,9 +68,7 @@ async function checkScenario(scenario) {
   const profile = await mkdtemp(join(tmpdir(), 'architekt-local-proposal-'))
   let context
   try {
-    const doc = await readFile(new URL(`../docs/pilot-2.0/${scenario.file}`, import.meta.url), 'utf8')
-    const transcript = doc.split(`## ${scenario.heading}\n\n`)[1].split('\n## ')[0].trim()
-      .replace(/\*\*Głos ([AB])\.\*\*/g, 'Głos $1:')
+    const transcript = await readTranscript(scenario)
     const firstVisit = await openWorkshop(profile)
     context = firstVisit.context
     let page = firstVisit.page
