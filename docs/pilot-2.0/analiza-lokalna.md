@@ -1,5 +1,7 @@
 # Analiza warsztatu — lokalny prototyp
 
+Ten dokument opisuje prototyp z wywołaniem OpenAI. Szkic AS-IS przetwarzany w przeglądarce jest dostępny w [warsztacie lokalnym](warsztat-lokalny.md#szkic-as-is-z-zapisanej-transkrypcji).
+
 Ta wersja jest przeznaczona wyłącznie do testów lokalnych i nie jest gotowa do publicznego wdrożenia. Dostawca AI: OpenAI Responses API; domyślny model `gpt-4.1-mini`. Można go zmienić zmienną `OPENAI_MODEL`. Korzystanie z API może wymagać osobnej konfiguracji rozliczeń i wiązać się z kosztami. Konto ChatGPT nie jest automatycznie konfiguracją klucza API.
 
 W kompilacji podglądu przycisk analizy jest domyślnie wyłączony; lokalny serwer deweloperski go udostępnia. Ustawienie `VITE_WORKSHOP_AI_ENABLED=true` jest przeznaczone dopiero dla wersji z osobno zabezpieczonym backendem. Samo ustawienie tej flagi nie wdraża backendu ani nie zapewnia bezpieczeństwa.
@@ -11,7 +13,7 @@ W kompilacji podglądu przycisk analizy jest domyślnie wyłączony; lokalny ser
 
 Serwer nasłuchuje tylko na `127.0.0.1`, dopuszcza wyłącznie żądania z lokalnego adresu Vite oraz jedno żądanie naraz. Limit tekstu dla analizy wynosi 20 000 znaków. Odpowiedź zawierająca przypisany dowód, którego nie ma w tekście, jest odrzucana. Cytat nie gwarantuje jednak, że interpretacja jest poprawna: wynik musi sprawdzić człowiek. Wynik można poprawić i zapisać ręcznie w przeglądarce, po wcześniejszym zapisaniu transkrypcji. Jest przypisany do dokładnej wersji tekstu i nie jest automatycznie przenoszony do procesu. Po zmianie transkrypcji poprzedni wynik nie jest pokazywany jako aktualny; jego zastąpienie wymaga potwierdzenia.
 
-Bez klucza API można wybrać „Opracuj ręcznie” i samodzielnie dodawać, edytować i usuwać kroki, role, decyzje oraz pytania. Nie jest to test automatycznej analizy. Transkrypcja i propozycja są przechowywane w przeglądarce oddzielnie od snapshotu biblioteki procesów i nie synchronizują się między urządzeniami.
+W podglądzie tego prototypu bez klucza API można użyć opcji „Opracuj ręcznie”. Transkrypcja i propozycja są przechowywane w przeglądarce oddzielnie od danych biblioteki procesów.
 
 Klucz pozostaje na serwerze; transkrypcja jest przesyłana do dostawcy po potwierdzeniu. Żądanie ustawia `store: false`, co nie zastępuje sprawdzenia polityk dostawcy, wymagań klienta, retencji innych danych oraz uprawnień przed użyciem rzeczywistych danych. Dla publicznej wersji należy osobno zaprojektować logowanie, autoryzację, limity, kontrolę kosztów, retencję i bezpieczne wdrożenie. Nie wystawiać tego serwera w internecie.
 

@@ -1,6 +1,6 @@
 # Pierwsza próba warsztatu bez internetu
 
-Wersja lokalna działa na laptopie. Pozwala ręcznie opracować ustalenia, zapisać proces i wrócić do niego po zamknięciu przeglądarki. Analiza AI i połączenie z Supabase są w tej wersji wyłączone. Do próby użyj fikcyjnych danych.
+Wersja lokalna działa na laptopie. Pozwala nagrać warsztat, zapisać transkrypcję, przygotować szkic AS-IS i wrócić do pracy po zamknięciu przeglądarki. Do próby użyj fikcyjnych danych.
 
 ## Przed warsztatem
 
@@ -37,6 +37,16 @@ Przed pierwszym użyciem przygotuj FFmpeg, `whisper-cli` i wielojęzyczny model 
 3. Porównaj tekst z dźwiękiem i kliknij „Zapisz transkrypcję”. Jeśli tekst już istnieje, aplikacja prosi o zgodę na zastąpienie. Jeżeli w trakcie rozpoznawania zmienisz tekst lub ustalenia, aplikacja nie podmienia ich automatycznie.
 
 Przycisk działa pod `http://127.0.0.1:4173` po uruchomieniu `npm run workshop:local`. Plik może mieć do 160 MiB, a wynik do 100 000 znaków. W przypadku dłuższego nagrania dostępna jest także [transkrypcja pobranego pliku z terminala](../pierwszy-warsztat-plan.md#transkrypcja-pobranego-nagrania).
+
+## Szkic AS-IS z zapisanej transkrypcji
+
+1. W „Ustaleniach warsztatowych” zapisz tekst rozmowy i kliknij „Przygotuj szkic AS-IS lokalnie”. Przy zastąpieniu bieżącej propozycji aplikacja prosi o potwierdzenie.
+2. Porównaj proponowane kroki z fragmentami rozmowy. Popraw treść i oznacz ją jako sprawdzoną. Rozpoznane warunki działania znajdziesz w „Wyjątkach”, a wypowiedzi o brakujących ustaleniach w „Pytaniach”. Możesz dopisać własne pytanie.
+3. Zapisz propozycję. W trybie „Dodaj kroki samodzielnie” wybierz sprawdzone pozycje i kliknij „Przenieś wybrane kroki do AS-IS”. Sprawdź kolejność, wykonawców i połączenia kroków. Zapisz proces AS-IS, żeby wrócić do niego z biblioteki.
+
+Przeglądarka wydobywa zdania opisujące czynności za pomocą reguł dla języka polskiego. Przetwarza zapisany tekst bez API, klucza i pobierania modelu. Czynności zapisane w jednym zdaniu mogą trafić do jednej propozycji. Reguły mogą pominąć czynność wyrażoną skrótem lub słowami spoza słownika, a komentarz z rozmowy może pojawić się na liście kroków. Przy opisie kilku wariantów pomagają wyraźne nagłówki `AS-IS:` i `TO-BE:`. Wykonawców, systemy i ścieżki w BPMN ustala osoba przeglądająca proces. Szkic pokazuje do 30 kroków, 20 wyjątków i 20 pytań. Przy większej liczbie pozycji aplikacja prosi o przejrzenie dalszej części tekstu.
+
+Sprawdzono dwie fikcyjne transkrypcje. Z [rozmowy o skierowaniu](proba-transkrypcji-lokalnej.md#dialog-do-powtórzenia-próby) aplikacja zaproponowała 13 kroków, zachowała termin dwóch dni roboczych, warunek zatwierdzenia i pytanie o liczbę zgłoszeń. Z [rozmowy o przekazaniu danych do biura](02-dane-do-biura.md#transkrypcja) zaproponowała 6 kroków oraz zachowała pytanie o eskalację. W Chromium sprawdzono cytaty, poprawienie i zatwierdzenie treści, wybór kroków, zapis i ponowne otwarcie obu szkiców. Test zablokował dostęp do usług zewnętrznych i stwierdził brak takich żądań.
 
 ## Potwierdzenie techniczne
 

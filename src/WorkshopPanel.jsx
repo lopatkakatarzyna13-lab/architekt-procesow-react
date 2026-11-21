@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
 import { loadCurrentProcessId } from './processIdentity'
+import { proposeLocalWorkshop } from './localWorkshopProposal'
 import WorkshopRecorder from './WorkshopRecorder'
 import {
   deleteWorkshop, formatOpenWorkshopQuestions, getLocalWorkshopDate, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
@@ -15,6 +16,7 @@ const completeReview = (review) => review ? { ...emptyReview(), ...review } : nu
 const unreviewedProposal = (proposal) => Object.fromEntries(Object.keys(categories).map((key) =>
   [key, (proposal[key] ?? []).map(({ text, status, evidence }) => ({ text, status, evidence, reviewed: false }))]))
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
+const localWorkshop = import.meta.env.MODE === 'workshop-local'
 
 export default function WorkshopPanel({ processId, processName, dirtyRef, recordingRef, autosaveDraft = false, canTransferSteps = false, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
   const [initial] = useState(() => {
@@ -259,11 +261,12 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
     }
   }
 
-  const replaceReview = () => {
+  const replaceReview = (confirmSaved = false) => {
     if (analysis?.questions.some(({ answer, assignee, dueDate }) => answer?.trim() || assignee?.trim() || dueDate)) {
       return window.confirm('Nowa propozycja zastąpi bieżące ustalenia, w tym odpowiedzi na pytania, przypisane osoby i terminy. Kontynuować?')
     }
     if (manualReview && analysis) return window.confirm('Zastąpić ustalenia zapisane ręcznie?')
+    if (confirmSaved && analysis && !reviewDirty) return window.confirm('Zastąpić bieżącą propozycję warsztatu nowym szkicem AS-IS?')
     return !reviewDirty || window.confirm('Masz niezapisaną propozycję. Czy chcesz ją zastąpić?')
   }
   const startManual = () => {
@@ -275,6 +278,27 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
     setReviewDirty(true)
     dirtyRef.current = true
     setAnalysisMessage('Dodaj ustalenia ręcznie. Zapisz propozycję przed opuszczeniem ekranu.')
+  }
+
+  const prepareLocalProposal = () => {
+    if (dirty || !savedTranscript.trim() || !replaceReview(true)) return
+    if (!analysis) {
+      try {
+        const existing = loadWorkshopReview(localStorage, processId, savedTranscript)
+        if (existing.review && !window.confirm('Zastąpić zapisaną propozycję warsztatu nowym szkicem AS-IS?')) return
+      } catch {
+        setAnalysisMessage('Nie można odczytać zapisanej propozycji warsztatu.')
+        return
+      }
+    }
+    const proposal = proposeLocalWorkshop(savedTranscript)
+    revision.current += 1
+    setManualReview(false)
+    setAnalysis({ ...unreviewedProposal(proposal), source: 'local-transcript' })
+    setSelectedSteps([])
+    setReviewDirty(true)
+    dirtyRef.current = true
+    setAnalysisMessage(`Przygotowano lokalny szkic AS-IS. Proponowane kroki: ${proposal.steps.length}.`)
   }
 
   const analyze = async () => {
@@ -345,6 +369,13 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
     setAnalysisMessage('')
   }
 
+  const reviewItem = (category, index, reviewed) => {
+    if (category === 'steps' && !reviewed && analysis.source === 'local-transcript') {
+      setSelectedSteps((current) => current.filter((itemIndex) => itemIndex !== index))
+    }
+    updateItem(category, index, (item) => ({ ...item, reviewed }))
+  }
+
   const editItem = (category, index, value) => {
     if (category === 'steps') setSelectedSteps([])
     updateItem(category, index, (item) => ({
@@ -396,7 +427,10 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
 
   const transferSteps = () => {
     if (!analysis || reviewDirty || dirty || !selectedSteps.length || !canTransferSteps || !onTransferSteps) return
-    const result = onTransferSteps(analysis.steps.filter((_, index) => selectedSteps.includes(index)).map((item) => item.text))
+    const steps = analysis.steps.filter((item, index) => selectedSteps.includes(index)
+      && (analysis.source !== 'local-transcript' || item.reviewed === true))
+    if (!steps.length) return
+    const result = onTransferSteps(steps.map((item) => item.text))
     if (result.error) { setAnalysisMessage(result.error); return }
     setSelectedSteps([])
     setAnalysisMessage(`Dodano kroków: ${result.added}. Pominięto istniejących lub powtórzonych: ${result.skipped}. Sprawdź listę kroków poniżej i zapisz proces AS-IS.`)
@@ -443,7 +477,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       {draftError && <p role="alert">{draftError}</p>}
       <p>Kliknij „Opracuj ręcznie”, aby zapisywać ustalenia już w trakcie spotkania. Tekst rozmowy możesz wkleić i zapisać później. Zapisy trafiają do tej przeglądarki. Uważaj na dane poufne i osoby korzystające z tego urządzenia.</p>
       {analysisAvailable && <p>Analiza AI wysyła transkrypcję do OpenAI po Twoim potwierdzeniu. Wpisanie lub zapisanie tekstu nie uruchamia analizy.</p>}
-      <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} W trybie dodawania kroków możesz przenieść zapisane ustalenia do AS-IS.</p>
+      {!localWorkshop && <p>{analysisAvailable ? 'Możesz opracować ustalenia ręcznie lub przygotować propozycję z AI.' : 'Możesz opracować ustalenia ręcznie.'} W trybie dodawania kroków możesz przenieść zapisane ustalenia do AS-IS.</p>}
       {analysisAvailable && workshopAiRemote && <div>
         {!workshopAiClient ? <p>Analiza AI nie jest skonfigurowana.</p> : aiSession ? <div><p>Zalogowano do analizy AI.</p><button type="button" disabled={authBusy} onClick={signOutAi}>Wyloguj z analizy AI</button></div> : <form onSubmit={signInAi}>
           <label htmlFor="ai-email">E-mail do analizy AI</label>
@@ -454,7 +488,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
         </form>}
         {authMessage && <p role="status">{authMessage}</p>}
       </div>}
-      {import.meta.env.MODE === 'workshop-local' && <WorkshopRecorder processId={processId} recordingRef={recordingRef}
+      {localWorkshop && <WorkshopRecorder processId={processId} recordingRef={recordingRef}
         onTranscribe={readError || analyzing ? undefined : transcribeRecording} transcribing={transcribing}
         onCancelTranscription={() => localTranscription.current?.abort()} />}
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
@@ -463,15 +497,17 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       <input id="workshop-transcript-file" type="file" accept=".txt,text/plain" disabled={Boolean(readError) || analyzing} onChange={importTranscript} />
       <div className="workshop-actions">
         <button type="button" className="save-button" disabled={Boolean(readError) || !dirty} onClick={save}>Zapisz transkrypcję</button>
+        {localWorkshop && <button type="button" className="save-button"
+          disabled={Boolean(readError || reviewLoadError) || dirty || !savedTranscript.trim() || transcribing}
+          onClick={prepareLocalProposal}>Przygotuj szkic AS-IS lokalnie</button>}
         <button type="button" className="save-button" disabled={Boolean(readError) || analyzing || !analysisAvailable} onClick={analyze}>{analyzing ? 'Analizuję…' : 'Analizuj transkrypcję'}</button>
         {analyzing && <button type="button" className="back-button" onClick={stopWaiting}>Przerwij oczekiwanie</button>}
         <button type="button" className="back-button" disabled={Boolean(readError) || analyzing} onClick={startManual}>Opracuj ręcznie</button>
         <button type="button" className="back-button" disabled={analyzing} onClick={clearWorkshop}>Usuń dane warsztatu</button>
         <span>{transcript.length} / {MAX_TRANSCRIPT_LENGTH} znaków</span>
       </div>
-      {!analysisAvailable && <p>{import.meta.env.MODE === 'workshop-local'
-        ? 'Warsztat lokalny działa bez internetu. Analiza AI jest wyłączona.'
-        : 'Analiza AI nie jest jeszcze dostępna w tym podglądzie. Możesz opracować ustalenia ręcznie.'}</p>}
+      {localWorkshop && <p>Zapisz tekst rozmowy i przygotuj szkic AS-IS. Propozycje powstają w tej przeglądarce na podstawie reguł językowych.</p>}
+      {!analysisAvailable && !localWorkshop && <p>Analiza AI nie jest jeszcze dostępna w tym podglądzie. Możesz opracować ustalenia ręcznie.</p>}
       {dirty && <p role="status">Masz niezapisane zmiany w transkrypcji.</p>}
       {message && <p role="status">{message}</p>}
       {!dirty && savedAt && !message && <p>Transkrypcja została wcześniej zapisana na tym urządzeniu.</p>}
@@ -480,8 +516,12 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       {analysisMessage && <p role="status">{analysisMessage}</p>}
       {analysis && <div className="workshop-results">
         <h3>Propozycja do sprawdzenia</h3>
-        <p>Popraw lub dodaj ustalenia, w tym systemy i wyjątki. Systemy i wyjątki dodajesz ręcznie. Po sprawdzeniu zaznacz wybrane pozycje i zapisz propozycję. Zmiana treści cofa oznaczenie. Zapis pozostaje w tej przeglądarce.</p>
-        <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
+        {analysis.source === 'local-transcript'
+          ? <p>Porównaj kroki z cytatami, popraw ich treść i oznacz sprawdzone pozycje. Zapisz propozycję i wybierz kroki do przeniesienia. W AS-IS sprawdź kolejność, wykonawców i połączenia, w tym powroty.</p>
+          : <>
+            <p>Popraw lub dodaj ustalenia, w tym systemy i wyjątki. Systemy i wyjątki dodajesz ręcznie. Po sprawdzeniu zaznacz wybrane pozycje i zapisz propozycję. Zmiana treści cofa oznaczenie. Zapis pozostaje w tej przeglądarce.</p>
+            <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
+          </>}
         {Object.entries(categories).map(([key, title]) => <div key={key}>
           <h4>{title}</h4>
           {key === 'questions' && analysis.questions.length > 0 && <>
@@ -500,11 +540,13 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
           </>}
           {analysis[key].length > 0 && !(key === 'questions' && onlyOpenQuestions && !openQuestions.length) && <ul>{analysis[key].map((item, index) => (
             key === 'questions' && onlyOpenQuestions && item.answerConfirmed ? null : <li key={`${key}-${index}`}>
-            {key === 'steps' && canTransferSteps && <label><input type="checkbox" checked={selectedSteps.includes(index)} onChange={(event) => setSelectedSteps((current) => event.target.checked ? [...current, index] : current.filter((itemIndex) => itemIndex !== index))} /> Wybierz krok {index + 1} do przeniesienia</label>}
+            {key === 'steps' && canTransferSteps && <label><input type="checkbox" checked={selectedSteps.includes(index)}
+              disabled={analysis.source === 'local-transcript' && item.reviewed !== true}
+              onChange={(event) => setSelectedSteps((current) => event.target.checked ? [...current, index] : current.filter((itemIndex) => itemIndex !== index))} /> Wybierz krok {index + 1} do przeniesienia</label>}
             <label htmlFor={`review-${key}-${index}`}>{title} — pozycja {index + 1}</label>
             <textarea id={`review-${key}-${index}`} rows="2" value={item.text} onChange={(event) => editItem(key, index, event.target.value)} />
-            <small>{item.status === 'supported' ? 'Źródło propozycji: cytat z rozmowy' : item.status === 'assumption' ? 'Źródło propozycji: założenie lub wpis ręczny' : 'Rodzaj: pytanie'}</small>
-            <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => updateItem(key, index, (current) => ({ ...current, reviewed: event.target.checked }))} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
+            <small>{item.status === 'supported' ? 'Źródło propozycji: cytat z rozmowy' : item.status === 'question' ? 'Rodzaj: pytanie' : analysis.source === 'local-transcript' && item.evidence ? 'Treść poprawiona podczas sprawdzania' : 'Źródło propozycji: założenie lub wpis ręczny'}</small>
+            <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => reviewItem(key, index, event.target.checked)} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
             {key === 'questions' && <>
               <div className="workshop-question-followup">
                 <div>

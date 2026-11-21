@@ -25,9 +25,15 @@ $env:WORKSHOP_WHISPER_MODEL = 'C:\Narzedzia\whisper\ggml-small-q5_1.bin'
 npm.cmd run workshop:transcribe -- "C:\Warsztat\nagranie.webm" "C:\Narzedzia\whisper\ggml-small-q5_1.bin"
 ```
 
-Wczytaj zapisany TXT w „Ustaleniach warsztatowych” i sprawdź kluczowe ustalenia przed zapisem. Porównaj z nagraniem zwłaszcza role, terminy, warunki i skróty. Rozpoznawanie odbywa się po nagraniu, z poziomu terminala. [Wyniki i dialog do powtórzenia próby](pilot-2.0/proba-transkrypcji-lokalnej.md)
+Wczytaj zapisany TXT w „Ustaleniach warsztatowych” i sprawdź kluczowe ustalenia przed zapisem. Porównaj z nagraniem zwłaszcza role, terminy, warunki i skróty. Z zapisanego tekstu możesz przygotować szkic AS-IS w lokalnej wersji aplikacji. [Wyniki i dialog do powtórzenia próby](pilot-2.0/proba-transkrypcji-lokalnej.md)
 
 Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny.md). Zacznij od lokalnego adresu już na początku spotkania. Zapis pozostaje w tym samym profilu przeglądarki pod tym adresem.
+
+## Pakiety po próbie z 21 listopada
+
+1. **Transkrypcja do szkicu AS-IS** — lokalne propozycje kroków z cytatami, wyjątkami i pytaniami do sprawdzenia. Sprawdzono poprawianie, zatwierdzanie, wybór, przeniesienie i ponowne otwarcie na dwóch fikcyjnych procesach. [Instrukcja i zakres próby](pilot-2.0/warsztat-lokalny.md#szkic-as-is-z-zapisanej-transkrypcji).
+2. **AS-IS i analiza do TO-BE** — przenieść istniejące kroki oraz umożliwić wybór usprawnień bez nadpisywania rozpoczętego TO-BE. W próbie skierowania uwzględnić walidację wymaganych pól, powrót do formularza i kontrolę człowieka.
+3. **Próba od nagrania do raportu** — sprawdzić przebieg przez obie mapy BPMN, raport dla IT i przywrócenie pracy po utracie połączenia. Ocena techniczna i niezależny odbiór przez człowieka mają osobne wyniki.
 
 ## Punkt startowy — potwierdzone
 
