@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
@@ -17,7 +17,18 @@ let context
 
 async function openWorkshop() {
   server = await preview({ mode: 'workshop-local' })
-  context = await chromium.launchPersistentContext(profile, { headless: true })
+  context = await chromium.launchPersistentContext(profile, {
+    headless: true,
+    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+  })
+  await context.addInitScript(() => {
+    const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    navigator.mediaDevices.getUserMedia = async (...args) => {
+      const stream = await getUserMedia(...args)
+      window.testMicrophoneTrack = stream.getAudioTracks()[0]
+      return stream
+    }
+  })
   await context.route('**/*', (route) => {
     const { origin: requestOrigin, pathname } = new URL(route.request().url())
     if (requestOrigin === origin && !pathname.startsWith('/api/')) return route.continue()
@@ -97,7 +108,26 @@ try {
   await page.getByLabel('Kroki — pozycja 2').fill(nextStep)
   await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
   await page.getByText('Propozycja zapisana na tym urządzeniu.').waitFor()
+  await page.getByRole('button', { name: 'Rozpocznij nagranie' }).click()
+  await page.getByText('Trwa nagrywanie.', { exact: true }).waitFor()
+  assert.equal(await page.evaluate(() => window.testMicrophoneTrack.readyState), 'live')
+  const leave = page.waitForEvent('dialog').then(async (prompt) => {
+    assert.match(prompt.message(), /Nagranie dostępne tylko na tym ekranie/)
+    await prompt.dismiss()
+  })
+  await page.getByRole('button', { name: 'Moje procesy' }).click()
+  await leave
+  // The fake microphone needs a short interval to produce audio samples.
+  await new Promise((resolve) => setTimeout(resolve, 350))
+  await page.getByRole('button', { name: 'Zatrzymaj nagranie' }).click()
+  const recording = page.getByRole('link', { name: 'Pobierz nagranie' })
+  await recording.waitFor()
+  assert.equal(await page.evaluate(() => window.testMicrophoneTrack.readyState), 'ended')
+  const [download] = await Promise.all([page.waitForEvent('download'), recording.click()])
+  assert.match(download.suggestedFilename(), /^warsztat-.*\.webm$/)
+  assert.ok((await stat(await download.path())).size > 0)
   assert.deepEqual(remoteRequests, [])
+  console.log('PASS: local microphone recording, navigation protection, microphone release and audio download with external requests blocked')
   console.log('PASS: offline TXT import and validation, cancelled replacement, and workshop recovery after browser and server restart')
 } finally {
   try {

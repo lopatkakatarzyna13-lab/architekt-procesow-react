@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
 import { loadCurrentProcessId } from './processIdentity'
+import WorkshopRecorder from './WorkshopRecorder'
 import {
   deleteWorkshop, formatOpenWorkshopQuestions, getLocalWorkshopDate, loadWorkshop, loadWorkshopReview, MAX_TRANSCRIPT_LENGTH,
   MAX_WORKSHOP_ANSWER_LENGTH, MAX_WORKSHOP_ASSIGNEE_LENGTH,
@@ -15,7 +16,7 @@ const unreviewedProposal = (proposal) => Object.fromEntries(Object.keys(categori
   [key, (proposal[key] ?? []).map(({ text, status, evidence }) => ({ text, status, evidence, reviewed: false }))]))
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 
-export default function WorkshopPanel({ processId, processName, dirtyRef, autosaveDraft = false, canTransferSteps = false, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
+export default function WorkshopPanel({ processId, processName, dirtyRef, recordingRef, autosaveDraft = false, canTransferSteps = false, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
   const [initial] = useState(() => {
     let data
     try { data = loadWorkshop(localStorage, processId) }
@@ -408,6 +409,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
         </form>}
         {authMessage && <p role="status">{authMessage}</p>}
       </div>}
+      {import.meta.env.MODE === 'workshop-local' && <WorkshopRecorder recordingRef={recordingRef} />}
       <label htmlFor="workshop-transcript">Tekst rozmowy</label>
       <textarea id="workshop-transcript" rows="9" maxLength={MAX_TRANSCRIPT_LENGTH} value={transcript} disabled={Boolean(readError)} onChange={(event) => changeTranscript(event.target.value)} placeholder="Wklej transkrypcję warsztatu…" />
       <label htmlFor="workshop-transcript-file">Wczytaj transkrypcję z pliku TXT</label>

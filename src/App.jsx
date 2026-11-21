@@ -1060,6 +1060,7 @@ function StepsAsIs({
 function AsIsScreen({
   processId,
   workshopDirtyRef,
+  workshopRecordingRef,
   onTransferWorkshopSteps,
   onUseWorkshopFinding,
   onAddConnection,
@@ -1125,7 +1126,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} autosaveDraft canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} recordingRef={workshopRecordingRef} autosaveDraft canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
 
       {isStepsVariant ? (
         <>
@@ -3534,6 +3535,7 @@ function App() {
   const [libraryStorageUncertain, setLibraryStorageUncertain] = useState(false)
   const [libraryMessage, setLibraryMessage] = useState('')
   const workshopDirtyRef = useRef(false)
+  const workshopRecordingRef = useRef(false)
   const [decisionDraftFlags, setDecisionDraftFlags] = useState({})
   const decisionDraftDirty = Object.values(decisionDraftFlags).some(Boolean)
   const onBpmnDraftChange = (id, dirty) => setDecisionDraftFlags((current) => ({ ...current, [id]: dirty }))
@@ -3544,6 +3546,7 @@ function App() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [decisionDraftDirty])
   const canLeaveWorkshop = () => {
+    if (workshopRecordingRef.current && !window.confirm('Opuścić warsztat? Nagranie dostępne tylko na tym ekranie zostanie utracone.')) return false
     if (!workshopDirtyRef.current && !decisionDraftDirty) return true
     if (!window.confirm('Transkrypcja, propozycja warsztatu albo ustawienia BPMN mają niezapisane zmiany. Czy na pewno chcesz opuścić ten ekran i je utracić?')) return false
     setDecisionDraftFlags({})
@@ -5329,6 +5332,7 @@ try {
           <AsIsScreen
             processId={processIdentityState.id}
             workshopDirtyRef={workshopDirtyRef}
+            workshopRecordingRef={workshopRecordingRef}
             onTransferWorkshopSteps={transferWorkshopSteps}
             onUseWorkshopFinding={useWorkshopFinding}
             onAddConnection={addConnection}
