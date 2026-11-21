@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections } from './processConnections.js'
+import { addProcessConnection, getNextProcessStepId, getProcessConnections, removeProcessConnection, removeStepConnections, setNextProcessStep } from './processConnections.js'
 
 const steps = () => [{ id: 'a', name: 'Weryfikacja' }, { id: 'b', name: 'Uzupełnienie' }, { id: 'c', name: 'Zatwierdzenie' }]
 describe('additional process paths', () => {
+  it('uses the explicitly selected destination and falls back after resetting or deleting it', () => {
+    const input = setNextProcessStep(steps(), 'a', 'c')
+    expect(getNextProcessStepId(input, 0)).toBe('c')
+    expect(getNextProcessStepId(setNextProcessStep(input, 'a', ''), 0)).toBe('b')
+    expect(getNextProcessStepId(removeStepConnections(input, 'c'), 0)).toBe('b')
+    expect(() => setNextProcessStep(input, 'b', 'b')).toThrow()
+  })
   it('adds a labelled return without changing the original steps or their order', () => {
     const original = steps()
     const changed = addProcessConnection(original, 'c', 'a', ' Wróć do poprawy ')

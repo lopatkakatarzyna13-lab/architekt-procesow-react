@@ -82,6 +82,8 @@ Przygotowanie do przeglądu: [zakres i plan wycofania](przygotowanie-uruchomieni
 
 ## Rozbudowa i testy map BPMN dla IT i AI
 
+W edytorze AS-IS lub TO-BE sekcja „Przebieg podstawowy” pozwala wybrać następny krok. Aby kompletne zgłoszenie przeszło od kontroli do zatwierdzenia, ustaw zatwierdzenie jako następny krok po kontroli. Dodaj warunkową ścieżkę od kontroli do uzupełnienia danych, a po uzupełnieniu wybierz kontrolę jako następny krok. W sekcji „Decyzje do eksportu BPMN” wpisz pytanie „Czy dane są kompletne?” oraz warunek podstawowej ścieżki „Tak”. Zapisz decyzję i proces. Gotowa mapa ma jedną bramkę wyboru po kontroli i powrót do kontroli po uzupełnieniu.
+
 Punktem wyjścia są mapy z próby skierowania na badania wstępne. Pokazują start u kierownika, tory kierownika i HR, oddzielny basen osoby przyjmowanej, decyzję o kompletności, powrót po uzupełnienie oraz przekazanie skierowania. [Sprawdzony przebieg w Chromium](https://github.com/lopatkakatarzyna13-lab/architekt-procesow-react/actions/runs/44339216593).
 
 Wynik rozbudowy, diagnozę i ograniczenia opisano w [próbie przekazania map do IT i AI](proba-bpmn-przekazanie-it-ai-2026-11-19.md).

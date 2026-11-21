@@ -30,7 +30,7 @@ function DecisionForm({ step, onSave, onDraftChange, variant, workshopDecisions 
     setMessage(result?.error || `Zapisano ustawienia bramki. Zapisz proces ${variant}.`)
   }}>
     <h3>Decyzja po kroku: {step.name}</h3>
-    <p>Podaj pytanie oraz warunek przejścia do kolejnego kroku z listy. Opisy pozostałych przejść pochodzą z dodanych połączeń. Przyjmij, że możliwy jest wybór jednej ścieżki.</p>
+    <p>Podaj pytanie oraz warunek przejścia ścieżką podstawową. Jej cel możesz ustawić w sekcji „Przebieg podstawowy”. Opisy pozostałych ścieżek pochodzą z dodanych połączeń.</p>
     {workshopDecisions.length > 0 && <>
       <label htmlFor={`gateway-workshop-${step.id}`}>Sprawdzona decyzja z warsztatu — {step.name}</label>
       <select id={`gateway-workshop-${step.id}`} value={workshopQuestion} onChange={(event) => setSelectedDecision(event.target.value)}>

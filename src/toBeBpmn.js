@@ -13,9 +13,10 @@ export function copyAsIsBpmn(steps, externalSteps, externalLinks, copiedSteps) {
 
   return {
     steps: copiedSteps.map((copy, index) => {
-      const { extraConnections, bpmnDecision, bpmnLane, bpmnMessages } = steps[index]
+      const { nextStepId, extraConnections, bpmnDecision, bpmnLane, bpmnMessages } = steps[index]
       return {
         ...copy,
+        ...(nextStepId && { nextStepId: stepIds.get(nextStepId) }),
         ...(extraConnections?.length && {
           extraConnections: extraConnections.map((link) => ({ ...link, targetId: stepIds.get(link.targetId) })),
           bpmnDecision: { ...bpmnDecision },

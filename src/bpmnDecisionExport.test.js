@@ -9,6 +9,29 @@ const steps = () => [
 ]
 
 describe('explicit BPMN decisions', () => {
+  it('skips corrections for a complete case and routes corrections back without a second decision', async () => {
+    const input = [
+      { id: 'submit', name: 'Wyślij zgłoszenie' },
+      { id: 'check', name: 'Sprawdź dane', nextStepId: 'approve',
+        extraConnections: [{ targetId: 'fix', label: 'Brakuje danych' }],
+        bpmnDecision: { question: 'Czy dane są kompletne?', mainLabel: 'Dane kompletne' } },
+      { id: 'fix', name: 'Uzupełnij dane', nextStepId: 'check' },
+      { id: 'approve', name: 'Zatwierdź dane' },
+      { id: 'generate', name: 'Wygeneruj skierowanie' },
+    ]
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(await createDecisionBpmn({ steps: input }))
+    expect(warnings).toEqual([])
+    const node = (id) => rootElement.rootElements[0].flowElements.find((element) => element.id === id)
+    expect(node('Decision_2').outgoing.map((flow) => [flow.name, flow.targetRef.id]))
+      .toEqual([['Dane kompletne', 'Task_4'], ['Brakuje danych', 'Task_3']])
+    expect(node('Task_3').outgoing.map((flow) => flow.targetRef.id)).toEqual(['Merge_2'])
+    expect(node('Merge_2').outgoing[0].targetRef.id).toBe('Task_2')
+    expect(node('Task_4').outgoing[0].targetRef.id).toBe('Task_5')
+    expect(node('Decision_3')).toBeUndefined()
+    expect(getDecisionBpmnError(input.map((step) => step.id === 'fix' ? { ...step, nextStepId: 'missing' } : step))).toMatch(/następny krok/)
+    const withoutCorrection = input.map((step) => step.id === 'check' ? { ...step, extraConnections: [] } : step)
+    expect(getDecisionBpmnError(withoutCorrection)).toMatch(/prowadzącą do kroku/)
+  })
   it('keeps a split and its return path clear of an expanded report task', async () => {
     const input = steps().map((step) => ({ ...step, bpmnLane: 'HR' }))
     const xml = await createDecisionBpmn({

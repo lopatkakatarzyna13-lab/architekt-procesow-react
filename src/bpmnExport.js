@@ -10,7 +10,7 @@ export function getLinearBpmnError(steps) {
     const stepError = getBpmnStepError(step)
     if (stepError) return `Krok „${step.name}”. ${stepError}`
     ids.add(step.id)
-    if (step.extraConnections !== undefined && (!Array.isArray(step.extraConnections) || step.extraConnections.length)) {
+    if (step.nextStepId !== undefined || (step.extraConnections !== undefined && (!Array.isArray(step.extraConnections) || step.extraConnections.length))) {
       return 'Eksport BPMN nie obsługuje jeszcze dodatkowych połączeń. Nie można ich pominąć bez zmiany znaczenia procesu.'
     }
   }

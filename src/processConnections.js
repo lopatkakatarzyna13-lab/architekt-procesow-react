@@ -16,8 +16,31 @@ export function removeProcessConnection(steps, sourceId, index) {
 }
 
 export function removeStepConnections(steps, removedId) {
-  return steps.filter((step) => step.id !== removedId).map((step) => Array.isArray(step.extraConnections)
-    ? { ...step, extraConnections: step.extraConnections.filter((link) => link.targetId !== removedId) } : step)
+  return steps.filter((step) => step.id !== removedId).map((step) => {
+    const { nextStepId, extraConnections } = step
+    const remaining = Array.isArray(extraConnections)
+      ? { ...step, extraConnections: extraConnections.filter((link) => link.targetId !== removedId) } : { ...step }
+    if (nextStepId === removedId) delete remaining.nextStepId
+    return remaining
+  })
+}
+
+export function setNextProcessStep(steps, sourceId, targetId) {
+  if (!steps.some((step) => step.id === sourceId) ||
+      (targetId !== '' && (sourceId === targetId || !steps.some((step) => step.id === targetId)))) {
+    throw new Error('Wybierz dwa różne istniejące kroki albo kolejność z listy.')
+  }
+  return steps.map((step) => {
+    if (step.id !== sourceId) return step
+    const updated = { ...step }
+    if (targetId) updated.nextStepId = targetId
+    else delete updated.nextStepId
+    return updated
+  })
+}
+
+export function getNextProcessStepId(steps, index) {
+  return steps[index].nextStepId ?? steps[index + 1]?.id
 }
 
 export function getProcessConnections(steps) {

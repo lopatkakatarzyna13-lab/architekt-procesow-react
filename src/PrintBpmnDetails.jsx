@@ -9,6 +9,7 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
   const endpoint = (pool, id) => [poolNames.get(pool) ?? pool, externalSteps.find((step) => step.id === id)?.name].filter(Boolean).join(' / ')
   const extra = steps.flatMap((step) => (step.extraConnections || []).map((link) => ({ from: step.name, to: steps.find((item) => item.id === link.targetId)?.name || 'Nieznany krok', label: link.label })))
   const decisions = steps.filter((step) => step.extraConnections?.length && step.bpmnDecision)
+  const overrides = steps.filter((step) => step.nextStepId)
   const detailed = steps.some((step) => step.bpmnTaskType || getBpmnDocuments(step).length || bpmnStepFields.some(([id]) => step[id]))
   return <div className="print-bpmn-details">
     <div className="print-map-block">
@@ -20,6 +21,8 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
       <ol className="print-bpmn-step-list">{steps.map((step) => <li key={step.id}><strong>{step.name}</strong><BpmnStepSummary step={step} /></li>)}</ol>
     </>}
     {decisions.length > 0 && <><h4>Decyzje i ścieżki podstawowe</h4><ul>{decisions.map((step) => <li key={step.id}>{step.name}: {step.bpmnDecision.question} — ścieżka podstawowa: {step.bpmnDecision.mainLabel}</li>)}</ul></>}
+    {overrides.length > 0 && <><h4>Przebieg podstawowy poza kolejnością listy</h4><ul>{overrides.map((step) =>
+      <li key={step.id}>{step.name} → {steps.find((item) => item.id === step.nextStepId)?.name || 'Nieznany krok'}</li>)}</ul></>}
     {extra.length > 0 && <><h4>Dodatkowe przejścia</h4><ul>{extra.map((item, index) => <li key={index}>{item.from} → {item.to}: {item.label}</li>)}</ul></>}
     {messages.length > 0 && <><h4>Baseny i wiadomości</h4><p>Basen własny: {messages[0].primary}. Baseny zewnętrzne: {pools.map(([, name]) => name).join(', ')}.</p><ul>{messages.map((message) => {
       const own = steps.find((step) => step.id === message.stepId)?.name || 'Nieznany krok'

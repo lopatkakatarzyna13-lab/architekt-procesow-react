@@ -8,6 +8,19 @@ it('uses generic boundaries independently of the AS-IS process', () => {
   })
 })
 
+it('remaps explicitly selected next steps when copying a process with a return', () => {
+  const steps = [
+    { id: 'a', name: 'Sprawdzenie', nextStepId: 'c', extraConnections: [{ targetId: 'b', label: 'Brak' }],
+      bpmnDecision: { question: 'Czy kompletne?', mainLabel: 'Tak' } },
+    { id: 'b', name: 'Uzupełnienie', nextStepId: 'a' },
+    { id: 'c', name: 'Zatwierdzenie' },
+  ]
+  const copies = steps.map(({ name }, index) => ({ id: `copy-${index}`, name }))
+  const result = copyAsIsBpmn(steps, [], [], copies)
+  expect(result.steps.map((step) => step.nextStepId)).toEqual(['copy-2', 'copy-0', undefined])
+  expect(getDecisionBpmnError(result.steps)).toBe('')
+})
+
 
 it('copies gateways, lanes and cross-pool links with new step and action references', () => {
   const steps = [

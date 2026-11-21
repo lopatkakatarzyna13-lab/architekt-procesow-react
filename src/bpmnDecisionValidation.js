@@ -1,5 +1,6 @@
 import { getBpmnStepError } from './bpmnStepDetails.js'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
+import { getNextProcessStepId } from './processConnections.js'
 
 export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = []) {
   if (!Array.isArray(steps) || !steps.length) return 'Dodaj i zapisz co najmniej jeden krok.'
@@ -52,6 +53,7 @@ export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = 
   }
   if (externalSteps.some((action) => !poolKeys.has(actionPools.get(action.id)))) return 'Przypisz działania zewnętrzne do basenów i dodaj co najmniej jedną wiadomość dla każdego użytego basenu.'
   for (const step of steps) {
+    if (step.nextStepId !== undefined && (!ids.has(step.nextStepId) || step.nextStepId === step.id)) return `Sprawdź następny krok po „${step.name}”.`
     if (step.extraConnections !== undefined && !Array.isArray(step.extraConnections)) return 'Nieprawidłowe połączenia. Sprawdź proces przed eksportem.'
     const links = step.extraConnections || []
     if (!links.length) continue
@@ -64,6 +66,22 @@ export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = 
       if (names.includes(label)) return `Opisy wyjść z decyzji „${step.name}” muszą się różnić.`
       names.push(label)
     }
+  }
+  if (steps.some((step) => step.nextStepId)) {
+    const routes = new Map(steps.map((step, index) => [step.id, [
+      getNextProcessStepId(steps, index), ...(step.extraConnections || []).map((link) => link.targetId),
+    ]]))
+    const reachable = new Set()
+    const pending = [steps[0].id]
+    while (pending.length) {
+      const id = pending.pop()
+      if (reachable.has(id)) continue
+      reachable.add(id)
+      pending.push(...(routes.get(id) || []))
+    }
+    if (!reachable.has(undefined)) return 'Sprawdź połączenia. Żadna ścieżka nie prowadzi do końca procesu.'
+    const omitted = steps.find((step) => !reachable.has(step.id))
+    if (omitted) return `Dodaj ścieżkę prowadzącą do kroku „${omitted.name}”.`
   }
   return ''
 }

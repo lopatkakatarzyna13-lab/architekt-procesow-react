@@ -43,7 +43,7 @@ import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
 import { findingCategories, getToBeStepSuggestion } from './toBeSuggestions'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages.js'
-import { addProcessConnection, getProcessConnections, removeProcessConnection, removeStepConnections, setProcessDecision, setProcessLane } from './processConnections.js'
+import { addProcessConnection, getNextProcessStepId, getProcessConnections, removeProcessConnection, removeStepConnections, setNextProcessStep, setProcessDecision, setProcessLane } from './processConnections.js'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
 const STORAGE_KEY = 'architekt-procesow:scope'
 const AS_IS_STORAGE_KEY = 'architekt-procesow:as-is'
@@ -1065,6 +1065,7 @@ function AsIsScreen({
   onTransferWorkshopSteps,
   onUseWorkshopFinding,
   onAddConnection,
+  onSetNextStep,
   onRemoveConnection,
   onSaveBpmnDecision,
   onSaveBpmnLane,
@@ -1143,7 +1144,7 @@ function AsIsScreen({
           onMoveStep={onMoveStep}
           onCancelEdit={onCancelEdit}
         />
-        <ProcessConnections steps={steps} onAdd={onAddConnection} onRemove={onRemoveConnection} />
+        <ProcessConnections steps={steps} onAdd={onAddConnection} onSetNext={onSetNextStep} onRemove={onRemoveConnection} />
         <BpmnDecisions steps={steps} workshopDecisions={workshopDecisions} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
         <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
@@ -2166,6 +2167,7 @@ function ToBeScreen({
   onCancelEdit,
   onCopySteps,
   onAddConnection,
+  onSetNextStep,
   onRemoveConnection,
   onSaveBpmnDecision,
   externalSteps,
@@ -2242,7 +2244,7 @@ function ToBeScreen({
         onMove={onMoveStep}
       />
       <ToBeSummary steps={displaySteps} selectedCount={selectedFindingIds.length} />
-      {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
+      {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onSetNext={onSetNextStep} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
       <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
       <BpmnLanes steps={steps} variant="TO-BE" onSave={onSaveBpmnLane} onDraftChange={markBpmnDraft} />
       {steps.length > 0 && <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
@@ -2636,16 +2638,23 @@ function createProcessFlow(steps, scope, variant, findings) {
     },
   ]
   const orderedIds = [startId, ...steps.map((step) => `${variant}-step-${step.id}`), endId]
-  const edges = orderedIds.slice(0, -1).map((source, index) => ({
-    id: `${variant}-edge-${index}`,
-    source,
-    target: orderedIds[index + 1],
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#7164bd' },
-    style: { stroke: '#8f86c8', strokeWidth: 1.6 },
-    selectable: false,
-    focusable: false,
-    deletable: false,
-  }))
+  const stepIds = new Set(steps.map((step) => step.id))
+  const edges = orderedIds.slice(0, -1).map((source, index) => {
+    const sourceStep = steps[index - 1]
+    const targetId = sourceStep && getNextProcessStepId(steps, index - 1)
+    return {
+      id: `${variant}-edge-${index}`,
+      source,
+      target: stepIds.has(targetId) ? `${variant}-step-${targetId}` : orderedIds[index + 1],
+      ...(sourceStep?.nextStepId && { type: 'smoothstep' }),
+      ...(sourceStep?.extraConnections?.length && { label: sourceStep.bpmnDecision?.mainLabel }),
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#7164bd' },
+      style: { stroke: '#8f86c8', strokeWidth: 1.6 },
+      selectable: false,
+      focusable: false,
+      deletable: false,
+    }
+  })
   for (const connection of getProcessConnections(steps)) {
     edges.push({
       id: `extra-${connection.sourceId}-${connection.index}`,
@@ -2751,7 +2760,7 @@ function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings,
         </div>
       ) : (
         <>
-          {getProcessConnections(selectedSteps).length > 0 && <p>Linia ciągła pokazuje kolejność kroków, a przerywana — dodane przejście.</p>}
+          {getProcessConnections(selectedSteps).length > 0 && <p>Linia ciągła pokazuje przebieg podstawowy, a przerywana — dodatkową ścieżkę.</p>}
           {mapVariant === 'to-be' && (
             <div className="map-legend" aria-label="Legenda mapy TO-BE">
               <span className="legend-new">Nowy</span>
@@ -4370,6 +4379,10 @@ const openSavedProcess = (process) => {
     if (!result.error && source?.extraConnections?.length === 1) onBpmnDraftChange(sourceId, false)
     return result
   }
+  const saveNextStep = (sourceId, targetId) => {
+    try { return saveConnectionChange(setNextProcessStep(steps, sourceId, targetId)) }
+    catch (error) { return { error: error.message } }
+  }
   const saveBpmnDecision = (sourceId, question, mainLabel) => {
     try { return saveConnectionChange(setProcessDecision(steps, sourceId, question, mainLabel)) }
     catch (error) { return { error: error.message } }
@@ -5345,6 +5358,7 @@ try {
             onTransferWorkshopSteps={transferWorkshopSteps}
             onUseWorkshopFinding={useWorkshopFinding}
             onAddConnection={addConnection}
+            onSetNextStep={saveNextStep}
             onRemoveConnection={removeConnection}
             onSaveBpmnDecision={saveBpmnDecision}
             onSaveBpmnLane={saveBpmnLane}
@@ -5433,6 +5447,7 @@ try {
             onCancelEdit={cancelToBeStepEdit}
             onCopySteps={copyAsIsSteps}
             onAddConnection={(...args) => changeToBeConnections(addProcessConnection, ...args)}
+            onSetNextStep={(...args) => changeToBeConnections(setNextProcessStep, ...args)}
             onRemoveConnection={(...args) => changeToBeConnections(removeProcessConnection, ...args)}
             onSaveBpmnDecision={(...args) => changeToBeConnections(setProcessDecision, ...args)}
             externalSteps={toBeExternalSteps}

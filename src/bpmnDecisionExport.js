@@ -1,6 +1,7 @@
 import { addBpmnDataObjects, createBpmnTask, getBpmnDataLayout } from './bpmnTaskModel.js'
 import { createLinearBpmn, defaultBpmnTaskSize, getLinearBpmnError } from './bpmnExport.js'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
+import { getNextProcessStepId } from './processConnections.js'
 
 import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 export { getDecisionBpmnError } from './bpmnDecisionValidation.js'
@@ -11,7 +12,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   const hasLanes = steps.some((step) => step.bpmnLane?.trim())
   const messages = getBpmnMessages(steps)
   const hasCollaboration = messages.length > 0
-  if (!hasCollaboration && !hasLanes && !steps.some((step) => step.extraConnections?.length)) {
+  if (!hasCollaboration && !hasLanes && !steps.some((step) => step.extraConnections?.length || step.nextStepId)) {
     const linearError = getLinearBpmnError(steps)
     if (linearError) throw new Error(linearError)
     return createLinearBpmn({ steps, processName, startName, endName, getTaskSize })
@@ -23,8 +24,13 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   const end = moddle.create('bpmn:EndEvent', { id: 'EndEvent_1', name: endName?.trim() || 'Koniec' })
   const tasks = steps.map((step, index) => createBpmnTask(moddle, step, `Task_${index + 1}`))
   const indexes = new Map(steps.map((step, index) => [step.id, index]))
-  const inbound = steps.map(() => 1)
-  for (const step of steps) for (const link of step.extraConnections || []) inbound[indexes.get(link.targetId)] += 1
+  const nextIndexes = steps.map((_, index) => indexes.get(getNextProcessStepId(steps, index)))
+  const inbound = steps.map((_, index) => index === 0 ? 1 : 0)
+  steps.forEach((step, index) => {
+    const nextIndex = nextIndexes[index]
+    if (nextIndex !== undefined) inbound[nextIndex] += 1
+    for (const link of step.extraConnections || []) inbound[indexes.get(link.targetId)] += 1
+  })
   const merges = steps.map((_, index) => inbound[index] > 1 ? moddle.create('bpmn:ExclusiveGateway', { id: `Merge_${index + 1}`, gatewayDirection: 'Converging' }) : null)
   const splits = steps.map((step, index) => step.extraConnections?.length ? moddle.create('bpmn:ExclusiveGateway', { id: `Decision_${index + 1}`, name: step.bpmnDecision.question.trim(), gatewayDirection: 'Diverging' }) : null)
   const entry = (index) => merges[index] || tasks[index]
@@ -33,11 +39,13 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   add(start, entry(0))
   steps.forEach((step, index) => {
     if (merges[index]) add(merges[index], tasks[index])
-    const next = index + 1 < steps.length ? entry(index + 1) : end
-    if (!splits[index]) add(tasks[index], next)
+    const nextIndex = nextIndexes[index]
+    const next = nextIndex === undefined ? end : entry(nextIndex)
+    const routed = nextIndex !== undefined && nextIndex !== index + 1
+    if (!splits[index]) add(tasks[index], next, '', routed)
     else {
       add(tasks[index], splits[index])
-      add(splits[index], next, step.bpmnDecision.mainLabel.trim())
+      add(splits[index], next, step.bpmnDecision.mainLabel.trim(), routed)
       for (const link of step.extraConnections) add(splits[index], entry(indexes.get(link.targetId)), link.label.trim(), true)
     }
   })
@@ -59,7 +67,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   const alternateLabelWidth = 180
   let nextLabelY = routingTop + 8
   for (const link of links.filter(({ alternate }) => alternate)) {
-    const height = Math.ceil(link.label.length / 16) * 16 + 4
+    const height = link.label ? Math.ceil(link.label.length / 16) * 16 + 4 : 0
     const routeY = nextLabelY + height + 8
     alternateLayout.set(link, { y: nextLabelY, height, routeY })
     nextLabelY = routeY + 12
@@ -129,7 +137,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
       : y1 === y2 ? [{ x: startX, y: y1 }, { x: endX, y: y2 }]
         : [{ x: startX, y: y1 }, { x: (startX + endX) / 2, y: y1 }, { x: (startX + endX) / 2, y: y2 }, { x: endX, y: y2 }]
     const edge = moddle.create('bpmndi:BPMNEdge', { id: `Edge_${index + 1}`, bpmnElement: flow, waypoint: positions.map((point) => moddle.create('dc:Point', point)) })
-    if (alternate) {
+    if (alternate && flow.name) {
       const centerX = (positions[1].x + positions[2].x) / 2
       edge.label = moddle.create('bpmndi:BPMNLabel', {
         bounds: moddle.create('dc:Bounds', { x: centerX - alternateLabelWidth / 2, y: alternate.y, width: alternateLabelWidth, height: alternate.height }),
