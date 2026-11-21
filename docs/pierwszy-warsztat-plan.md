@@ -8,7 +8,21 @@ W sekcji „Ustalenia warsztatowe” wybierz „Opracuj ręcznie”. Dodaj pozyc
 
 Gotowy tekst można też wczytać przez „Wczytaj transkrypcję z pliku TXT”. Import obsługuje UTF-8 i działa lokalnie. Sprawdź tekst w edytorze i kliknij „Zapisz transkrypcję”. Przy podmianie tekstu aplikacja prosi o potwierdzenie.
 
-W trybie lokalnym sekcja „Nagranie warsztatu” pozwala uruchomić mikrofon, zatrzymać nagrywanie i odsłuchać materiał. Aplikacja przetwarza dźwięk w karcie przeglądarki. Pobierz plik przed zmianą widoku lub zamknięciem karty, aby zachować nagranie. Automatyczne rozpoznawanie mowy pozostaje osobnym etapem.
+W trybie lokalnym sekcja „Nagranie warsztatu” pozwala uruchomić mikrofon, zatrzymać nagrywanie i odsłuchać materiał. Aplikacja przetwarza dźwięk w karcie przeglądarki. Pobierz plik przed zmianą widoku lub zamknięciem karty, aby zachować nagranie.
+
+### Transkrypcja pobranego nagrania
+
+Polecenie `npm run workshop:transcribe -- "nagranie.webm" "ggml-base.bin"` rozpoznaje mowę po polsku i zapisuje TXT obok nagrania. Możesz podać trzeci argument z inną ścieżką pliku TXT. Skrypt wymaga zainstalowanych FFmpeg i `whisper-cli` oraz pobranego wcześniej wielojęzycznego modelu, np. `ggml-base.bin`. Programy można dodać do PATH albo wskazać ścieżki w zmiennych `FFMPEG_PATH` i `WHISPER_CLI_PATH`. Po przygotowaniu tych plików przetwarzanie odbywa się lokalnie. [FFmpeg](https://ffmpeg.org/download.html) · [Whisper.cpp](https://github.com/ggml-org/whisper.cpp)
+
+W PowerShellu, po rozpakowaniu programów, dostosuj przykładowe ścieżki i uruchom polecenie z katalogu aplikacji.
+
+```powershell
+$env:FFMPEG_PATH = 'C:\Narzedzia\ffmpeg\bin\ffmpeg.exe'
+$env:WHISPER_CLI_PATH = 'C:\Narzedzia\whisper\whisper-cli.exe'
+npm.cmd run workshop:transcribe -- "C:\Warsztat\nagranie.webm" "C:\Narzedzia\whisper\ggml-base.bin"
+```
+
+Wczytaj zapisany TXT w „Ustaleniach warsztatowych” i sprawdź kluczowe ustalenia przed zapisem. Rozpoznawanie odbywa się po nagraniu, z poziomu terminala.
 
 Na próbę bez internetu przygotuj [warsztat lokalny](pilot-2.0/warsztat-lokalny.md). Zacznij od lokalnego adresu już na początku spotkania. Zapis pozostaje w tym samym profilu przeglądarki pod tym adresem.
 
