@@ -19,5 +19,8 @@ export function createBrowserBpmn({ steps, externalSteps, externalLinks, scope }
     steps, externalSteps, externalLinks,
     processName: scope.processName, startName: scope.processStart, endName: scope.processEnd,
     getTaskSize,
+    getLabelHeight: (label, width) => Math.ceil(textRenderer.getDimensions(label, {
+      box: { width }, style: textRenderer.getExternalStyle(),
+    }).height),
   })
 }

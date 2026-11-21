@@ -53,6 +53,31 @@ describe('explicit BPMN decisions', () => {
     expect(label.x + label.width / 2).toBe((returnFlow.waypoint[1].x + returnFlow.waypoint[2].x) / 2)
   })
 
+  it('keeps the primary decision labels between the gateways and their next shapes', async () => {
+    const input = steps().map((step, index) => ({ ...step, bpmnLane: index === 1 ? 'Kierownik' : 'HR' }))
+    input[1].bpmnDecision.mainLabel = 'Tak, przekaż komplet danych do zatwierdzenia'
+    input[2].extraConnections = [{ targetId: 'a', label: 'Do doprecyzowania' }]
+    input[2].bpmnDecision = { question: 'Czy zatwierdzono?', mainLabel: 'Tak, zakończ rejestrację zgłoszenia' }
+    input[2].bpmnDocuments = [{ direction: 'output', name: 'Skierowanie', format: 'PDF' }]
+    const xml = await createDecisionBpmn({
+      steps: input,
+      getTaskSize: () => ({ width: 152, height: 100 }),
+    })
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+    expect(warnings).toEqual([])
+    const elements = rootElement.diagrams[0].plane.planeElement
+    for (const index of [1, 2]) {
+      const edge = elements.find(({ bpmnElement }) => bpmnElement.name === input[index].bpmnDecision.mainLabel)
+      const { x, y, width, height } = edge.label.bounds
+      const start = edge.waypoint[0]
+      const end = edge.waypoint.at(-1)
+      expect(x).toBeGreaterThan(start.x)
+      expect(x + width).toBeLessThan(end.x)
+      if (index === 1) expect(y).toBeGreaterThan(start.y)
+      else expect(y + height).toBeLessThan(start.y)
+    }
+  })
+
   it('creates named exclusive split, merge and the requested return with diagram coordinates', async () => {
     const { rootElement, warnings } = await new BpmnModdle().fromXML(await createDecisionBpmn({ steps: steps(), processName: 'Fikcyjny proces' }))
     expect(warnings).toEqual([])

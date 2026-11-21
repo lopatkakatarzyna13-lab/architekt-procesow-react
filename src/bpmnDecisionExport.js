@@ -6,7 +6,14 @@ import { getNextProcessStepId } from './processConnections.js'
 import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 export { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 
-export async function createDecisionBpmn({ steps, externalSteps = [], externalLinks = [], processName, startName, endName, getTaskSize = defaultBpmnTaskSize }) {
+const gatewaySize = 50
+const splitOffset = 45
+const mergeOffset = 100
+const mainLabelWidth = 112
+const mainLabelPadding = 10
+const estimateLabelHeight = (label) => Math.ceil(label.length / 12) * 16 + 4
+
+export async function createDecisionBpmn({ steps, externalSteps = [], externalLinks = [], processName, startName, endName, getTaskSize = defaultBpmnTaskSize, getLabelHeight = estimateLabelHeight }) {
   const error = getDecisionBpmnError(steps, externalSteps, externalLinks)
   if (error) throw new Error(error)
   const hasLanes = steps.some((step) => step.bpmnLane?.trim())
@@ -52,14 +59,25 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   const laneNames = hasLanes ? [...new Set(steps.map((step) => step.bpmnLane.trim()))] : []
   const dataLayout = getBpmnDataLayout(steps)
   const taskSizes = tasks.map((task, index) => getTaskSize(task.name, steps[index]))
+  const mainLabelGap = splitOffset + gatewaySize + mainLabelWidth + 2 * mainLabelPadding
+  const columnGap = (index, following) => {
+    const baseGap = dataLayout.height ? 280 : 360
+    const mergeSpace = merges[following] ? mergeOffset : 0
+    if (splits[index] && nextIndexes[index] === following) {
+      return Math.max(baseGap, taskSizes[index].width + mainLabelGap + mergeSpace)
+    }
+    const gatewaySpace = (splits[index] ? 115 : 24) + mergeSpace
+    return dataLayout.height ? Math.max(baseGap, taskSizes[index].width + gatewaySpace) : baseGap
+  }
   const taskColumns = [250]
   for (let index = 1; index < steps.length; index += 1) {
-    const gatewaySpace = (splits[index - 1] ? 115 : 24) + (merges[index] ? 100 : 0)
-    const gap = dataLayout.height ? Math.max(280, taskSizes[index - 1].width + gatewaySpace) : 360
-    taskColumns.push(taskColumns[index - 1] + gap)
+    taskColumns.push(taskColumns[index - 1] + columnGap(index - 1, index))
   }
   const maxTaskHeight = Math.max(...taskSizes.map(({ height }) => height))
-  const taskBandHeight = Math.max(180, maxTaskHeight + 100)
+  const mainLabelHeights = new Map(links.filter(({ label, alternate }) => label && !alternate)
+    .map((link) => [link, getLabelHeight(link.label, mainLabelWidth)]))
+  const mainLabelSpace = Math.max(0, ...mainLabelHeights.values()) + mainLabelPadding
+  const taskBandHeight = Math.max(180, maxTaskHeight + 100, 2 * (mainLabelSpace + 12))
   const laneHeight = taskBandHeight + dataLayout.height
   const laneTop = hasCollaboration ? 10 : 100
   const routingTop = hasLanes ? laneTop : hasCollaboration ? 10 : 0
@@ -72,22 +90,23 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     alternateLayout.set(link, { y: nextLabelY, height, routeY })
     nextLabelY = routeY + 12
   }
-  const baseUnlanedCenter = Math.max(240, maxTaskHeight / 2 + 110)
-  const firstShapeTop = hasLanes ? laneTop + (taskBandHeight - maxTaskHeight) / 2 : baseUnlanedCenter - maxTaskHeight / 2
+  const baseUnlanedCenter = Math.max(240, maxTaskHeight / 2 + 110, mainLabelSpace + 22)
+  const topClearance = Math.max(maxTaskHeight / 2, mainLabelSpace)
+  const firstShapeTop = hasLanes ? laneTop + taskBandHeight / 2 - topClearance : baseUnlanedCenter - topClearance
   const routingPadding = Math.max(0, nextLabelY - firstShapeTop)
   const unlanedCenter = baseUnlanedCenter + routingPadding
   const shiftX = hasCollaboration ? 40 : 0
   const centerY = (index) => hasLanes ? laneTop + taskBandHeight / 2 + routingPadding + laneNames.indexOf(steps[index].bpmnLane.trim()) * laneHeight : unlanedCenter
   const boxes = new Map()
   boxes.set(start, { x: 70 + shiftX, y: centerY(0) - 18, width: 36, height: 36 })
-  const endX = taskColumns.at(-1) + (dataLayout.height ? 280 : 360) + shiftX + dataLayout.offsets.at(-1) + dataLayout.lastExtra
+  const endX = taskColumns.at(-1) + columnGap(steps.length - 1) + shiftX + dataLayout.offsets.at(-1) + dataLayout.lastExtra
   boxes.set(end, { x: endX, y: centerY(steps.length - 1) - 18, width: 36, height: 36 })
   steps.forEach((_, index) => {
     const x = taskColumns[index] + shiftX + dataLayout.offsets[index]; const center = centerY(index)
     const size = taskSizes[index]
     boxes.set(tasks[index], { x, y: center - size.height / 2, ...size })
-    if (merges[index]) boxes.set(merges[index], { x: x - 100, y: center - 25, width: 50, height: 50 })
-    if (splits[index]) boxes.set(splits[index], { x: x + size.width + 45, y: center - 25, width: 50, height: 50 })
+    if (merges[index]) boxes.set(merges[index], { x: x - mergeOffset, y: center - gatewaySize / 2, width: gatewaySize, height: gatewaySize })
+    if (splits[index]) boxes.set(splits[index], { x: x + size.width + splitOffset, y: center - gatewaySize / 2, width: gatewaySize, height: gatewaySize })
   })
   const lanes = laneNames.map((name, index) => moddle.create('bpmn:Lane', { id: `Lane_${index + 1}`, name, flowNodeRef: [] }))
   if (hasLanes) {
@@ -124,13 +143,14 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
     })
   }
   const edges = flows.map((flow, index) => {
-    const { source, target } = links[index]
-    const alternate = alternateLayout.get(links[index])
+    const link = links[index]
+    const { source, target } = link
+    const alternate = alternateLayout.get(link)
     const a = boxes.get(source); const b = boxes.get(target)
     const startX = a.x + a.width; const endX = b.x; const y1 = a.y + a.height / 2; const y2 = b.y + b.height / 2
     // Alternate flows leave and enter the top of their gateways so a return
     // does not overlap the primary incoming and outgoing sequence flows.
-    const offset = approachOffset.get(links[index]) ?? 0
+    const offset = approachOffset.get(link) ?? 0
     const targetPortX = b.x + b.width / 2 + offset
     const positions = alternate
       ? [{ x: a.x + a.width / 2, y: a.y }, { x: a.x + a.width / 2, y: alternate.routeY }, { x: targetPortX, y: alternate.routeY }, { x: targetPortX, y: b.y + Math.abs(offset) }]
@@ -141,6 +161,13 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
       const centerX = (positions[1].x + positions[2].x) / 2
       edge.label = moddle.create('bpmndi:BPMNLabel', {
         bounds: moddle.create('dc:Bounds', { x: centerX - alternateLabelWidth / 2, y: alternate.y, width: alternateLabelWidth, height: alternate.height }),
+      })
+    } else if (mainLabelHeights.has(link)) {
+      const height = mainLabelHeights.get(link)
+      const x = (startX + endX - mainLabelWidth) / 2
+      const y = y2 < y1 ? y1 + mainLabelPadding : y1 - height - mainLabelPadding
+      edge.label = moddle.create('bpmndi:BPMNLabel', {
+        bounds: moddle.create('dc:Bounds', { x, y, width: mainLabelWidth, height }),
       })
     }
     return edge
