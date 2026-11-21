@@ -222,6 +222,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, autosa
   }
   const startManual = () => {
     if (!replaceReview()) return
+    transcriptImport.current += 1
     setManualReview(!transcript.trim())
     setAnalysis(emptyReview())
     setSelectedSteps([])
