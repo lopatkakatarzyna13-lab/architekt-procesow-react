@@ -22,6 +22,12 @@ Wersja lokalna działa na laptopie. Pozwala ręcznie opracować ustalenia, zapis
 
 Krótka próba automatyczna zamyka kartę po zapisaniu pierwszego fragmentu i sprawdza odtwarzanie oraz pobranie po ponownym uruchomieniu przeglądarki. Próba 60 minut na Windows jest osobnym zadaniem pilotażowym.
 
+## Próba czasu nagrania na Windows
+
+Test w GitHub Actions uruchamia Chromium na Windows Server 2022 z wirtualnym mikrofonem. Sprawdza wariant 15 sekund i 60 minut rzeczywistego czasu. Po zatrzymaniu odtwarza i pobiera plik, a FFmpeg mierzy długość zdekodowanego dźwięku. Osobna próba zamyka kartę po około 27 sekundach i po ponownym uruchomieniu Chromium sprawdza odzyskaną część oraz podaje różnicę w sekundach. Przeglądarka podczas obu prób ma dostęp tylko do lokalnej aplikacji.
+
+Próba w CI sprawdza Windows i Chromium w kontrolowanych warunkach. Na laptopie używanym podczas spotkania pozostaje sprawdzenie fizycznego mikrofonu oraz zachowania przeglądarki przy ustawieniach zasilania tego urządzenia.
+
 ## Potwierdzenie techniczne
 
 Test w GitHub Actions uruchamia przygotowany build w Chromium, blokuje żądania poza aplikacją i sprawdza zapis tekstu, propozycji i kroków AS-IS. Następnie ponownie uruchamia serwer oraz przeglądarkę, odczytuje proces z biblioteki i dopisuje kolejne ustalenie. Konfiguracja testu zawiera fikcyjne zmienne zdalnych usług, żeby sprawdzić izolację wersji lokalnej.

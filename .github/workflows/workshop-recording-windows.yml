@@ -1,0 +1,47 @@
+name: Local workshop recording on Windows
+
+on:
+  push:
+    branches:
+      - feature/architekt-2-mvp
+    paths:
+      - .github/workflows/workshop-recording-windows.yml
+      - tests/browser-workshop-duration.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  recording:
+    name: Recording and recovery (${{ matrix.seconds }} s)
+    runs-on: windows-2022
+    timeout-minutes: 85
+    strategy:
+      fail-fast: false
+      matrix:
+        seconds: [15, 3600]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Prepare local workshop and Chromium
+        shell: pwsh
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install chromium --only-shell
+          npm run workshop:prepare
+      - name: Prepare FFmpeg
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          ffmpeg -version
+      - name: Record, decode and recover without external requests
+        env:
+          WORKSHOP_RECORD_SECONDS: ${{ matrix.seconds }}
+        run: node tests/browser-workshop-duration.mjs
