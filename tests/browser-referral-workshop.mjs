@@ -411,6 +411,10 @@ try {
   const pages = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
     .split('\f').map((page) => page.replace(/\s+/g, ' '))
   const text = pages.join(' ')
+  const recommendations = text.split('09 Rekomendacje').at(-1).split('10 Otwarte pytania po warsztacie')[0]
+  assert.ok(recommendations.includes('Kroki oznaczone jako możliwe do automatyzacji'))
+  assert.ok(recommendations.includes('Brak oznaczonych kroków TO-BE.'))
+  assert.ok(recommendations.includes(`Pomysły usprawnień z analizy ${improvement}`))
   if (enriched) {
     for (const [variant, document] of [['AS-IS', 'Zgłoszenie papierowe'], ['TO-BE', approvedRecord]]) {
       const mapPage = pages.find((page) => page.includes(`Mapa BPMN ${variant}`))

@@ -2548,7 +2548,7 @@ function ProcessComparison({ startMethod, asIsSteps, toBeSteps, stepComparison, 
     ['Nowe kroki', toBeSteps.filter((step) => step.stepType === 'Nowy').length],
     ['Zmienione kroki', toBeSteps.filter((step) => step.stepType === 'Zmieniony').length],
     ['Bez zmian', toBeSteps.filter((step) => step.stepType === 'Bez zmian').length],
-    ['Możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').length],
+    ['Oznaczone do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').length],
     ['Uwzględnione ustalenia', selectedCount],
   ]
 
@@ -3270,8 +3270,10 @@ function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
   const stepsByFinding = getToBeStepsByFinding(toBeSteps)
   const selectedIds = new Set(selectedFindingIds)
   const missingSteps = findings.filter(({ id }) => selectedIds.has(id) && !stepsByFinding.has(id))
+  const improvementIdeas = [...new Set(findings.map(({ improvement }) => improvement?.trim()).filter(Boolean))]
   const groups = [
-    ['Kroki możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').map((step) => step.name), 'Nie wskazano kroków możliwych do automatyzacji'],
+    ['Kroki oznaczone jako możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').map((step) => step.name), 'Brak oznaczonych kroków TO-BE.'],
+    ...(improvementIdeas.length ? [['Pomysły usprawnień z analizy', improvementIdeas]] : []),
     ['Ustalenia o wysokim wpływie', findings.filter((item) => item.impactLevel === 'Wysoki').map((item) => item.name), 'Nie zidentyfikowano ustaleń o wysokim wpływie'],
     ['Wąskie gardła', findings.filter((item) => item.category === 'Wąskie gardło').map((item) => item.name), 'Nie zidentyfikowano wąskich gardeł'],
     ['Ryzyka', findings.filter((item) => item.category === 'Ryzyko lub możliwość błędu').map((item) => item.name), 'Nie zidentyfikowano ryzyk'],
