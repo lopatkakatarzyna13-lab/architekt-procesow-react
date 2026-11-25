@@ -6,7 +6,7 @@ import { expect } from 'playwright/test'
 
 export const decisionScenarios = [
   ['Skierowanie próbne', 'Kadry sprawdzają kompletność zgłoszenia. Jeżeli brakuje danych, kierownik uzupełnia formularz. Zgłoszenie wraca do kadr do ponownej kontroli. Gdy dane są kompletne, kadry zatwierdzają skierowanie. Pracownik odbiera skierowanie na badania wstępne w formacie PDF przez portal.'],
-  ['Zestawienie do biura', 'HR: Sprawdzam, czy dane są kompletne. Zwracam zestawienie menedżerowi z prośbą o uzupełnienie. Po otrzymaniu uzupełnienia ponownie sprawdzam kompletność. Gdy dane są kompletne, przekazuję zestawienie nieobecności w formacie XLSX do biura e-mailem.'],
+  ['Zestawienie do biura', 'HR: Sprawdzam, czy dane są kompletne. Zwracam zestawienie menedżerowi z prośbą o uzupełnienie. Po otrzymaniu uzupełnienia ponownie sprawdzam kompletność. Gdy dane są kompletne, przekazuję zestawienie nieobecności w formacie XLSX do biura rachunkowego e-mailem.'],
 ]
 
 export async function checkWorkshopDecision(page, name, transcript) {
@@ -40,6 +40,22 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await documents.getByLabel('Nazwa dokumentu').fill(expectedDoc.corrected)
   await button('Zatwierdź dokument na mapie AS-IS').click()
   await expect(documents.getByRole('status')).toContainText(expectedDoc.corrected)
+  const prepareHandoff = button('Przygotuj przekazanie do innego basenu')
+  const external = page.getByLabel('Nazwa basenu zewnętrznego', { exact: true })
+  const partner = referral ? 'Agencja zatrudnienia' : 'Biuro rachunkowe'
+  await prepareHandoff.click()
+  await expect(page.getByLabel('Co jest przekazywane?')).toHaveValue(expectedDoc.corrected)
+  await expect(page.getByLabel('Kierunek wiadomości')).toHaveValue(referral ? 'incoming' : 'outgoing')
+  await expect(external).toHaveValue(referral ? '' : partner)
+  if (referral) {
+    await button('Dodaj wiadomość BPMN').click()
+    await expect(external).toBeFocused()
+    await external.fill(partner)
+  }
+  await prepareHandoff.click()
+  await expect(external).toHaveValue(partner)
+  await button('Dodaj wiadomość BPMN').click()
+  await expect(button('Wyczyść formularz wiadomości')).toHaveCount(0)
   await button('Pomiń propozycję decyzji').click()
   await expect(button('Zatwierdź decyzję i powrót w AS-IS')).toHaveCount(0)
   await button('Wróć do pominiętej propozycji decyzji').click()
@@ -88,6 +104,17 @@ export async function checkWorkshopDecision(page, name, transcript) {
       assert.ok(lanes.find((lane) => lane.name === owner).flowNodeRef.some((ref) => ref.id === 'Task_' + (index + 1)))
     })
   }
+  function verifyHandoff(root) {
+    const collaboration = root.rootElements.find((element) => element.$type === 'bpmn:Collaboration')
+    assert.equal(collaboration.messageFlows.length, 1)
+    const externalPool = collaboration.participants.find((participant) => participant.name === partner)
+    assert.ok(externalPool)
+    const flow = collaboration.messageFlows[0]
+    assert.equal(flow.name, expectedDoc.corrected)
+    assert.equal(referral ? flow.sourceRef : flow.targetRef, externalPool)
+    assert.equal((referral ? flow.targetRef : flow.sourceRef).id, 'Task_' + owners.length)
+  }
+  verifyHandoff(model.rootElement)
   verifyLanes(model.rootElement)
   assert.deepEqual(node('Decision_1').outgoing.map((flow) => [flow.name, flow.targetRef.id]), [['Tak', 'Task_4'], ['Braki', 'Task_2']])
   assert.equal(node('Task_3').outgoing[0].targetRef.outgoing[0].targetRef.id, 'Task_1')
@@ -99,13 +126,18 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await button('Zapisz analizę').click()
   await button('Przejdź do TO-BE').click()
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Skrócenie czasu korekty')
-  await button('Skopiuj kroki z AS-IS').click()
-  await button('Zatwierdź tory według wykonawców').click()
+  if (referral) await button('Skopiuj mapę BPMN z AS-IS').click()
+  else {
+    await button('Skopiuj kroki z AS-IS').click()
+    await button('Zatwierdź tory według wykonawców').click()
+  }
   await button('Zapisz proces TO-BE').click()
   const [targetDownload] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
   const targetPath = await targetDownload.path()
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', targetPath])
-  verifyLanes((await new BpmnModdle().fromXML(await readFile(targetPath, 'utf8'))).rootElement)
+  const targetRoot = (await new BpmnModdle().fromXML(await readFile(targetPath, 'utf8'))).rootElement
+  verifyLanes(targetRoot)
+  if (referral) verifyHandoff(targetRoot)
   await button('Przejdź do raportu').click()
   await page.getByLabel(/Nazwa osoby, roli lub zespołu/).fill('Koordynator próby')
   await button('Dodaj interesariusza').click()
@@ -114,6 +146,11 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await page.evaluate(() => { window.print = () => { window.decisionReportPrinted = true } })
   await button('Eksportuj do PDF').click()
   await page.waitForFunction(() => window.decisionReportPrinted)
+  const printedHandoff = await page.locator('.print-bpmn-image:not(.print-tobe-bpmn)').evaluate((image) => {
+    const svg = new DOMParser().parseFromString(decodeURIComponent(image.src.split(',')[1]), 'image/svg+xml')
+    return Boolean(svg.querySelector('[data-element-id="MessageFlow_1"]'))
+  })
+  assert.ok(printedHandoff, 'Mapa AS-IS do druku zawiera przepływ wiadomości')
   for (const selector of ['.print-bpmn-image:not(.print-tobe-bpmn)', '.print-tobe-bpmn']) {
     const labels = await page.locator(selector).evaluate((image) => {
       const svg = new DOMParser().parseFromString(decodeURIComponent(image.src.split(',')[1]), 'image/svg+xml')
@@ -125,7 +162,8 @@ export async function checkWorkshopDecision(page, name, transcript) {
   const pdf = await page.pdf({ format: 'A4', printBackground: true })
   const pages = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).split('\f')
   assert.ok(pages.join(' ').replace(/\s+/g, ' ').includes(expectedDoc.corrected), 'Zatwierdzona nazwa dokumentu w PDF')
+  assert.ok(pages.join(' ').replace(/\s+/g, ' ').includes(partner), 'Uczestnik przekazania w PDF')
   const diagram = pages.map((part) => part.replace(/\s+/g, ' ')).find((part) => part.includes('Mapa BPMN AS-IS'))?.split('Szczegóły kroków BPMN')[0]
   assert.ok(diagram?.includes('Braki') && diagram.includes('Tak'), 'Mapa AS-IS w PDF zawiera oba warunki')
-  console.log('PASS: ' + name + ' — decyzja, tory, dokument ' + expectedDoc.direction + ', format i kanał w obu BPMN, zapis i PDF')
+  console.log('PASS: ' + name + ' — dokument i przekazanie ' + (referral ? 'przychodzące' : 'wychodzące') + ', basen, właściwy krok, BPMN XSD i PDF')
 }

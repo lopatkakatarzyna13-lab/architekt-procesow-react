@@ -1121,7 +1121,12 @@ function AsIsScreen({
   onContinue,
 }) {
   const isStepsVariant = startMethod === 'steps'
+  const workshopMessageForm = useRef(null)
   const [workshopDecisionSource, setWorkshopDecisionSource] = useState(null)
+  const prepareWorkshopHandoff = (stepId, handoff) => {
+    if (bpmnDraftDirty || editingStepId) return 'Dokończ otwarty formularz kroku lub BPMN przed przygotowaniem wiadomości.'
+    return workshopMessageForm.current?.prepare(stepId, handoff)
+  }
   const workshopDecisions = workshopDecisionSource?.processId === processId ? workshopDecisionSource?.decisions : undefined
 
   return (
@@ -1149,7 +1154,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} recordingRef={workshopRecordingRef} autosaveDraft canTransferSteps={isStepsVariant} mapSteps={steps} onApplyDecision={onApplyWorkshopDecision} onApplyDocument={onApplyWorkshopDocument} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} recordingRef={workshopRecordingRef} autosaveDraft canTransferSteps={isStepsVariant} mapSteps={steps} onApplyDecision={onApplyWorkshopDecision} onApplyDocument={onApplyWorkshopDocument} onPrepareHandoff={prepareWorkshopHandoff} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
 
       {isStepsVariant ? (
         <>
@@ -1169,7 +1174,7 @@ function AsIsScreen({
         <BpmnDecisions steps={steps} workshopDecisions={workshopDecisions} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
         <BpmnLanes steps={steps} externalSteps={externalSteps} onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
-        <BpmnMessages steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
+        <BpmnMessages workshopRef={workshopMessageForm} steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={onBpmnDraftChange} variant="AS-IS" />
         <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>

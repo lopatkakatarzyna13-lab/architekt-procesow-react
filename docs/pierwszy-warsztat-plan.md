@@ -90,6 +90,10 @@ Po przeniesieniu sprawdzonych kroków do AS-IS zajrzyj do sekcji „Dokumenty z 
 
 Lokalne reguły rozpoznają m.in. skierowania, zestawienia, formularze i wnioski. Gdy nie ma propozycji, dokument można dodać w sekcji „Dokumenty i szczegóły wykonania” w edycji kroku.
 
+### Przekazanie dokumentu do innego basenu (Pakiet 10)
+
+Przy zatwierdzonym dokumencie z rozpoznaną czynnością wysyłki lub odbioru wybierz „Przygotuj przekazanie do innego basenu”, jeśli druga strona należy do innej organizacji. W formularzu wiadomości sprawdź krok, kierunek i zatwierdzoną nazwę dokumentu. Wybierz lub wpisz uczestnika, jeśli rozmowa nie wskazuje go jednoznacznie. Przy pierwszej wiadomości możesz zmienić proponowaną nazwę własnego basenu „Organizacja”. Wiadomość pojawi się na mapie po wybraniu „Dodaj wiadomość BPMN”. Zapisz AS-IS. Opcja „Skopiuj mapę BPMN z AS-IS” przenosi także przekazania do TO-BE.
+
 ### Podpowiedzi do TO-BE podczas warsztatu
 
 W edytorze kroku TO-BE wybierz „Powiązane usprawnienie”. Jeśli ustalenie ma kategorię i brakuje zapisanego pomysłu, edytor pokazuje podpowiedź opartą na tej kategorii, np. potwierdzenie odbioru przy problemie z przekazaniem. Przyciskiem „Uzupełnij puste pola propozycją” można przenieść nazwę, opis i rezultat do formularza. Wpisane wcześniej wartości zachowują się. Po przejrzeniu treści można ją poprawić, dodać krok i zapisać TO-BE zwykłą ścieżką. Kategoria „Inne” pozostawia miejsce na własny pomysł.

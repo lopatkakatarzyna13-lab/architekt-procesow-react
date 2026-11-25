@@ -49,7 +49,7 @@ export function workshopDocumentProposals(analysis, steps, original) {
     const document = documentFromActivity(source.text)
     if (!document) continue
     const matches = steps.filter((step) => normalize(step.name) === normalize(item.text))
-    if (matches.length === 1) proposals.push({ step: matches[0], evidence: item.evidence, document, sourceKey: document.direction + ':' + normalize(document.name) })
+    if (matches.length === 1) proposals.push({ step: matches[0], activity: source.text, evidence: item.evidence, document, sourceKey: document.direction + ':' + normalize(document.name) })
   }
   return proposals
 }
@@ -63,8 +63,12 @@ export function applyWorkshopDocument(steps, stepId, draft, sourceKey) {
   const documents = getBpmnDocuments(step)
   const existing = documents.filter((item) => (sourceKey && item.workshopSource === sourceKey) ||
     (item.direction === document.direction && normalize(item.name) === normalize(document.name)))
-  if (existing.some((item) => item.direction === document.direction && normalize(item.name) === normalize(document.name) &&
-    normalize(item.format ?? '') === normalize(document.format) && normalize(item.channel ?? '') === normalize(document.channel))) return steps
-  if (existing.length) throw new Error('Ten dokument ma już inne szczegóły. Sprawdź go w edycji kroku.')
-  return steps.map((item) => item === step ? { ...step, bpmnDocuments: [...documents, { ...document, workshopSource: sourceKey }] } : item)
+  const exact = existing.find((item) => item.direction === document.direction && normalize(item.name) === normalize(document.name) &&
+    normalize(item.format ?? '') === normalize(document.format) && normalize(item.channel ?? '') === normalize(document.channel))
+  if (exact && exact.workshopSource === sourceKey) return steps
+  if (existing.length && (!exact || existing.length > 1 || exact.workshopSource)) throw new Error('Ten dokument ma już inne szczegóły. Sprawdź go w edycji kroku.')
+  const next = exact
+    ? documents.map((item) => item === exact ? { ...item, workshopSource: sourceKey } : item)
+    : [...documents, { ...document, workshopSource: sourceKey }]
+  return steps.map((item) => item === step ? { ...step, bpmnDocuments: next } : item)
 }

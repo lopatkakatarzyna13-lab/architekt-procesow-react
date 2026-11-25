@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { getBpmnMessages } from './bpmnMessages.js'
+import { useImperativeHandle, useRef, useState } from 'react'
+import { getBpmnMessages, getExternalPools } from './bpmnMessages.js'
 
-export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemove, onDraftChange, variant = 'AS-IS' }) {
+export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemove, onDraftChange, workshopRef, variant = 'AS-IS' }) {
   const [stepId, setStepId] = useState('')
   const [primary, setPrimary] = useState('')
   const [external, setExternal] = useState('')
@@ -10,7 +10,24 @@ export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemov
   const [label, setLabel] = useState('')
   const [message, setMessage] = useState('')
   const list = getBpmnMessages(steps)
+  const externalInput = useRef(null)
+  const pools = getExternalPools(list)
   const dirty = Boolean(stepId || primary || external || direction || label)
+  useImperativeHandle(workshopRef, () => ({
+    prepare(id, handoff) {
+      if (dirty) return 'Najpierw dodaj lub wyczyść przygotowywaną wiadomość BPMN.'
+      setStepId(id)
+      setPrimary(list[0]?.primary || 'Organizacja')
+      setExternal(pools.find(([key]) => key === handoff.external.toLocaleLowerCase('pl'))?.[1] || handoff.external)
+      setDirection(handoff.direction)
+      setLabel(handoff.label)
+      setExternalStepId('')
+      setMessage('Sprawdź uczestników i kierunek przekazania. Wybierz „Dodaj wiadomość BPMN”, aby nanieść je na mapę.')
+      onDraftChange('message-form', true)
+      externalInput.current?.focus()
+      return ''
+    },
+  }))
   const update = (values) => onDraftChange('message-form', Object.values(values).some(Boolean))
   const reset = () => { setStepId(''); setPrimary(''); setExternal(''); setDirection(''); setLabel(''); setExternalStepId(''); onDraftChange('message-form', false) }
   const submit = (event) => {
@@ -32,7 +49,8 @@ export default function BpmnMessages({ steps, externalSteps = [], onAdd, onRemov
       <label htmlFor="message-primary">Nazwa basenu Twojego procesu</label>
       <input id="message-primary" value={primary} maxLength={100} required placeholder="np. Firma" onChange={(event) => { const v = event.target.value; setPrimary(v); update({ stepId, primary: v, external, direction, label }) }} />
       <label htmlFor="message-external">Nazwa basenu zewnętrznego</label>
-      <input id="message-external" value={external} maxLength={100} required placeholder="np. Biuro rachunkowe" onChange={(event) => { const v = event.target.value; setExternal(v); update({ stepId, primary, external: v, direction, label }) }} />
+      <input id="message-external" ref={externalInput} list={pools.length ? 'message-existing-pools' : undefined} value={external} maxLength={100} required placeholder="np. Biuro rachunkowe" onChange={(event) => { const v = event.target.value; setExternal(v); update({ stepId, primary, external: v, direction, label }) }} />
+      {pools.length > 0 && <datalist id="message-existing-pools">{pools.map(([key, name]) => <option key={key} value={name} />)}</datalist>}
       <label htmlFor="message-direction">Kierunek wiadomości</label>
       <select id="message-direction" value={direction} required onChange={(event) => { const v = event.target.value; setDirection(v); update({ stepId, primary, external, direction: v, label }) }}>
         <option value="">Wybierz kierunek</option><option value="outgoing">Mój proces wysyła do zewnętrznego uczestnika</option><option value="incoming">Mój proces otrzymuje od zewnętrznego uczestnika</option>
