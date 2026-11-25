@@ -14,14 +14,14 @@ function isWorkshopDueDate(value) {
 }
 
 function validStepDetails(step) {
-  return ['owner', 'system'].every((field) => step[field] === undefined || typeof step[field] === 'string')
+  return ['owner', 'system', 'description'].every((field) => step[field] === undefined || typeof step[field] === 'string')
 }
 
 export function validateWorkshopReview(review, transcript) {
   const errors = validateWorkshopProposal(review, transcript, { allowEmptyTranscript: true })
   if (errors.length) return errors
 
-  if (!review.steps.every(validStepDetails)) errors.push('Nieprawidłowy wykonawca lub system kroku.')
+  if (!review.steps.every(validStepDetails)) errors.push('Nieprawidłowy wykonawca, system lub opis kroku.')
   for (const question of review.questions) {
     if (question.answer !== undefined &&
       (typeof question.answer !== 'string' || question.answer.length > MAX_WORKSHOP_ANSWER_LENGTH)) {
@@ -210,13 +210,13 @@ export function appendWorkshopSteps(existingSteps, proposedSteps, createId) {
     const step = typeof proposed === 'string' ? { name: proposed } : proposed
     const name = step?.name
     if (typeof name !== 'string' || !name.trim()) throw new TypeError('Nazwa kroku nie może być pusta.')
-    if (!validStepDetails(step)) throw new TypeError('Nieprawidłowy wykonawca lub system kroku.')
+    if (!validStepDetails(step)) throw new TypeError('Nieprawidłowy wykonawca, system lub opis kroku.')
     const cleaned = name.trim()
     const normalized = normalize(cleaned)
     if (seen.has(normalized)) { skipped.push(cleaned); continue }
     const id = createId()
     if (typeof id !== 'string' || !id.trim() || existingSteps.some((step) => step?.id === id) || added.some((step) => step.id === id)) throw new Error('Nie udało się utworzyć identyfikatora kroku.')
-    added.push({ id, name: cleaned, description: '', owner: step.owner?.trim() ?? '', system: step.system?.trim() ?? '', result: '' })
+    added.push({ id, name: cleaned, description: step.description?.trim() ?? '', owner: step.owner?.trim() ?? '', system: step.system?.trim() ?? '', result: '' })
     seen.add(normalized)
   }
   return { steps: [...existingSteps, ...added], added, skipped }

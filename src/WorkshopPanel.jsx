@@ -433,7 +433,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       && (analysis.source !== 'local-transcript' || item.reviewed === true))
     if (!steps.length) return
     const result = onTransferSteps(steps.map((item) => analysis.source === 'local-transcript'
-      ? { name: item.text, owner: item.owner ?? '', system: item.system ?? '' }
+      ? { name: item.text, owner: item.owner ?? '', system: item.system ?? '', description: item.description ?? '' }
       : item.text))
     if (result.error) { setAnalysisMessage(result.error); return }
     setSelectedSteps([])
@@ -521,7 +521,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       {analysis && <div className="workshop-results">
         <h3>Propozycja do sprawdzenia</h3>
         {analysis.source === 'local-transcript'
-          ? <p>Porównaj nazwę kroku, wykonawcę i system z fragmentem rozmowy. Popraw dane i zaznacz „Sprawdzono treść” przy wybranym kroku. Pola do potwierdzenia możesz zostawić puste. Zapisz propozycję i przenieś wybrane kroki do AS-IS.</p>
+          ? <p>Porównaj nazwę kroku, wykonawcę, system i opis z fragmentem rozmowy. Popraw dane i zaznacz „Sprawdzono treść” przy wybranym kroku. Pola do potwierdzenia możesz zostawić puste. Zapisz propozycję i przenieś wybrane kroki do AS-IS.</p>
           : <>
             <p>Popraw lub dodaj ustalenia, w tym systemy i wyjątki. Systemy i wyjątki dodajesz ręcznie. Po sprawdzeniu zaznacz wybrane pozycje i zapisz propozycję. Zmiana treści cofa oznaczenie. Zapis pozostaje w tej przeglądarce.</p>
             <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
@@ -559,6 +559,13 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
                 {!item[field]?.trim() && <small id={`review-${field}-hint-${index}`}>Do potwierdzenia</small>}
               </div>)}
             </div>}
+            {key === 'steps' && analysis.source === 'local-transcript' && <>
+              <label htmlFor={`review-description-${index}`}>Opis czynności — krok {index + 1}</label>
+              <textarea id={`review-description-${index}`} rows="2" value={item.description ?? ''}
+                aria-describedby={!item.description?.trim() ? `description-hint-${index}` : undefined}
+                onChange={(event) => editItem(key, index, event.target.value, 'description')} />
+              {!item.description?.trim() && <small id={`description-hint-${index}`}>Do potwierdzenia</small>}
+            </>}
             <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => reviewItem(key, index, event.target.checked)} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
             {key === 'questions' && <>
               <div className="workshop-question-followup">

@@ -3,6 +3,28 @@ import { proposeLocalWorkshop } from './localWorkshopProposal'
 import { validateWorkshopReview } from './workshop'
 
 describe('local transcript suggestions', () => {
+  it('keeps the comparison criteria and the exact supporting exchange from one utterance', () => {
+    const text = 'HR: Specjalistka do spraw kadr porównuje kartę z rejestrem BHP.  Sprawdza datę wersji i zgodność z nazwą stanowiska.'
+    const { steps } = proposeLocalWorkshop(text)
+    expect(steps[0].description).toBe('Sprawdza datę wersji i zgodność z nazwą stanowiska.')
+    expect(steps[0].evidence).toBe(text)
+  })
+
+  it('does not assign a detail from another speaker, an alternative, or a shared condition', () => {
+    const { steps } = proposeLocalWorkshop([
+      'HR: Specjalistka porównuje kartę z rejestrem BHP.',
+      'Biuro: Sprawdza datę wersji.',
+      'Kadry wysyłają skierowanie przez formularz lub przez pocztę.',
+      'Kadry wysyłają skierowanie mailem, nie przez formularz.',
+      'Kierownik wysyła zgłoszenie, kadry sprawdzają dane, jeśli czegoś brakuje.',
+    ].join('\n'))
+    expect(steps.every((step) => step.description === '')).toBe(true)
+  })
+
+  it('places details only on the action that supplies them', () => {
+    const { steps } = proposeLocalWorkshop('Kadry wysyłają dane o premiach, biuro potwierdza odbiór. Kierownik uzupełnia kartę w ciągu dwóch dni roboczych.')
+    expect(steps.map((step) => step.description)).toEqual(['Dane o premiach.', '', 'W ciągu dwóch dni roboczych.'])
+  })
   it('splits the actions from the short referral recording and retains its deadline and unclear condition', () => {
     const firstSentence = 'Kierownik wysyła zgłoszenie, kadry sprawdzają kompletność danych, jeśli czegoś brakuje.'
     const deadline = 'Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia.'

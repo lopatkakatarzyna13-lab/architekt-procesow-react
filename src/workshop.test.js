@@ -248,13 +248,13 @@ describe('security: workshop retention and migration', () => {
 it('preserves existing AS-IS fields and skips duplicates when appending reviewed steps', () => {
   const existing = [{ id: 'old', name: 'Odbiór', owner: 'Biuro', system: 'ERP', description: 'Pierwotny opis' }]
   const proposals = [
-    { name: ' odbiór ', owner: 'HR', system: 'SAP' },
-    { name: 'Weryfikacja', owner: ' Kadry ', system: 'SAP HR' },
+    { name: ' odbiór ', owner: 'HR', system: 'SAP', description: 'Inny opis' },
+    { name: 'Weryfikacja', owner: ' Kadry ', system: 'SAP HR', description: '  Sprawdza datę wersji.  ' },
     { name: 'WERYFIKACJA', owner: '', system: '' },
   ]
   const result = appendWorkshopSteps(existing, proposals, () => 'new')
   expect(result.steps).toEqual([existing[0], {
-    id: 'new', name: 'Weryfikacja', owner: 'Kadry', system: 'SAP HR', description: '', result: '',
+    id: 'new', name: 'Weryfikacja', owner: 'Kadry', system: 'SAP HR', description: 'Sprawdza datę wersji.', result: '',
   }])
   expect(result.skipped).toEqual(['odbiór', 'WERYFIKACJA'])
 })

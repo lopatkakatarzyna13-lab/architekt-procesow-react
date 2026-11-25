@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,6 +19,8 @@ const scenarios = [
     firstDetails: ['kierownik', 'portal kadrowy'],
     nextDetails: ['Kierownik', ''],
     correctedOwner: 'Kierownik jednostki',
+    descriptions: ['Przez formularz w portalu kadrowym.', 'W ciągu dwóch dni roboczych.'],
+    editedDescription: 'Zgłoszenie trafia do kadr przez formularz w portalu kadrowym.',
     next: 'Kierownik uzupełnia ten sam formularz w ciągu dwóch dni roboczych',
     question: /nie znamy liczby zgłoszeń/,
     exception: /system nie generuje pliku PDF/,
@@ -31,6 +34,7 @@ const scenarios = [
     corrected: 'Menedżerowie wysyłają dane do HR do piątego dnia miesiąca',
     firstDetails: ['menedżerowie', ''],
     nextDetails: ['HR', 'Enova'],
+    descriptions: ['Dane o nieobecnościach i zatwierdzonych premiach.', ''],
     extraLine: 'HR: Zapisuję potwierdzenie w systemie Enova.',
     next: 'Zapisuję potwierdzenie w systemie Enova',
     question: /menedżer nie odpowiada przed terminem/,
@@ -72,6 +76,37 @@ async function openWorkshop(profile) {
   return { context, page }
 }
 
+async function verifyDescriptionInPdf(page, scenario, description) {
+  const button = (name) => page.getByRole('button', { name, exact: true })
+  await button('Przejdź do analizy').click()
+  await page.getByLabel(/Kategoria/).selectOption({ label: 'Wąskie gardło' })
+  await page.getByLabel(/Nazwa problemu lub obserwacji/).fill('Oczekiwanie na komplet danych')
+  await button('Dodaj ustalenie').click()
+  await button('Zapisz analizę').click()
+  await button('Przejdź do TO-BE').click()
+  await page.getByLabel(/Cel projektowanej zmiany/).fill('Sprawdzić kompletność danych')
+  await button('Skopiuj kroki z AS-IS').click()
+  await button('Zapisz proces TO-BE').click()
+  await button('Przejdź do raportu').click()
+  for (const [name, owner] of [[scenario.corrected, scenario.correctedOwner ?? scenario.firstDetails[0]], [scenario.next, scenario.nextDetails[0]]]) {
+    await page.getByLabel(`${name}: ${owner}`, { exact: true }).selectOption('RA')
+  }
+  await button('Zapisz raport').click()
+  await page.evaluate(() => { window.print = () => { window.workshopReportPrinted = true } })
+  await button('Eksportuj do PDF').click()
+  await page.waitForFunction(() => window.workshopReportPrinted)
+  await page.emulateMedia({ media: 'print' })
+  const pdf = await page.pdf({ format: 'A4', printBackground: true })
+  const text = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).replace(/\s+/g, ' ')
+  const section = text.match(/Obecny przebieg procesu przed zaprojektowaniem usprawnień\.(.*?)Najważniejsze ustalenia z analizy/u)?.[1]
+  assert.ok(section, 'PDF zawiera sekcję AS-IS')
+  const start = section.indexOf(scenario.corrected)
+  const end = section.indexOf(scenario.next, start + scenario.corrected.length)
+  assert.ok(start >= 0 && end > start, 'Oba kroki AS-IS w kolejności w PDF')
+  assert.ok(section.slice(start + scenario.corrected.length, end).includes(description), `Opis pod pierwszym krokiem w PDF: ${description}`)
+  console.log(`PASS: ${scenario.name} — reviewed description in the AS-IS section of the exported PDF`)
+}
+
 async function checkScenario(scenario) {
   const profile = await mkdtemp(join(tmpdir(), 'architekt-local-proposal-'))
   let context
@@ -100,6 +135,13 @@ async function checkScenario(scenario) {
     const nextIndex = stepNames.indexOf(scenario.next) + 1
     assert.ok(nextIndex > 1)
     const detail = (label, index) => page.getByLabel(`${label} — krok ${index}`, { exact: true })
+    if (scenario.descriptions) {
+      await expect(detail('Opis czynności', 1)).toHaveValue(scenario.descriptions[0])
+      await expect(detail('Opis czynności', nextIndex)).toHaveValue(scenario.descriptions[1])
+    } else {
+      await expect(detail('Opis czynności', 1)).toHaveValue('')
+      await expect(detail('Opis czynności', 1)).toHaveAccessibleDescription('Do potwierdzenia')
+    }
     for (const [index, [owner, system]] of [[1, scenario.firstDetails], [nextIndex, scenario.nextDetails]]) {
       await expect(detail('Wykonawca', index)).toHaveValue(owner)
       await expect(detail('System', index)).toHaveValue(system)
@@ -128,6 +170,13 @@ async function checkScenario(scenario) {
     await approve(nextIndex).check()
     await select(1).check()
     await select(nextIndex).check()
+    if (scenario.editedDescription) {
+      await detail('Opis czynności', 1).fill(scenario.editedDescription)
+      await expect(approve(1)).not.toBeChecked()
+      await expect(select(1)).toBeDisabled()
+      await approve(1).check()
+      await select(1).check()
+    }
     if (scenario.correctedOwner) {
       await detail('Wykonawca', 1).fill(scenario.correctedOwner)
       await expect(approve(1)).not.toBeChecked()
@@ -152,6 +201,11 @@ async function checkScenario(scenario) {
     await transfer.click()
     const checkTransferredDetails = async () => {
       const rows = page.locator('ol.steps-list > li')
+      if (scenario.descriptions) {
+        await expect(rows.first().locator('.step-details > p')).toHaveText(scenario.editedDescription ?? scenario.descriptions[0])
+        if (scenario.descriptions[1]) await expect(rows.nth(1).locator('.step-details > p')).toHaveText(scenario.descriptions[1])
+        else await expect(rows.nth(1).locator('.step-details > p')).toHaveCount(0)
+      }
       const expected = [
         [scenario.correctedOwner ?? scenario.firstDetails[0], scenario.firstDetails[1]],
         [scenario.nextDetails[0], scenario.correctedOwner ? 'Portal warsztatowy' : scenario.nextDetails[1]],
@@ -189,6 +243,7 @@ async function checkScenario(scenario) {
     await page.getByRole('button', { name: 'Przygotuj szkic AS-IS lokalnie' }).click()
     await expect(page.getByLabel('Kroki — pozycja 1', { exact: true })).toHaveValue(scenario.corrected)
     console.log(`PASS: ${scenario.name} — ${stepNames.length} proposals with source quotes, approval, selective transfer and recovery`)
+    if (scenario.descriptions) await verifyDescriptionInPdf(page, scenario, scenario.editedDescription ?? scenario.descriptions[0])
   } finally {
     try {
       await context?.close()

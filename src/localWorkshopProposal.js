@@ -118,6 +118,28 @@ function stepDetails(activity, speakerRole) {
   return { owner, system }
 }
 
+// Take a detail from the selected action, never from a neighbouring speaker.
+// Keep the source wording so dates, channels and qualifications survive review.
+const detailTail = /(?<!\p{L})(?:dane (?:o|dotyczące)|z prośbą o|przez formularz|za pomocą|na podstawie|w ciągu|w terminie)\s+.+$/iu
+const detailDeadline = /^do [\p{L}\d-]+ dnia miesiąca(?=\s)/iu
+const uncertainDetail = /(?<!\p{L})(?:albo|lub|chyba|prawdopodobnie|być może|raczej|czasem|czasami|niekiedy|zamiast|nie|bez)(?!\p{L})/iu
+
+function describeActivity(activity, verb) {
+  if (hypothetical.test(activity) || uncertainDetail.test(activity) || followUpNote.test(activity)) return ''
+  const tail = activity.slice(verb.index + verb[0].length).trim()
+  const match = detailTail.exec(tail)
+  if (match && /(?:tylko|wyłącznie|oprócz|poza)\s+$/iu.test(tail.slice(0, match.index))) return ''
+  const detail = match?.[0] || detailDeadline.exec(activity)?.[0]
+  if (!detail || /[,;:?!]/u.test(detail) || findAction(detail)) return ''
+  return detail[0].toLocaleUpperCase('pl') + detail.slice(1).replace(/[.!]+$/, '') + '.'
+}
+
+// A comparison can be clarified by explicit criteria in the very next sentence
+// of the same turn. Restrict the complement to criteria, so another actor,
+// action or alternative cannot be silently assigned to this step.
+const criterion = '(?:datę (?:wersji|ważności|wystawienia)|numer (?:wersji|dokumentu)|kompletność danych|zgodność z (?:nazwą stanowiska|oryginałem|rejestrem))'
+const clarifiesComparison = new RegExp('^Sprawdza ' + criterion + '(?: (?:i|oraz) ' + criterion + ')*[.!]?$', 'iu')
+
 export function proposeLocalWorkshop(transcript) {
   const sentences = new Intl.Segmenter('pl', { granularity: 'sentence' })
   const proposal = { steps: [], exceptions: [], questions: [] }
@@ -132,6 +154,7 @@ export function proposeLocalWorkshop(transcript) {
       if (category === 'steps') {
         const previous = proposal.steps.find((step) => step.text.toLocaleLowerCase('pl') === key)
         if (previous.owner.toLocaleLowerCase('pl') !== details.owner.toLocaleLowerCase('pl')) previous.owner = ''
+        if (previous.description !== details.description) previous.description = ''
       }
       return
     }
@@ -151,7 +174,8 @@ export function proposeLocalWorkshop(transcript) {
     const content = phaseLabel.test(utterance) ? utterance : utterance.replace(speakerLabel, '')
     const speaker = spoken.slice(0, spoken.length - content.length)
     const speakerRole = utterance.slice(0, utterance.length - content.length).replace(/:\s*$/, '').trim()
-    for (const { segment, index } of sentences.segment(content)) {
+    const segments = sentences.segment(content)
+    for (const { segment, index } of segments) {
       const raw = segment.trim()
       if (!raw) continue
       const evidence = index === 0 ? speaker + raw : raw
@@ -212,8 +236,17 @@ export function proposeLocalWorkshop(transcript) {
         }
         const name = activity[0].toLocaleUpperCase('pl') + activity.slice(1).replace(/[.!]+$/, '')
         const details = stepDetails(activity, speakerRole)
-        const quote = index > 0 && details.owner && details.owner === speakerRole
+        let quote = index > 0 && details.owner && details.owner === speakerRole
           ? speaker + content.slice(0, index + segment.trimEnd().length) : evidence
+        details.description = describeActivity(activity, activityVerb)
+        if (!conditional && details.owner && activities.length === 1 && /^porównuje$/iu.test(activityVerb[0])
+          && !uncertainDetail.test(activity) && !findAction(activity.slice(activityVerb.index + activityVerb[0].length))) {
+          const next = segments.containing(index + segment.length)
+          if (next && clarifiesComparison.test(tidy(next.segment))) {
+            details.description = tidy(next.segment)
+            quote += segment.slice(segment.trimEnd().length) + next.segment.trimEnd()
+          }
+        }
         add('steps', name, quote, details)
       }
     }
