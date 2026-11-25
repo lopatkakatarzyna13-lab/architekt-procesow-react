@@ -435,7 +435,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       && (analysis.source !== 'local-transcript' || item.reviewed === true))
     if (!steps.length) return
     const result = onTransferSteps(steps.map((item) => analysis.source === 'local-transcript'
-      ? { name: item.text, owner: item.owner ?? '', system: item.system ?? '', description: item.description ?? '' }
+      ? { name: item.text, owner: item.owner ?? '', system: item.system ?? '', description: item.description ?? '', ...(item.bpmnDeadline && { bpmnDeadline: item.bpmnDeadline }) }
       : item.text))
     if (result.error) { setAnalysisMessage(result.error); return }
     setSelectedSteps([])
@@ -567,6 +567,12 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
                 aria-describedby={!item.description?.trim() ? `description-hint-${index}` : undefined}
                 onChange={(event) => editItem(key, index, event.target.value, 'description')} />
               {!item.description?.trim() && <small id={`description-hint-${index}`}>Do potwierdzenia</small>}
+              {item.bpmnDeadline !== undefined && <>
+                <label htmlFor={`review-deadline-${index}`}>Termin wykonania — krok {index + 1}</label>
+                <input id={`review-deadline-${index}`} value={item.bpmnDeadline}
+                  onChange={(event) => editItem(key, index, event.target.value, 'bpmnDeadline')} />
+                <small>Możesz wyczyścić to pole. Jeśli zmieniasz termin, sprawdź też treść nazwy i opisu kroku.</small>
+              </>}
             </>}
             <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => reviewItem(key, index, event.target.checked)} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
             {key === 'questions' && <>

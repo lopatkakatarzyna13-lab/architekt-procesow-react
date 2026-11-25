@@ -124,6 +124,35 @@ const detailTail = /(?<!\p{L})(?:dane (?:o|dotyczące)|z prośbą o|przez formul
 const detailDeadline = /^do [\p{L}\d-]+ dnia miesiąca(?=\s)/iu
 const uncertainDetail = /(?<!\p{L})(?:albo|lub|chyba|prawdopodobnie|być może|raczej|czasem|czasami|niekiedy|zamiast|nie|bez)(?!\p{L})/iu
 
+const amount = '(?:[1-9]\\d{0,2}|jeden|jedn(?:ą|ej|ego)|dw(?:a|ie|óch)|trz(?:y|ech)|czter(?:y|ech)|pięć|pięciu|siedem|siedmiu)'
+const interval = amount + ' (?:dni|dzień|dnia|godzin(?:y|ę)?|minut(?:y|ę)?|tygodni(?:e)?)(?: (?:robocz|kalendarzow)(?:y|e|ych|ego))?'
+const relativeDeadline = new RegExp('(?:w ciągu|w terminie(?: do)?) ' + interval +
+  '(?: od (?:otrzymania|wpływu|przyjęcia|zwrotu|zgłoszenia|zatwierdzenia)(?: [\\p{L}-]+){0,4})?$', 'iu')
+const allottedTime = new RegExp('^(?:mam|ma|mają|mamy|masz|macie) (' + interval + ') na ', 'iu')
+const monthlyDeadline = /(?:najpóźniej )?do (?:[1-9]\d?\.?|pierwszego|drugiego|trzeciego|czwartego|piątego|dziesiątego|ostatniego) dnia(?: roboczego)? (?:każdego |następnego )?miesiąca/iu
+const ambiguousTiming = /(?<!\p{L})(?:zwykle|około|średnio|przeciętnie|czeka\p{L}*|oczekuj\p{L}*|trwa\p{L}*|zajmuj\p{L}*|czasu pracy|oczekiwania|od (?:\d+|dwóch) do)(?!\p{L})/iu
+
+function extractStepDeadline(activity, verb) {
+  const text = activity.replace(/[.!]+$/, '')
+  if (condition.test(text) || hypothetical.test(text) || uncertainDetail.test(text) ||
+      ambiguousTiming.test(text) || /[,;?]/u.test(text)) return ''
+  const before = text.slice(0, verb.index)
+  const after = text.slice(verb.index + verb[0].length)
+  if (findAction(after)) return ''
+  const month = monthlyDeadline.exec(text)
+  if (month) {
+    const actor = before.slice(month[0].length).trim()
+    if ((month.index === 0 && (!actor || roleName.test(actor)) && !/\b(?:w ciągu|w terminie|do godziny)\b/iu.test(after)) ||
+        (month.index > verb.index && month.index + month[0].length === text.length && !/\b(?:w ciągu|w terminie|do godziny)\b/iu.test(text.slice(0, month.index)))) return month[0]
+    return ''
+  }
+  if (deadlineAction.test(verb[0])) {
+    if (/\b(?:od|przed|po|jeśli|gdy|do|w terminie|w ciągu)\b/iu.test(after)) return ''
+    return allottedTime.exec(verb[0])?.[1] ?? ''
+  }
+  return relativeDeadline.exec(after)?.[0] ?? ''
+}
+
 function describeActivity(activity, verb) {
   if (hypothetical.test(activity) || uncertainDetail.test(activity) || followUpNote.test(activity)) return ''
   const tail = activity.slice(verb.index + verb[0].length).trim()
@@ -239,6 +268,8 @@ export function proposeLocalWorkshop(transcript) {
         let quote = index > 0 && details.owner && details.owner === speakerRole
           ? speaker + content.slice(0, index + segment.trimEnd().length) : evidence
         details.description = describeActivity(activity, activityVerb)
+        const deadline = activities.length === 1 ? extractStepDeadline(activity, activityVerb) : ''
+        if (deadline) details.bpmnDeadline = deadline
         if (!conditional && details.owner && activities.length === 1 && /^porównuje$/iu.test(activityVerb[0])
           && !uncertainDetail.test(activity) && !findAction(activity.slice(activityVerb.index + activityVerb[0].length))) {
           const next = segments.containing(index + segment.length)

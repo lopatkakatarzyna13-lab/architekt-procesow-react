@@ -167,6 +167,29 @@ describe('local transcript suggestions', () => {
     expect(questions.at(-1).text).toContain('do 30 kroków')
   })
 
+  it.each([
+    ['Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia.', 'dwa dni robocze'],
+    ['HR wysyła raport w ciągu 24 godzin od otrzymania zgłoszenia.', 'w ciągu 24 godzin od otrzymania zgłoszenia'],
+    ['Do piątego dnia miesiąca menedżerowie wysyłają HR dane o premiach.', 'Do piątego dnia miesiąca'],
+    ['Kadry zatwierdzają zestawienie do ostatniego dnia roboczego miesiąca.', 'do ostatniego dnia roboczego miesiąca'],
+  ])('proponuje termin przypisany do pojedynczej czynności: %s', (text, deadline) => {
+    const [step] = proposeLocalWorkshop(text).steps
+    expect(step.bpmnDeadline).toBe(deadline)
+    expect(step.evidence).toContain(deadline)
+  })
+
+  it.each([
+    'HR czeka na odpowiedź w ciągu dwóch dni roboczych.',
+    'Jeżeli kierownik nie odpowie w ciągu dwóch dni roboczych, kadry wysyłają przypomnienie.',
+    'Kierownik zwykle uzupełnia dane w ciągu dwóch dni.',
+    'Kadry sprawdzają dane przez dwie godziny.',
+    'Kierownik uzupełnia dane w ciągu dwóch dni albo do końca miesiąca.',
+    'Kadry zatwierdzają dane i wysyłają raport w ciągu dwóch dni.',
+    'HR sprawdza kompletność dokumentów. Dwa dni później kadry wysyłają raport.',
+  ])('nie zamienia obserwacji, oczekiwania ani niejednoznacznego warunku w termin: %s', (text) => {
+    expect(proposeLocalWorkshop(text).steps.every((step) => step.bpmnDeadline === undefined)).toBe(true)
+  })
+
   it('keeps conflicting speakers and alternative tools open for confirmation', () => {
     const transcript = 'HR: Wysyłam plik w SAP.\nBiuro: Wysyłam plik w SAP.\nKadry sprawdzają dane w SAP, czasem w Excelu.'
     const { steps } = proposeLocalWorkshop(transcript)

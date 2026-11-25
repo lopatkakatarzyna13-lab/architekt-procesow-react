@@ -94,6 +94,12 @@ Lokalne reguły rozpoznają m.in. skierowania, zestawienia, formularze i wnioski
 
 Przy zatwierdzonym dokumencie z rozpoznaną czynnością wysyłki lub odbioru wybierz „Przygotuj przekazanie do innego basenu”, jeśli druga strona należy do innej organizacji. W formularzu wiadomości sprawdź krok, kierunek i zatwierdzoną nazwę dokumentu. Wybierz lub wpisz uczestnika, jeśli rozmowa nie wskazuje go jednoznacznie. Przy pierwszej wiadomości możesz zmienić proponowaną nazwę własnego basenu „Organizacja”. Wiadomość pojawi się na mapie po wybraniu „Dodaj wiadomość BPMN”. Zapisz AS-IS. Opcja „Skopiuj mapę BPMN z AS-IS” przenosi także przekazania do TO-BE.
 
+### Termin wykonania z transkrypcji (Pakiet 11)
+
+W nowym lokalnym szkicu AS-IS przy kroku z rozpoznanym terminem pojawi się pole „Termin wykonania”. Porównaj je z cytatem, popraw lub wyczyść przed zatwierdzeniem kroku. Po przeniesieniu nowego kroku i zapisaniu procesu termin znajdziesz w szczegółach zadania BPMN i w raporcie dla IT. Skopiowanie kroku do TO-BE zachowuje termin. Jeśli krok już istnieje na mapie, jego termin można zmienić w edycji kroku.
+
+Reguły rozpoznają m.in. „w ciągu dwóch dni roboczych”, „ma dwa dni robocze na uzupełnienie” i „do piątego dnia miesiąca”. Termin jest opisem ustalenia warsztatowego. Pola czasu pracy i oczekiwania można uzupełnić osobno.
+
 ### Podpowiedzi do TO-BE podczas warsztatu
 
 W edytorze kroku TO-BE wybierz „Powiązane usprawnienie”. Jeśli ustalenie ma kategorię i brakuje zapisanego pomysłu, edytor pokazuje podpowiedź opartą na tej kategorii, np. potwierdzenie odbioru przy problemie z przekazaniem. Przyciskiem „Uzupełnij puste pola propozycją” można przenieść nazwę, opis i rezultat do formularza. Wpisane wcześniej wartości zachowują się. Po przejrzeniu treści można ją poprawić, dodać krok i zapisać TO-BE zwykłą ścieżką. Kategoria „Inne” pozostawia miejsce na własny pomysł.

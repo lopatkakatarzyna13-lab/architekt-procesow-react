@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, expect } from 'playwright/test'
+import { BpmnModdle } from 'bpmn-moddle'
 import { preview } from 'vite'
 import { checkWorkshopDecision, decisionScenarios } from './check-workshop-decision.mjs'
 
@@ -23,6 +24,7 @@ const scenarios = [
     descriptions: ['Przez formularz w portalu kadrowym.', 'W ciągu dwóch dni roboczych.'],
     editedDescription: 'Zgłoszenie trafia do kadr przez formularz w portalu kadrowym.',
     next: 'Kierownik uzupełnia ten sam formularz w ciągu dwóch dni roboczych',
+    deadline: { task: 2, proposed: 'w ciągu dwóch dni roboczych', approved: '2 dni robocze' },
     question: /nie znamy liczby zgłoszeń/,
     exception: /system nie generuje pliku PDF/,
     outsideAsIs: /obowiązkowe pola|integracja z rejestrem|OCR/i,
@@ -38,6 +40,7 @@ const scenarios = [
     descriptions: ['Dane o nieobecnościach i zatwierdzonych premiach.', ''],
     extraLine: 'HR: Zapisuję potwierdzenie w systemie Enova.',
     next: 'Zapisuję potwierdzenie w systemie Enova',
+    deadline: { task: 1, proposed: 'Do piątego dnia miesiąca', approved: 'Do piątego dnia miesiąca' },
     question: /menedżer nie odpowiada przed terminem/,
     exception: /po otrzymaniu uzupełnienia ponownie sprawdzam kompletność/i,
     outsideAsIs: /naliczanie wynagrodzeń|ścieżka eskalacji/i,
@@ -50,6 +53,7 @@ const scenarios = [
     firstDetails: ['Kierownik', ''],
     nextDetails: ['Kierownik', ''],
     next: 'Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia',
+    deadline: { task: 2, proposed: 'dwa dni robocze', approved: '' },
     question: /którego kroku dotyczy warunek/i,
     exception: /jeśli czegoś brakuje/,
     outsideAsIs: /sprawdzają kompletność danych, jeśli czegoś brakuje/i,
@@ -77,6 +81,24 @@ async function openWorkshop(profile) {
   return { context, page }
 }
 
+async function verifyDeadlineExport(page, scenario) {
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Pobierz BPMN 2.0', exact: true }).click()])
+  const path = await download.path()
+  execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path])
+  const { rootElement, warnings } = await new BpmnModdle().fromXML(await readFile(path, 'utf8'))
+  assert.deepEqual(warnings, [])
+  const process = rootElement.rootElements.find((item) => item.$type === 'bpmn:Process')
+  const tasks = process.flowElements.filter((item) => item.$instanceOf('bpmn:Task'))
+  assert.equal(tasks.length, 2)
+  for (const task of tasks) {
+    const details = task.documentation?.[0]?.text ?? ''
+    const lines = details.split('\n').filter((line) => line.startsWith('Termin wykonania:'))
+    const target = scenario.deadline.task === 1 ? scenario.corrected : scenario.next
+    assert.deepEqual(lines, task.name === target && scenario.deadline.approved ? ['Termin wykonania: ' + scenario.deadline.approved] : [])
+    assert.doesNotMatch(details, /^(?:Czas pracy|Czas oczekiwania):/mu)
+  }
+}
+
 async function verifyDescriptionInPdf(page, scenario, description) {
   const button = (name) => page.getByRole('button', { name, exact: true })
   await button('Przejdź do analizy').click()
@@ -88,6 +110,7 @@ async function verifyDescriptionInPdf(page, scenario, description) {
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Sprawdzić kompletność danych')
   await button('Skopiuj kroki z AS-IS').click()
   await button('Zapisz proces TO-BE').click()
+  await verifyDeadlineExport(page, scenario)
   await button('Przejdź do raportu').click()
   for (const [name, owner] of [[scenario.corrected, scenario.correctedOwner ?? scenario.firstDetails[0]], [scenario.next, scenario.nextDetails[0]]]) {
     await page.getByLabel(`${name}: ${owner}`, { exact: true }).selectOption('RA')
@@ -99,13 +122,22 @@ async function verifyDescriptionInPdf(page, scenario, description) {
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true })
   const text = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).replace(/\s+/g, ' ')
+  const lists = page.locator('.print-bpmn-step-list')
+  await expect(lists).toHaveCount(2)
+  for (const list of await lists.all()) {
+    const row = list.locator(':scope > li').nth(scenario.deadline.task - 1)
+    await expect(row.locator('dt', { hasText: 'Termin wykonania' })).toHaveCount(1)
+    await expect(row.getByText(scenario.deadline.approved, { exact: true })).toHaveCount(1)
+  }
+  assert.ok(text.toLocaleLowerCase('pl').includes('termin wykonania'), 'PDF zawiera pole terminu')
+  assert.ok(text.includes(scenario.deadline.approved), 'PDF zawiera sprawdzony termin')
   const section = text.match(/Obecny przebieg procesu przed zaprojektowaniem usprawnień\.(.*?)Najważniejsze ustalenia z analizy/u)?.[1]
   assert.ok(section, 'PDF zawiera sekcję AS-IS')
   const start = section.indexOf(scenario.corrected)
   const end = section.indexOf(scenario.next, start + scenario.corrected.length)
   assert.ok(start >= 0 && end > start, 'Oba kroki AS-IS w kolejności w PDF')
   assert.ok(section.slice(start + scenario.corrected.length, end).includes(description), `Opis pod pierwszym krokiem w PDF: ${description}`)
-  console.log(`PASS: ${scenario.name} — reviewed description in the AS-IS section of the exported PDF`)
+  console.log(`PASS: ${scenario.name} — opis w PDF, termin przy właściwym kroku AS-IS i TO-BE w obu BPMN i raporcie`)
 }
 
 async function checkScenario(scenario) {
@@ -171,6 +203,16 @@ async function checkScenario(scenario) {
     await approve(nextIndex).check()
     await select(1).check()
     await select(nextIndex).check()
+    const deadlineIndex = scenario.deadline.task === 1 ? 1 : nextIndex
+    const deadline = detail('Termin wykonania', deadlineIndex)
+    await expect(deadline).toHaveValue(scenario.deadline.proposed)
+    if (scenario.deadline.proposed !== scenario.deadline.approved) {
+      await deadline.fill(scenario.deadline.approved)
+      await expect(approve(deadlineIndex)).not.toBeChecked()
+      await expect(select(deadlineIndex)).toBeDisabled()
+      await approve(deadlineIndex).check()
+      await select(deadlineIndex).check()
+    }
     if (scenario.editedDescription) {
       await detail('Opis czynności', 1).fill(scenario.editedDescription)
       await expect(approve(1)).not.toBeChecked()
@@ -239,6 +281,8 @@ async function checkScenario(scenario) {
     await checkTransferredDetails()
     await expect(persistedSteps.nth(0)).toContainText(scenario.corrected)
     await expect(persistedSteps.nth(1)).toContainText(scenario.next)
+    await expect(detail('Termin wykonania', deadlineIndex)).toHaveValue(scenario.deadline.approved)
+    await verifyDeadlineExport(page, scenario)
 
     page.once('dialog', (dialog) => dialog.dismiss())
     await page.getByRole('button', { name: 'Przygotuj szkic AS-IS lokalnie' }).click()
