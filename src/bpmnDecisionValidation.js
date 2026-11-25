@@ -2,6 +2,12 @@ import { getBpmnStepError } from './bpmnStepDetails.js'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
 import { getNextProcessStepId } from './processConnections.js'
 
+// A route can be reviewed while lanes, documents or external pools are still being edited.
+export function getDecisionGraphError(steps) {
+  return getDecisionBpmnError(steps.map(({ id, name, nextStepId, nextIsDecision, extraConnections, bpmnDecision }) =>
+    ({ id, name, nextStepId, nextIsDecision, extraConnections, bpmnDecision })))
+}
+
 export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = []) {
   if (!Array.isArray(steps) || !steps.length) return 'Dodaj i zapisz co najmniej jeden krok.'
   if (!Array.isArray(externalSteps) || externalSteps.some((step) => !step || typeof step.id !== 'string' || !step.id || typeof step.name !== 'string' || !step.name.trim() || step.name.trim().length > 100 || (step.participant !== undefined && (typeof step.participant !== 'string' || !step.participant.trim() || step.participant.trim().length > 100))) || new Set(externalSteps.map((step) => step.id)).size !== externalSteps.length) return 'Sprawdź listę działań zewnętrznych.'

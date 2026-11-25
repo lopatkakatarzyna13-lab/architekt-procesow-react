@@ -16,9 +16,9 @@ const required = 'Stanowisko i warunki pracy'
 const originalDescription = 'Kierownik podaje dane stanowiska.'
 const finding = 'Brak danych w zgłoszeniu'
 const constraint = 'Kadry zachowują kontrolę merytoryczną.'
-const decision = 'Czy wszystkie pola obowiązkowe są uzupełnione?'
-const successfulPath = 'Tak, dane kompletne'
-const returnPath = 'Nie, wróć do formularza'
+const decision = 'Czy zgłoszenie jest kompletne?'
+const successfulPath = 'Tak — dane kompletne'
+const returnPath = 'Nie — uzupełnij dane'
 const server = await preview({ mode: 'workshop-local' })
 let browser
 
@@ -119,13 +119,15 @@ try {
   await expect(toBeList.locator('li')).toHaveCount(4)
   await expect(toBeList).not.toContainText(oldIntake)
 
-  await choose('Od kroku', `2. ${validation}`)
-  await choose('Do kroku', `1. ${form}`)
-  await field('Kiedy następuje przejście?').fill(returnPath)
-  await button('Dodaj połączenie').click()
-  await field(`Pytanie decyzji — ${validation}`).fill(decision)
-  await field(`Kiedy kontynuować podstawową ścieżkę — ${validation}`).fill(successfulPath)
-  await button(`Zapisz decyzję BPMN — ${validation}`).click()
+  const proposal = page.getByRole('region', { name: `Propozycja decyzji TO-BE — ${validation}` })
+  const accept = proposal.getByRole('button', { name: 'Zatwierdź decyzję i powrót w TO-BE' })
+  await expect(proposal.getByLabel(successfulPath).locator('option:checked')).toHaveText(review)
+  await expect(proposal.getByLabel(returnPath).locator('option:checked')).toHaveText(form)
+  await proposal.getByLabel(returnPath).selectOption({ label: review })
+  await expect(accept).toBeDisabled()
+  await proposal.getByLabel(returnPath).selectOption({ label: form })
+  await accept.click()
+  await expect(proposal).toHaveCount(0)
   await button('Zapisz proces TO-BE').click()
   await expect(page.getByText('Proces TO-BE został zapisany', { exact: true })).toBeVisible()
   await page.reload()
@@ -133,6 +135,14 @@ try {
   await expect(toBeList.locator('li').first()).toContainText(originalDescription)
   await expect(toBeList.locator('li')).toHaveCount(4)
   await expect(page.locator('.to-be-finding').filter({ hasText: finding })).toContainText(validation)
+  await expect(proposal).toHaveCount(0)
+  await button('Pokaż podgląd BPMN').click()
+  const previewMap = page.getByRole('img', { name: 'Podgląd zapisanego diagramu BPMN TO-BE' })
+  await expect(button('Dopasuj BPMN')).toBeEnabled()
+  const previewText = (await previewMap.textContent()).replace(/\s/gu, '')
+  for (const label of [decision, successfulPath, returnPath]) {
+    assert.ok(previewText.includes(label.replace(/\s/gu, '')), label)
+  }
 
   const [download] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
   const path = await download.path()
@@ -156,6 +166,14 @@ try {
   assert.ok(flows.some((flow) => flow.sourceRef === returnFlow.targetRef && flow.targetRef === task(form)))
   assert.ok(flowsTo(decision, review, successfulPath))
   assert.ok(flowsTo(review, generate))
+  await button('Wróć do analizy').click()
+  await button('Wróć do AS-IS').click()
+  const [originalDownload] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
+  const original = await new BpmnModdle().fromXML(await readFile(await originalDownload.path(), 'utf8'))
+  assert.deepEqual(original.warnings, [])
+  const originalFlow = original.rootElement.rootElements.find((element) => element.$type === 'bpmn:Process').flowElements
+  assert.deepEqual(originalFlow.filter((element) => element.$instanceOf('bpmn:Task')).map((step) => step.name), [form, oldIntake, generate])
+  assert.ok(!originalFlow.some((element) => element.$instanceOf('bpmn:Gateway')))
   assert.deepEqual(remoteRequests, [])
   console.log('PASS: selective AS-IS import, preserved TO-BE draft and fields, validation and human review after reopening, both BPMN paths')
 } finally {

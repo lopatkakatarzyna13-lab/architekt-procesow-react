@@ -1,5 +1,5 @@
 import { addProcessConnection, setNextProcessStep, setProcessDecision } from './processConnections.js'
-import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
+import { getDecisionGraphError } from './bpmnDecisionValidation.js'
 
 const missing = /brakuj|brak(?:i|ach|ów|u)?\b|niekomplet|nie zgadzaj|nie (?:są|jest) (?:kompletn|zgodn|poprawn)/iu
 const control = /(?:sprawdz|weryfikuj|porównuj).*(?:komplet|zgodn|rejestr|wersj)/iu
@@ -77,9 +77,7 @@ export function applyWorkshopDecision(steps, draft) {
   if (!matchingLink) next = addProcessConnection(next, sourceId, otherId, otherLabel)
   next = setProcessDecision(next, sourceId, question, mainLabel)
   next = setNextProcessStep(next, returnFrom, returnTo, toDecision)
-  // Validate just this graph. External pools and task metadata have their own editors.
-  const graph = next.map(({ id, name, nextStepId, nextIsDecision, extraConnections, bpmnDecision }) => ({ id, name, nextStepId, nextIsDecision, extraConnections, bpmnDecision }))
-  const error = getDecisionBpmnError(graph)
+  const error = getDecisionGraphError(next)
   if (error) throw new Error(error)
   return next
 }

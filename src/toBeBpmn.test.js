@@ -1,6 +1,21 @@
 import { expect, it } from 'vitest'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
-import { copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
+import { applyFormDecision, copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
+
+it('applies both exits to an existing validation step without modifying the source or duplicating a decision', () => {
+  const steps = [
+    { id: 'f', name: 'Formularz' },
+    { id: 'v', name: 'Sprawdź dane', bpmnTaskType: 'service', bpmnException: 'Przy brakach wskaż pola do poprawy i wróć do formularza.' },
+    { id: 'h', name: 'Kontrola kadr' },
+  ]
+  const changed = applyFormDecision(steps, 'v', 'h', 'f')
+  expect(steps[1]).not.toHaveProperty('bpmnDecision')
+  expect(changed[1]).toMatchObject({ nextStepId: 'h', extraConnections: [{ targetId: 'f', label: 'Nie — uzupełnij dane' }] })
+  expect(() => applyFormDecision(changed, 'v', 'h', 'f')).toThrow()
+  expect(() => applyFormDecision(steps, 'v', 'f', 'h')).not.toThrow()
+  expect(() => applyFormDecision(steps, 'v', 'h', 'missing')).toThrow()
+  expect(() => applyFormDecision(steps, 'v', 'h', 'h')).toThrow()
+})
 
 it('uses generic boundaries independently of the AS-IS process', () => {
   expect(toBeBpmnScope({ processName: 'Zatrudnienie', processStart: 'Zgłoszenie', processEnd: 'Umowa' })).toEqual({

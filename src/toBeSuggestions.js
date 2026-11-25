@@ -44,6 +44,13 @@ export function getToBeStepSuggestion(finding) {
   }
 }
 
+const formReturnException = 'Przy brakach wskaż pola do poprawy i wróć do formularza.'
+
+export function isFormValidationStep(step) {
+  return step.bpmnTaskType === 'service' &&
+    (step.formSuggestion === 'validation' || step.bpmnException === formReturnException)
+}
+
 export function getFormImprovementSuggestions(finding, sourceStep, assumptions) {
   if (!finding) return []
   const context = [finding.name, finding.situation, finding.cause, finding.improvement].join(' ')
@@ -53,11 +60,12 @@ export function getFormImprovementSuggestions(finding, sourceStep, assumptions) 
   return [
     {
       name: 'Walidacja pól obowiązkowych',
+      formSuggestion: 'validation',
       description: 'Formularz sprawdza kompletność zgłoszenia przed wysłaniem.',
       result: 'Kompletne zgłoszenie gotowe do przekazania.',
       bpmnTaskType: 'service',
       bpmnRule: 'Przekaż zgłoszenie dalej po uzupełnieniu wszystkich wymaganych pól.',
-      bpmnException: 'Przy brakach wskaż pola do poprawy i wróć do formularza.',
+      bpmnException: formReturnException,
       ...(sourceStep?.bpmnRequiredData && { bpmnRequiredData: sourceStep.bpmnRequiredData }),
     },
     {

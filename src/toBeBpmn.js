@@ -1,4 +1,28 @@
-import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
+import { getDecisionBpmnError, getDecisionGraphError } from './bpmnDecisionValidation.js'
+import { addProcessConnection, setNextProcessStep, setProcessDecision } from './processConnections.js'
+import { isFormValidationStep } from './toBeSuggestions.js'
+
+export const formDecision = {
+  question: 'Czy zgłoszenie jest kompletne?',
+  mainLabel: 'Tak — dane kompletne',
+  returnLabel: 'Nie — uzupełnij dane',
+}
+
+export function canProposeFormDecision(step) {
+  return isFormValidationStep(step) && !step.bpmnDecision && !step.extraConnections?.length && !step.nextIsDecision
+}
+
+export function applyFormDecision(steps, sourceId, mainId, returnId) {
+  const source = steps.find((step) => step.id === sourceId)
+  if (!source || !canProposeFormDecision(source)) throw new Error('Sprawdź istniejące połączenia kroku walidacji.')
+  if (!mainId || !returnId || mainId === returnId) throw new Error('Wskaż dwa różne cele decyzji.')
+  let next = setNextProcessStep(steps, sourceId, mainId)
+  next = addProcessConnection(next, sourceId, returnId, formDecision.returnLabel)
+  next = setProcessDecision(next, sourceId, formDecision.question, formDecision.mainLabel)
+  const error = getDecisionGraphError(next)
+  if (error) throw new Error(error)
+  return next
+}
 
 export function toBeBpmnScope(scope) {
   return { processName: `${scope.processName?.trim() || 'Proces'} — TO-BE`, processStart: '', processEnd: '' }

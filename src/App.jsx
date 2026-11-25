@@ -43,7 +43,8 @@ import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
 import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, emptyBpmnStep, getBpmnDocuments, getBpmnStepError, readBpmnStepDraft } from './bpmnStepDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
-import { copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
+import { applyFormDecision, canProposeFormDecision, copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
+import ToBeFormDecision from './ToBeFormDecision'
 import { findingCategories, getFormImprovementSuggestions, getToBeStepSuggestion } from './toBeSuggestions'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages.js'
 import { addProcessConnection, getNextProcessStepId, getProcessConnections, removeProcessConnection, removeStepConnections, setNextProcessStep, setProcessDecision, setProcessLane } from './processConnections.js'
@@ -2230,6 +2231,7 @@ function ToBeScreen({
   onCancelEdit,
   onCopySteps,
   onCopySelectedSteps,
+  onApplyFormDecision,
   onAddConnection,
   onSetNextStep,
   onRemoveConnection,
@@ -2312,6 +2314,9 @@ function ToBeScreen({
         onMove={onMoveStep}
       />
       <ToBeSummary steps={displaySteps} selectedCount={selectedFindingIds.length} />
+      {steps.map((step, index) => canProposeFormDecision(step) &&
+        <ToBeFormDecision key={step.id} steps={steps} index={index} busy={bpmnDraftDirty || Boolean(editingStepId)}
+          onApply={onApplyFormDecision} />)}
       {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onSetNext={onSetNextStep} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
       <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
       <BpmnLanes steps={steps} externalSteps={externalSteps} variant="TO-BE" onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={markBpmnDraft} />
@@ -5540,6 +5545,7 @@ try {
             onCancelEdit={cancelToBeStepEdit}
             onCopySteps={copyAsIsSteps}
             onCopySelectedSteps={copySelectedAsIsSteps}
+            onApplyFormDecision={(...args) => changeToBeConnections(applyFormDecision, ...args)}
             onAddConnection={(...args) => changeToBeConnections(addProcessConnection, ...args)}
             onSetNextStep={(...args) => changeToBeConnections(setNextProcessStep, ...args)}
             onRemoveConnection={(...args) => changeToBeConnections(removeProcessConnection, ...args)}
