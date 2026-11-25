@@ -45,7 +45,8 @@ import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, emptyBpmnStep, g
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { applyFormDecision, canProposeFormDecision, copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
 import ToBeFormDecision from './ToBeFormDecision'
-import { findingCategories, getFormImprovementSuggestions, getToBeStepSuggestion } from './toBeSuggestions'
+import { applyHumanReview, findingCategories, getFormImprovementSuggestions, getHumanReviewAction, getToBeStepSuggestion } from './toBeSuggestions'
+import HumanReviewAction from './HumanReviewAction'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages.js'
 import { addProcessConnection, getNextProcessStepId, getProcessConnections, removeProcessConnection, removeStepConnections, setNextProcessStep, setProcessDecision, setProcessLane } from './processConnections.js'
 const stages = ['Zakres', 'AS-IS', 'Analiza', 'TO-BE', 'Raport']
@@ -133,6 +134,10 @@ const emptyToBeStep = {
   findingId: '',
   additionalFindingIds: [],
   automatable: 'Nie',
+}
+
+function createToBeStepId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function copyAsIsToBeStep(step, index) {
@@ -2071,6 +2076,8 @@ function ToBeStepEditor({
 function ToBeStepsList({
   steps,
   findings,
+  asIsSteps,
+  onApplyHumanReview,
   editingId,
   error,
   onEdit,
@@ -2105,8 +2112,12 @@ function ToBeStepsList({
         </div>
       ) : (
         <ol className="to-be-steps-list">
-          {steps.map((step, index) => (
-            <li className={editingId === step.id ? 'is-editing' : ''} key={step.id}>
+          {steps.map((step, index) => {
+            const action = getHumanReviewAction(steps, index)
+            const finding = findingsById.get(step.findingId)
+            const role = action && ((action === 'replace' && steps[index + 1].owner) ||
+              asIsSteps.find((item) => item.id === finding?.location)?.owner || '')
+            return <li className={editingId === step.id ? 'is-editing' : ''} key={step.id}>
               <span className="step-order">{index + 1}</span>
               <div className="to-be-step-content">
                 <div className="to-be-step-title">
@@ -2127,6 +2138,8 @@ function ToBeStepsList({
                     <span key={id}>Usprawnienie: {name}</span>
                   ))}
                 </div>
+                {action && <HumanReviewAction key={action} action={action} number={index + 2} defaultOwner={role}
+                  busy={deleteDisabled || Boolean(editingId)} onApply={(owner) => onApplyHumanReview(step.id, action, owner)} />}
               </div>
               <div className="step-actions">
                 <button
@@ -2159,7 +2172,7 @@ function ToBeStepsList({
                 </button>
               </div>
             </li>
-          ))}
+          })}
         </ol>
       )}
     </section>
@@ -2232,6 +2245,7 @@ function ToBeScreen({
   onCopySteps,
   onCopySelectedSteps,
   onApplyFormDecision,
+  onApplyHumanReview,
   onAddConnection,
   onSetNextStep,
   onRemoveConnection,
@@ -2306,6 +2320,8 @@ function ToBeScreen({
       <ToBeStepsList
         steps={displaySteps}
         findings={findings}
+        asIsSteps={asIsSteps}
+        onApplyHumanReview={onApplyHumanReview}
         editingId={editingStepId}
         error={toBeError}
         onEdit={onEditStep}
@@ -4934,9 +4950,7 @@ try {
         ),
       )
     } else {
-      const id =
-        globalThis.crypto?.randomUUID?.() ??
-        `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      const id = createToBeStepId()
       setToBeSteps((currentSteps) => [...currentSteps, { ...toBeStepDraft, id }])
     }
 
@@ -5546,6 +5560,8 @@ try {
             onCopySteps={copyAsIsSteps}
             onCopySelectedSteps={copySelectedAsIsSteps}
             onApplyFormDecision={(...args) => changeToBeConnections(applyFormDecision, ...args)}
+            onApplyHumanReview={(sourceId, action, owner) => changeToBeConnections(applyHumanReview, sourceId, action, owner,
+              { ...emptyToBeStep, id: createToBeStepId() })}
             onAddConnection={(...args) => changeToBeConnections(addProcessConnection, ...args)}
             onSetNextStep={(...args) => changeToBeConnections(setNextProcessStep, ...args)}
             onRemoveConnection={(...args) => changeToBeConnections(removeProcessConnection, ...args)}

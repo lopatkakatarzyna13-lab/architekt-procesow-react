@@ -57,6 +57,7 @@ try {
       await field('Wykorzystywany system lub narzędzie').fill('System HR')
     }
     if (step === oldIntake) {
+      await field('Osoba lub rola odpowiedzialna').fill('Kadry')
       await showBpmnDetails()
       await field('Wymagane dane').fill(required)
     }
@@ -94,13 +95,24 @@ try {
   await expect(field('Wyjątek')).toHaveValue(/wróć do formularza/)
   await button('Dodaj krok').click()
 
+  await expect(toBeList.getByLabel('Osoba lub rola wykonująca kontrolę')).toHaveValue('Kadry')
+  await button('Dodaj kontrolę kadr').click()
+  await expect(toBeList.locator('li').nth(2)).toContainText(review)
+  await expect(button('Dodaj kontrolę kadr')).toHaveCount(0)
+  await toBeList.locator('li').nth(2).getByRole('button', { name: 'Usuń krok' }).click()
   await selectFinding()
-  await useSuggestion(review)
+  await useSuggestion(validation)
   await field('Osoba lub rola odpowiedzialna').fill('Kadry')
+  await button('Dodaj krok').click()
+  await button('Zamień powtórzoną walidację na kontrolę kadr').click()
+  await expect(toBeList.locator('li')).toHaveCount(3)
+  await expect(toBeList.locator('li').nth(2)).toContainText(review)
+  await editButtons.nth(2).click()
   await expect(field('Typ zadania BPMN')).toHaveValue('user')
   await showBpmnDetails()
   await expect(field('Punkt kontroli człowieka')).toHaveValue(/zatwierdza merytorycznie/)
-  await button('Dodaj krok').click()
+  await expect(field('Wyjątek')).toHaveValue('')
+  await button('Zapisz zmiany').click()
 
   await editButtons.first().click()
   await field('Rezultat kroku').fill('Dane zgłoszenia wpisane do formularza.')

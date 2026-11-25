@@ -3662,3 +3662,9 @@ footer span:first-child::before {
   }
   .print-bpmn-step-list .bpmn-step-summary dd { margin-bottom: 1mm; }
 }
+.human-review-action, .human-review-action label {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.human-review-action input { max-width: 100%; }

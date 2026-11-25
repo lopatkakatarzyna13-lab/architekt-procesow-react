@@ -46,6 +46,25 @@ export function getToBeStepSuggestion(finding) {
 
 const formReturnException = 'Przy brakach wskaż pola do poprawy i wróć do formularza.'
 
+const validation = {
+  name: 'Walidacja pól obowiązkowych',
+  formSuggestion: 'validation',
+  description: 'Formularz sprawdza kompletność zgłoszenia przed wysłaniem.',
+  result: 'Kompletne zgłoszenie gotowe do przekazania.',
+  bpmnTaskType: 'service',
+  bpmnRule: 'Przekaż zgłoszenie dalej po uzupełnieniu wszystkich wymaganych pól.',
+  bpmnException: formReturnException,
+}
+
+export const humanReview = {
+  name: 'Kontrola merytoryczna zgłoszenia przez człowieka',
+  formSuggestion: 'human-review',
+  description: 'Osoba odpowiedzialna ocenia zgłoszenie po walidacji formularza.',
+  result: 'Zatwierdzone zgłoszenie lub wskazanie danych do poprawy.',
+  bpmnTaskType: 'user',
+  bpmnHumanCheck: 'Osoba odpowiedzialna zatwierdza merytorycznie zgłoszenie przed przekazaniem do kolejnego kroku.',
+}
+
 export function isFormValidationStep(step) {
   return step.bpmnTaskType === 'service' &&
     (step.formSuggestion === 'validation' || step.bpmnException === formReturnException)
@@ -59,21 +78,45 @@ export function getFormImprovementSuggestions(finding, sourceStep, assumptions) 
 
   return [
     {
-      name: 'Walidacja pól obowiązkowych',
-      formSuggestion: 'validation',
-      description: 'Formularz sprawdza kompletność zgłoszenia przed wysłaniem.',
-      result: 'Kompletne zgłoszenie gotowe do przekazania.',
-      bpmnTaskType: 'service',
-      bpmnRule: 'Przekaż zgłoszenie dalej po uzupełnieniu wszystkich wymaganych pól.',
-      bpmnException: formReturnException,
+      ...validation,
       ...(sourceStep?.bpmnRequiredData && { bpmnRequiredData: sourceStep.bpmnRequiredData }),
     },
-    {
-      name: 'Kontrola merytoryczna zgłoszenia przez człowieka',
-      description: 'Osoba odpowiedzialna ocenia zgłoszenie po walidacji formularza.',
-      result: 'Zatwierdzone zgłoszenie lub wskazanie danych do poprawy.',
-      bpmnTaskType: 'user',
-      bpmnHumanCheck: 'Osoba odpowiedzialna zatwierdza merytorycznie zgłoszenie przed przekazaniem do kolejnego kroku.',
-    },
+    humanReview,
   ]
+}
+
+export function getHumanReviewAction(steps, index) {
+  const source = steps[index]
+  if (!source?.findingId || !isFormValidationStep(source) || source.nextIsDecision) return null
+  const sameValidation = (step) => step?.findingId === source.findingId && isFormValidationStep(step)
+  if (sameValidation(steps[index - 1])) return null
+  if (steps.some((step) => step.findingId === source.findingId && step.bpmnTaskType === 'user' &&
+    (step.formSuggestion === 'human-review' || step.bpmnHumanCheck === humanReview.bpmnHumanCheck || step.name === humanReview.name))) return null
+  const next = steps[index + 1]
+  if (source.nextStepId && source.nextStepId !== next?.id) return null
+  if (!sameValidation(next)) return 'add'
+  // A customized validation may be a distinct business activity.
+  if (next.sourceAsIsStepId || next.bpmnDecision || next.extraConnections?.length || next.bpmnHumanCheck ||
+    ['name', 'description', 'result', 'bpmnRule', 'bpmnException'].some((field) => next[field] && next[field] !== validation[field])) return null
+  return 'replace'
+}
+
+export function applyHumanReview(steps, sourceId, action, owner, newStep) {
+  const index = steps.findIndex((step) => step.id === sourceId)
+  if (!owner.trim() || !action || getHumanReviewAction(steps, index) !== action) return steps
+  const source = steps[index]
+  const result = [...steps]
+  if (action === 'replace') {
+    result[index + 1] = { ...steps[index + 1], ...humanReview, owner: owner.trim(), bpmnRule: '', bpmnException: '' }
+  } else {
+    const roleLane = steps.find((step) => step.bpmnLane?.trim().toLocaleLowerCase('pl') === owner.trim().toLocaleLowerCase('pl'))?.bpmnLane
+    const review = { ...newStep, ...humanReview, owner: owner.trim(), findingId: source.findingId,
+      additionalFindingIds: [...(source.additionalFindingIds ?? [])], ...(roleLane && { bpmnLane: roleLane }) }
+    if (source.nextStepId) {
+      result[index] = { ...source, nextStepId: review.id }
+      review.nextStepId = source.nextStepId
+    }
+    result.splice(index + 1, 0, review)
+  }
+  return result
 }
