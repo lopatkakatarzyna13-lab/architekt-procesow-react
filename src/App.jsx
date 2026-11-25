@@ -35,6 +35,7 @@ import ProcessConnections from './ProcessConnections.jsx'
 import BpmnExport from './BpmnExport.jsx'
 import BpmnDecisions from './BpmnDecisions'
 import BpmnLanes from './BpmnLanes'
+import { applyRoleLanes } from './roleLanes.js'
 import BpmnMessages from './BpmnMessages.jsx'
 import BpmnExternalMessages from './BpmnExternalMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
@@ -1086,6 +1087,7 @@ function AsIsScreen({
   onRemoveConnection,
   onSaveBpmnDecision,
   onSaveBpmnLane,
+  onApplyRoleLanes,
   onAddBpmnMessage,
   onRemoveBpmnMessage,
   externalSteps,
@@ -1163,7 +1165,7 @@ function AsIsScreen({
         />
         <ProcessConnections steps={steps} onAdd={onAddConnection} onSetNext={onSetNextStep} onRemove={onRemoveConnection} />
         <BpmnDecisions steps={steps} workshopDecisions={workshopDecisions} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
-        <BpmnLanes steps={steps} onSave={onSaveBpmnLane} onDraftChange={onBpmnDraftChange} />
+        <BpmnLanes steps={steps} externalSteps={externalSteps} onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
         <BpmnMessages steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={onBpmnDraftChange} variant="AS-IS" />
@@ -2229,6 +2231,7 @@ function ToBeScreen({
   externalLinks,
   onExternalLinksChange,
   onSaveBpmnLane,
+  onApplyRoleLanes,
   onExternalStepsChange,
   onAddBpmnMessage,
   onRemoveBpmnMessage,
@@ -2304,7 +2307,7 @@ function ToBeScreen({
       <ToBeSummary steps={displaySteps} selectedCount={selectedFindingIds.length} />
       {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onSetNext={onSetNextStep} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
       <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
-      <BpmnLanes steps={steps} variant="TO-BE" onSave={onSaveBpmnLane} onDraftChange={markBpmnDraft} />
+      <BpmnLanes steps={steps} externalSteps={externalSteps} variant="TO-BE" onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={markBpmnDraft} />
       {steps.length > 0 && <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
       <BpmnMessages steps={steps} externalSteps={externalSteps} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
       <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={markBpmnDraft} variant="TO-BE" />
@@ -5434,6 +5437,7 @@ try {
             onRemoveConnection={removeConnection}
             onSaveBpmnDecision={saveBpmnDecision}
             onSaveBpmnLane={saveBpmnLane}
+            onApplyRoleLanes={() => saveConnectionChange(applyRoleLanes(steps, externalSteps))}
             externalSteps={externalSteps}
             onExternalStepsChange={changeExternalSteps}
             externalLinks={externalLinks}
@@ -5531,6 +5535,7 @@ try {
               return {}
             }}
             onSaveBpmnLane={(...args) => changeToBeConnections(setProcessLane, ...args)}
+            onApplyRoleLanes={() => changeToBeConnections(applyRoleLanes, toBeExternalSteps)}
             onExternalStepsChange={(next) => {
               setToBeExternalSteps(next)
               setToBeSaved(false)

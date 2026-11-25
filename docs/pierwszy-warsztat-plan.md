@@ -80,6 +80,10 @@ Po sprawdzeniu, zapisaniu i przeniesieniu kroków zajrzyj do sekcji „Decyzja i
 
 Wybierz „Zatwierdź decyzję i powrót w AS-IS”, a następnie „Zapisz proces AS-IS”. Podgląd, plik BPMN i mapa AS-IS w PDF korzystają z zapisanych połączeń. Ponowne zastosowanie tej samej propozycji zachowuje jedną bramkę. Konflikt z ręcznie zapisanym połączeniem wymaga rozstrzygnięcia w edytorze. Rozbudowane przebiegi z kilkoma powrotami można opracować w dotychczasowym edytorze BPMN.
 
+### Tory według wykonawców (Pakiet 8)
+
+W sekcji „Tory ról w BPMN” na etapie AS-IS lub TO-BE sprawdź propozycję przy każdym kroku. Przycisk „Zatwierdź tory według wykonawców” uzupełnia puste tory razem. Jeśli wykonawca ma już jeden ręcznie przypisany tor, aplikacja proponuje tę samą nazwę przy jego pozostałych krokach. Krok bez wykonawcy lub z niejednoznacznym przypisaniem możesz rozstrzygnąć w jego formularzu. Po zatwierdzeniu zapisz proces i otwórz podgląd BPMN.
+
 ### Podpowiedzi do TO-BE podczas warsztatu
 
 W edytorze kroku TO-BE wybierz „Powiązane usprawnienie”. Jeśli ustalenie ma kategorię i brakuje zapisanego pomysłu, edytor pokazuje podpowiedź opartą na tej kategorii, np. potwierdzenie odbioru przy problemie z przekazaniem. Przyciskiem „Uzupełnij puste pola propozycją” można przenieść nazwę, opis i rezultat do formularza. Wpisane wcześniej wartości zachowują się. Po przejrzeniu treści można ją poprawić, dodać krok i zapisać TO-BE zwykłą ścieżką. Kategoria „Inne” pozostawia miejsce na własny pomysł.

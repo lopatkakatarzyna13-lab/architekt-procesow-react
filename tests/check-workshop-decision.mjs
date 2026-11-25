@@ -20,7 +20,9 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await page.getByLabel('Tekst rozmowy', { exact: true }).fill(transcript)
   await button('Zapisz transkrypcję').click()
   await button('Przygotuj szkic AS-IS lokalnie').click()
+  const owners = name === 'Skierowanie próbne' ? ['Kadry', 'Kierownik', 'Kadry', 'Kadry'] : ['HR', 'HR', 'HR', 'HR']
   for (let index = 1; index <= 4; index++) {
+    await page.getByLabel('Wykonawca — krok ' + index, { exact: true }).fill(owners[index - 1])
     await page.getByLabel('Sprawdzono treść — kroki, pozycja ' + index, { exact: true }).check()
     await page.getByLabel('Wybierz krok ' + index + ' do przeniesienia', { exact: true }).check()
   }
@@ -36,6 +38,16 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await expect(review.getByRole('status')).toContainText('Dodano decyzję')
   await apply.click()
   await expect(review.getByRole('status')).toContainText('już na mapie')
+  const batch = button('Zatwierdź tory według wykonawców')
+  const firstLane = page.getByLabel(/^Tor BPMN — krok 1:/)
+  await firstLane.fill('Niezapisana korekta')
+  await expect(batch).toBeDisabled()
+  await firstLane.fill('')
+  await expect(batch).toBeEnabled()
+  await batch.click()
+  for (const [index, owner] of owners.entries()) {
+    await expect(page.getByLabel(new RegExp('^Tor BPMN — krok ' + (index + 1) + ':'))).toHaveValue(owner)
+  }
   await button('Zapisz proces AS-IS').click()
   await expect(page.getByText('Proces AS-IS został zapisany')).toBeVisible()
   await page.reload()
@@ -49,6 +61,14 @@ export async function checkWorkshopDecision(page, name, transcript) {
   const model = await new BpmnModdle().fromXML(await readFile(path, 'utf8'))
   assert.deepEqual(model.warnings, [])
   const node = (id) => model.rootElement.rootElements[0].flowElements.find((item) => item.id === id)
+  function verifyLanes(root) {
+    const lanes = root.rootElements.find((element) => element.$type === 'bpmn:Process').laneSets[0].lanes
+    assert.deepEqual(lanes.map((lane) => lane.name), [...new Set(owners)])
+    owners.forEach((owner, index) => {
+      assert.ok(lanes.find((lane) => lane.name === owner).flowNodeRef.some((ref) => ref.id === 'Task_' + (index + 1)))
+    })
+  }
+  verifyLanes(model.rootElement)
   assert.deepEqual(node('Decision_1').outgoing.map((flow) => [flow.name, flow.targetRef.id]), [['Tak', 'Task_4'], ['Braki', 'Task_2']])
   assert.equal(node('Task_3').outgoing[0].targetRef.outgoing[0].targetRef.id, 'Task_1')
 
@@ -60,7 +80,12 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await button('Przejdź do TO-BE').click()
   await page.getByLabel(/Cel projektowanej zmiany/).fill('Skrócenie czasu korekty')
   await button('Skopiuj kroki z AS-IS').click()
+  await button('Zatwierdź tory według wykonawców').click()
   await button('Zapisz proces TO-BE').click()
+  const [targetDownload] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
+  const targetPath = await targetDownload.path()
+  execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', targetPath])
+  verifyLanes((await new BpmnModdle().fromXML(await readFile(targetPath, 'utf8'))).rootElement)
   await button('Przejdź do raportu').click()
   await page.getByLabel(/Nazwa osoby, roli lub zespołu/).fill('Koordynator próby')
   await button('Dodaj interesariusza').click()
@@ -69,10 +94,17 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await page.evaluate(() => { window.print = () => { window.decisionReportPrinted = true } })
   await button('Eksportuj do PDF').click()
   await page.waitForFunction(() => window.decisionReportPrinted)
+  for (const selector of ['.print-bpmn-image:not(.print-tobe-bpmn)', '.print-tobe-bpmn']) {
+    const labels = await page.locator(selector).evaluate((image) => {
+      const svg = new DOMParser().parseFromString(decodeURIComponent(image.src.split(',')[1]), 'image/svg+xml')
+      return [...svg.querySelectorAll('[data-element-id^="Lane_"] text')].map((el) => el.textContent.trim())
+    })
+    for (const owner of owners) assert.ok(labels.includes(owner), 'Tor w mapie do druku: ' + owner)
+  }
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true })
   const pages = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).split('\f')
   const diagram = pages.map((part) => part.replace(/\s+/g, ' ')).find((part) => part.includes('Mapa BPMN AS-IS'))?.split('Szczegóły kroków BPMN')[0]
   assert.ok(diagram?.includes('Braki') && diagram.includes('Tak'), 'Mapa AS-IS w PDF zawiera oba warunki')
-  console.log('PASS: ' + name + ' — zatwierdzenie, wznowienie, podgląd, BPMN XSD i mapa w PDF')
+  console.log('PASS: ' + name + ' — decyzja i powrót, tory z wykonawców AS-IS i TO-BE, BPMN XSD i mapy w PDF')
 }
