@@ -28,6 +28,7 @@ import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
+import { applyWorkshopDecision } from './workshopDecision.js'
 import { deleteWorkshopRecording } from './workshopRecordings'
 import { appendWorkshopSteps, getWorkshopStorageKeys, loadWorkshop, loadWorkshopReview } from './workshop'
 import ProcessConnections from './ProcessConnections.jsx'
@@ -1078,6 +1079,7 @@ function AsIsScreen({
   workshopDirtyRef,
   workshopRecordingRef,
   onTransferWorkshopSteps,
+  onApplyWorkshopDecision,
   onUseWorkshopFinding,
   onAddConnection,
   onSetNextStep,
@@ -1143,7 +1145,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} recordingRef={workshopRecordingRef} autosaveDraft canTransferSteps={isStepsVariant} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} recordingRef={workshopRecordingRef} autosaveDraft canTransferSteps={isStepsVariant} mapSteps={steps} onApplyDecision={onApplyWorkshopDecision} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
 
       {isStepsVariant ? (
         <>
@@ -4426,6 +4428,14 @@ const openSavedProcess = (process) => {
       return { ok: true }
     } catch { return { error: 'Nie udało się zapisać połączenia. Lista kroków nie została zmieniona.' } }
   }
+  const applyReviewedDecision = (draft) => {
+    if (decisionDraftDirty || editingStepId) return 'Dokończ edycję kroku lub formularza BPMN przed zastosowaniem propozycji.'
+    try {
+      const next = applyWorkshopDecision(steps, draft)
+      if (next === steps) return 'Ta decyzja i powrót są już na mapie.'
+      return saveConnectionChange(next).error ?? 'Dodano decyzję i powrót. Zapisz proces AS-IS.'
+    } catch (error) { return error.message }
+  }
   const addConnection = (sourceId, targetId, label) => {
     try { return saveConnectionChange(addProcessConnection(steps, sourceId, targetId, label)) }
     catch (error) { return { error: error.message } }
@@ -5417,6 +5427,7 @@ try {
             workshopDirtyRef={workshopDirtyRef}
             workshopRecordingRef={workshopRecordingRef}
             onTransferWorkshopSteps={transferWorkshopSteps}
+            onApplyWorkshopDecision={applyReviewedDecision}
             onUseWorkshopFinding={useWorkshopFinding}
             onAddConnection={addConnection}
             onSetNextStep={saveNextStep}

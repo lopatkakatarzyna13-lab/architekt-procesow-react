@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import WorkshopDecision from './WorkshopDecision.jsx'
 import { requestWorkshopAnalysis, workshopAiClient, workshopAiRemote } from './workshopAiClient'
 import { loadCurrentProcessId } from './processIdentity'
 import { proposeLocalWorkshop } from './localWorkshopProposal'
@@ -18,7 +19,7 @@ const unreviewedProposal = (proposal) => Object.fromEntries(Object.keys(categori
 const analysisAvailable = import.meta.env.DEV || (workshopAiRemote && import.meta.env.VITE_WORKSHOP_AI_ENABLED === 'true')
 const localWorkshop = import.meta.env.MODE === 'workshop-local'
 
-export default function WorkshopPanel({ processId, processName, dirtyRef, recordingRef, autosaveDraft = false, canTransferSteps = false, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
+export default function WorkshopPanel({ processId, processName, dirtyRef, recordingRef, autosaveDraft = false, canTransferSteps = false, mapSteps, onApplyDecision, onTransferSteps, onUseFinding, onDecisionSourceChange }) {
   const [initial] = useState(() => {
     let data
     try { data = loadWorkshop(localStorage, processId) }
@@ -610,6 +611,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
           <button type="button" className="save-button" disabled={!selectedSteps.length || reviewDirty || dirty} onClick={transferSteps}>Przenieś wybrane kroki do AS-IS</button>
           <span>Najpierw zapisz propozycję. Sprawdzone role, systemy, decyzje i wyjątki możesz wstawić do formularza kroku. Aby uzupełnić istniejący krok, najpierw wybierz jego edycję.</span>
         </div> : <p>Przenoszenie kroków jest dostępne w trybie „Dodaj kroki samodzielnie”.</p>}
+        {canTransferSteps && onApplyDecision && !dirty && !reviewDirty && !staleReview && !reviewLoadError && <WorkshopDecision analysis={analysis} steps={mapSteps} transcript={savedTranscript} onApply={onApplyDecision} />}
       </div>}
     </section>
   )

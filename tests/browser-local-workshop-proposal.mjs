@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, expect } from 'playwright/test'
 import { preview } from 'vite'
+import { checkWorkshopDecision, decisionScenarios } from './check-workshop-decision.mjs'
 
 const origin = 'http://127.0.0.1:4173'
 const remoteRequests = []
@@ -255,6 +256,14 @@ async function checkScenario(scenario) {
 
 try {
   for (const scenario of scenarios) await checkScenario(scenario)
+  for (const [name, transcript] of decisionScenarios) {
+    const profile = await mkdtemp(join(tmpdir(), 'architekt-decision-'))
+    const { page, context } = await openWorkshop(profile)
+    try { await checkWorkshopDecision(page, name, transcript) } finally {
+      await context.close()
+      await rm(profile, { recursive: true, force: true })
+    }
+  }
   assert.deepEqual(remoteRequests, [])
   console.log('PASS: no requests to APIs or external services')
 } finally {
