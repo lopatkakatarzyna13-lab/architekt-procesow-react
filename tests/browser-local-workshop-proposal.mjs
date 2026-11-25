@@ -15,6 +15,9 @@ const scenarios = [
     heading: 'Dialog do powtórzenia próby',
     first: 'Zgłoszenie wysyła kierownik przez formularz w portalu kadrowym',
     corrected: 'Kierownik zgłasza osobę na badania przez portal kadrowy',
+    firstDetails: ['kierownik', 'portal kadrowy'],
+    nextDetails: ['Kierownik', ''],
+    correctedOwner: 'Kierownik jednostki',
     next: 'Kierownik uzupełnia ten sam formularz w ciągu dwóch dni roboczych',
     question: /nie znamy liczby zgłoszeń/,
     exception: /system nie generuje pliku PDF/,
@@ -26,7 +29,10 @@ const scenarios = [
     heading: 'Transkrypcja',
     first: 'Do piątego dnia miesiąca menedżerowie wysyłają HR dane o nieobecnościach i zatwierdzonych premiach',
     corrected: 'Menedżerowie wysyłają dane do HR do piątego dnia miesiąca',
-    next: 'Gdy dane są kompletne, przekazuję zestawienie do biura rachunkowego przez uzgodniony kanał',
+    firstDetails: ['menedżerowie', ''],
+    nextDetails: ['HR', 'Enova'],
+    extraLine: 'HR: Zapisuję potwierdzenie w systemie Enova.',
+    next: 'Zapisuję potwierdzenie w systemie Enova',
     question: /menedżer nie odpowiada przed terminem/,
     exception: /po otrzymaniu uzupełnienia ponownie sprawdzam kompletność/i,
     outsideAsIs: /naliczanie wynagrodzeń|ścieżka eskalacji/i,
@@ -36,6 +42,8 @@ const scenarios = [
     transcript: 'Kierownik wysyła zgłoszenie, kadry sprawdzają kompletność danych, jeśli czegoś brakuje. Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia.\nPo ponownej kontroli kadry zatwierdzają dane i generują skierowanie.',
     first: 'Kierownik wysyła zgłoszenie',
     corrected: 'Kierownik wysyła zgłoszenie do kadr',
+    firstDetails: ['Kierownik', ''],
+    nextDetails: ['Kierownik', ''],
     next: 'Kierownik ma dwa dni robocze na uzupełnienie zgłoszenia',
     question: /którego kroku dotyczy warunek/i,
     exception: /jeśli czegoś brakuje/,
@@ -68,7 +76,7 @@ async function checkScenario(scenario) {
   const profile = await mkdtemp(join(tmpdir(), 'architekt-local-proposal-'))
   let context
   try {
-    const transcript = await readTranscript(scenario)
+    const transcript = [await readTranscript(scenario), scenario.extraLine].filter(Boolean).join('\n')
     const firstVisit = await openWorkshop(profile)
     context = firstVisit.context
     let page = firstVisit.page
@@ -91,6 +99,18 @@ async function checkScenario(scenario) {
     assert.doesNotMatch(stepNames.join('\n'), scenario.outsideAsIs)
     const nextIndex = stepNames.indexOf(scenario.next) + 1
     assert.ok(nextIndex > 1)
+    const detail = (label, index) => page.getByLabel(`${label} — krok ${index}`, { exact: true })
+    for (const [index, [owner, system]] of [[1, scenario.firstDetails], [nextIndex, scenario.nextDetails]]) {
+      await expect(detail('Wykonawca', index)).toHaveValue(owner)
+      await expect(detail('System', index)).toHaveValue(system)
+      if (!system) await expect(detail('System', index)).toHaveAccessibleDescription('Do potwierdzenia')
+    }
+    const channel = stepNames.findIndex((name) => name.includes('uzgodniony kanał'))
+    if (scenario.extraLine) {
+      assert.ok(channel >= 0)
+      await expect(detail('System', channel + 1)).toHaveValue('')
+      await expect(detail('Wykonawca', channel + 1)).toHaveValue('HR')
+    }
     const questionTexts = await page.getByLabel(/^Pytania — pozycja \d+$/).evaluateAll((items) => items.map((item) => item.value))
     assert.match(questionTexts.join('\n'), scenario.question)
     const exceptionTexts = await page.getByLabel(/^Wyjątki — pozycja \d+$/).evaluateAll((items) => items.map((item) => item.value))
@@ -108,6 +128,18 @@ async function checkScenario(scenario) {
     await approve(nextIndex).check()
     await select(1).check()
     await select(nextIndex).check()
+    if (scenario.correctedOwner) {
+      await detail('Wykonawca', 1).fill(scenario.correctedOwner)
+      await expect(approve(1)).not.toBeChecked()
+      await expect(select(1)).not.toBeChecked()
+      await approve(1).check()
+      await select(1).check()
+      await detail('System', nextIndex).fill('Portal warsztatowy')
+      await expect(approve(nextIndex)).not.toBeChecked()
+      await expect(select(nextIndex)).not.toBeChecked()
+      await approve(nextIndex).check()
+      await select(nextIndex).check()
+    }
     await first.fill(scenario.corrected)
     await expect(approve(1)).not.toBeChecked()
     await expect(select(1)).toBeDisabled()
@@ -118,6 +150,19 @@ async function checkScenario(scenario) {
     await expect(transfer).toBeDisabled()
     await page.getByRole('button', { name: 'Zapisz propozycję' }).click()
     await transfer.click()
+    const checkTransferredDetails = async () => {
+      const rows = page.locator('ol.steps-list > li')
+      const expected = [
+        [scenario.correctedOwner ?? scenario.firstDetails[0], scenario.firstDetails[1]],
+        [scenario.nextDetails[0], scenario.correctedOwner ? 'Portal warsztatowy' : scenario.nextDetails[1]],
+      ]
+      for (const [index, [owner, system]] of expected.entries()) {
+        await expect(rows.nth(index).getByText(`Rola: ${owner}`, { exact: true })).toBeVisible()
+        if (system) await expect(rows.nth(index).getByText(`Narzędzie: ${system}`, { exact: true })).toBeVisible()
+        else await expect(rows.nth(index).getByText(/^Narzędzie:/)).toHaveCount(0)
+      }
+    }
+    await checkTransferredDetails()
     await page.getByRole('button', { name: 'Zapisz proces AS-IS' }).click()
     await expect(page.getByText('Proces AS-IS został zapisany')).toBeVisible()
 
@@ -136,6 +181,7 @@ async function checkScenario(scenario) {
     assert.deepEqual(persistedQuestions, questionTexts)
     const persistedSteps = page.locator('ol.steps-list > li')
     await expect(persistedSteps).toHaveCount(2)
+    await checkTransferredDetails()
     await expect(persistedSteps.nth(0)).toContainText(scenario.corrected)
     await expect(persistedSteps.nth(1)).toContainText(scenario.next)
 

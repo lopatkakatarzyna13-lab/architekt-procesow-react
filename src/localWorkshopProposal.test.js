@@ -110,6 +110,29 @@ describe('local transcript suggestions', () => {
     expect(questions.map(({ text }) => text)).toEqual(['Do wyjaśnienia — Termin odbioru do ustalenia.'])
   })
 
+  it('binds each role and system to its own action and quotes the original sentence', () => {
+    const text = 'Kierownik zapisuje dane w SAP HR i kadry sprawdzają dane w systemie Enova.'
+    const { steps } = proposeLocalWorkshop(text)
+    expect(steps.map(({ owner, system, evidence }) => [owner, system, evidence])).toEqual([
+      ['Kierownik', 'SAP HR', text], ['kadry', 'Enova', text],
+    ])
+  })
+
+  it('distinguishes a role speaking in the first person from a recipient, condition or anonymous speaker', () => {
+    const text = [
+      'HR: Zbieram dane. Gdy kierownik dostarczy plik, przekazuję go do biura przez uzgodniony kanał.',
+      'Głos A: Przekazuję zgłoszenie do kadr w portalu kadrowym.',
+      'Kadry lub kierownik sprawdzają dane w SAP albo w Excelu.',
+      'Kadry sprawdzają, czy kierownik wysyła dokument przez portal kadrowy.',
+    ].join('\n')
+    const { steps } = proposeLocalWorkshop(text)
+    expect(steps.map(({ owner, system }) => [owner, system])).toEqual([
+      ['HR', ''], ['HR', ''], ['', 'portal kadrowy'], ['', ''], ['Kadry', ''],
+    ])
+    expect(steps[1].evidence).toMatch(/^HR:.*przekazuję/)
+    for (const step of steps) expect(text).toContain(step.evidence)
+  })
+
   it('deduplicates with Polish casing and shows when proposal limits are exceeded', () => {
     const transcript = [
       'MENEDŻER wysyła zgłoszenie.',
@@ -120,5 +143,11 @@ describe('local transcript suggestions', () => {
     expect(steps).toHaveLength(30)
     expect(steps[1].text).toBe('Kadry weryfikują zgłoszenie o numerze 0')
     expect(questions.at(-1).text).toContain('do 30 kroków')
+  })
+
+  it('keeps conflicting speakers and alternative tools open for confirmation', () => {
+    const transcript = 'HR: Wysyłam plik w SAP.\nBiuro: Wysyłam plik w SAP.\nKadry sprawdzają dane w SAP, czasem w Excelu.'
+    const { steps } = proposeLocalWorkshop(transcript)
+    expect(steps.map(({ owner, system }) => [owner, system])).toEqual([['', 'SAP'], ['Kadry', '']])
   })
 })

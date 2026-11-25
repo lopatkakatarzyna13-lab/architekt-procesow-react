@@ -13,10 +13,15 @@ function isWorkshopDueDate(value) {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
+function validStepDetails(step) {
+  return ['owner', 'system'].every((field) => step[field] === undefined || typeof step[field] === 'string')
+}
+
 export function validateWorkshopReview(review, transcript) {
   const errors = validateWorkshopProposal(review, transcript, { allowEmptyTranscript: true })
   if (errors.length) return errors
 
+  if (!review.steps.every(validStepDetails)) errors.push('Nieprawidłowy wykonawca lub system kroku.')
   for (const question of review.questions) {
     if (question.answer !== undefined &&
       (typeof question.answer !== 'string' || question.answer.length > MAX_WORKSHOP_ANSWER_LENGTH)) {
@@ -110,6 +115,7 @@ export function loadWorkshopDraft(storage, processId, savedTranscript) {
     if (!categories.every((key) => Array.isArray(draft.review?.[key])
       && draft.review[key].every((item) => typeof item?.text === 'string'
         && ['answer', 'assignee', 'dueDate', 'evidence'].every((field) => item[field] === undefined || typeof item[field] === 'string')))) return null
+    if (!draft.review.steps.every(validStepDetails)) return null
   }
   return draft
 }
@@ -194,20 +200,23 @@ export function deleteWorkshop(storage, processId) {
   }
 }
 
-export function appendWorkshopSteps(existingSteps, names, createId) {
-  if (!Array.isArray(existingSteps) || !Array.isArray(names) || typeof createId !== 'function') throw new TypeError('Nieprawidłowe dane kroków.')
+export function appendWorkshopSteps(existingSteps, proposedSteps, createId) {
+  if (!Array.isArray(existingSteps) || !Array.isArray(proposedSteps) || typeof createId !== 'function') throw new TypeError('Nieprawidłowe dane kroków.')
   const normalize = (value) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pl')
   const seen = new Set(existingSteps.map((step) => typeof step?.name === 'string' ? normalize(step.name) : '').filter(Boolean))
   const added = []
   const skipped = []
-  for (const name of names) {
+  for (const proposed of proposedSteps) {
+    const step = typeof proposed === 'string' ? { name: proposed } : proposed
+    const name = step?.name
     if (typeof name !== 'string' || !name.trim()) throw new TypeError('Nazwa kroku nie może być pusta.')
+    if (!validStepDetails(step)) throw new TypeError('Nieprawidłowy wykonawca lub system kroku.')
     const cleaned = name.trim()
     const normalized = normalize(cleaned)
     if (seen.has(normalized)) { skipped.push(cleaned); continue }
     const id = createId()
     if (typeof id !== 'string' || !id.trim() || existingSteps.some((step) => step?.id === id) || added.some((step) => step.id === id)) throw new Error('Nie udało się utworzyć identyfikatora kroku.')
-    added.push({ id, name: cleaned, description: '', owner: '', system: '', result: '' })
+    added.push({ id, name: cleaned, description: '', owner: step.owner?.trim() ?? '', system: step.system?.trim() ?? '', result: '' })
     seen.add(normalized)
   }
   return { steps: [...existingSteps, ...added], added, skipped }

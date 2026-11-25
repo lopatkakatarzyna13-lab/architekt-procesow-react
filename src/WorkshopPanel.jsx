@@ -294,7 +294,9 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
     const proposal = proposeLocalWorkshop(savedTranscript)
     revision.current += 1
     setManualReview(false)
-    setAnalysis({ ...unreviewedProposal(proposal), source: 'local-transcript' })
+    const review = unreviewedProposal(proposal)
+    review.steps = proposal.steps.map((step) => ({ ...step, reviewed: false }))
+    setAnalysis({ ...review, source: 'local-transcript' })
     setSelectedSteps([])
     setReviewDirty(true)
     dirtyRef.current = true
@@ -376,11 +378,11 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
     updateItem(category, index, (item) => ({ ...item, reviewed }))
   }
 
-  const editItem = (category, index, value) => {
+  const editItem = (category, index, value, field = 'text') => {
     if (category === 'steps') setSelectedSteps((current) => current.filter((itemIndex) => itemIndex !== index))
     updateItem(category, index, (item) => ({
       ...item,
-      text: value,
+      [field]: value,
       reviewed: false,
       status: item.status === 'supported' ? 'assumption' : item.status,
       ...(category === 'questions' && { answerConfirmed: false }),
@@ -430,7 +432,9 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
     const steps = analysis.steps.filter((item, index) => selectedSteps.includes(index)
       && (analysis.source !== 'local-transcript' || item.reviewed === true))
     if (!steps.length) return
-    const result = onTransferSteps(steps.map((item) => item.text))
+    const result = onTransferSteps(steps.map((item) => analysis.source === 'local-transcript'
+      ? { name: item.text, owner: item.owner ?? '', system: item.system ?? '' }
+      : item.text))
     if (result.error) { setAnalysisMessage(result.error); return }
     setSelectedSteps([])
     setAnalysisMessage(`Dodano kroków: ${result.added}. Pominięto istniejących lub powtórzonych: ${result.skipped}. Sprawdź listę kroków poniżej i zapisz proces AS-IS.`)
@@ -517,7 +521,7 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
       {analysis && <div className="workshop-results">
         <h3>Propozycja do sprawdzenia</h3>
         {analysis.source === 'local-transcript'
-          ? <p>Porównaj kroki z cytatami, popraw ich treść i oznacz sprawdzone pozycje. Zapisz propozycję i wybierz kroki do przeniesienia. W AS-IS sprawdź kolejność, wykonawców i połączenia, w tym powroty.</p>
+          ? <p>Porównaj nazwę kroku, wykonawcę i system z fragmentem rozmowy. Popraw dane i zaznacz „Sprawdzono treść” przy wybranym kroku. Pola do potwierdzenia możesz zostawić puste. Zapisz propozycję i przenieś wybrane kroki do AS-IS.</p>
           : <>
             <p>Popraw lub dodaj ustalenia, w tym systemy i wyjątki. Systemy i wyjątki dodajesz ręcznie. Po sprawdzeniu zaznacz wybrane pozycje i zapisz propozycję. Zmiana treści cofa oznaczenie. Zapis pozostaje w tej przeglądarce.</p>
             <p>Cytat pomaga odnaleźć fragment rozmowy, ale nie potwierdza poprawności propozycji. Przed przeniesieniem kroków sprawdź ich treść i kontekst.</p>
@@ -546,6 +550,15 @@ export default function WorkshopPanel({ processId, processName, dirtyRef, record
             <label htmlFor={`review-${key}-${index}`}>{title} — pozycja {index + 1}</label>
             <textarea id={`review-${key}-${index}`} rows="2" value={item.text} onChange={(event) => editItem(key, index, event.target.value)} />
             <small>{item.status === 'supported' ? 'Źródło propozycji: cytat z rozmowy' : item.status === 'question' ? 'Rodzaj: pytanie' : analysis.source === 'local-transcript' && item.evidence ? 'Treść poprawiona podczas sprawdzania' : 'Źródło propozycji: założenie lub wpis ręczny'}</small>
+            {key === 'steps' && analysis.source === 'local-transcript' && <div className="workshop-question-followup">
+              {Object.entries({ owner: 'Wykonawca', system: 'System' }).map(([field, label]) => <div key={field}>
+                <label htmlFor={`review-${field}-${index}`}>{label} — krok {index + 1}</label>
+                <input id={`review-${field}-${index}`} type="text" value={item[field] ?? ''}
+                  aria-describedby={!item[field]?.trim() ? `review-${field}-hint-${index}` : undefined}
+                  onChange={(event) => editItem(key, index, event.target.value, field)} />
+                {!item[field]?.trim() && <small id={`review-${field}-hint-${index}`}>Do potwierdzenia</small>}
+              </div>)}
+            </div>}
             <label><input type="checkbox" checked={item.reviewed === true} disabled={!item.text.trim()} onChange={(event) => reviewItem(key, index, event.target.checked)} /> Sprawdzono treść — {title.toLowerCase()}, pozycja {index + 1}</label>
             {key === 'questions' && <>
               <div className="workshop-question-followup">

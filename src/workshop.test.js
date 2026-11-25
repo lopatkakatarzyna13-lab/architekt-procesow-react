@@ -52,6 +52,15 @@ describe('proposal validation', () => {
 describe('review persistence', () => {
   const transcript = 'HR sprawdza dane.'
   const review = () => ({ steps: [{ text: 'Kontrola danych', status: 'supported', evidence: 'HR sprawdza dane.' }], roles: [], decisions: [], questions: [] })
+  it('round-trips step details and rejects a malformed update without losing the saved review', () => {
+    const s = storage()
+    const data = review()
+    Object.assign(data.steps[0], { owner: 'HR', system: 'SAP', reviewed: true })
+    saveWorkshopReview(s, A, transcript, data)
+    const invalid = { ...data, steps: [{ ...data.steps[0], owner: {} }] }
+    expect(() => saveWorkshopReview(s, A, transcript, invalid)).toThrow()
+    expect(loadWorkshopReview(s, A, transcript).review).toEqual(data)
+  })
   it('restores a saved review only for its process and exact source transcript', () => {
     const s = storage()
     saveWorkshopReview(s, A, transcript, review())
@@ -234,4 +243,18 @@ describe('security: workshop retention and migration', () => {
     expect(() => deleteWorkshop(s, 'invalid')).toThrow()
     expect(loadWorkshop(s, A).transcript).toBe(transcript)
   })
+})
+
+it('preserves existing AS-IS fields and skips duplicates when appending reviewed steps', () => {
+  const existing = [{ id: 'old', name: 'Odbiór', owner: 'Biuro', system: 'ERP', description: 'Pierwotny opis' }]
+  const proposals = [
+    { name: ' odbiór ', owner: 'HR', system: 'SAP' },
+    { name: 'Weryfikacja', owner: ' Kadry ', system: 'SAP HR' },
+    { name: 'WERYFIKACJA', owner: '', system: '' },
+  ]
+  const result = appendWorkshopSteps(existing, proposals, () => 'new')
+  expect(result.steps).toEqual([existing[0], {
+    id: 'new', name: 'Weryfikacja', owner: 'Kadry', system: 'SAP HR', description: '', result: '',
+  }])
+  expect(result.skipped).toEqual(['odbiór', 'WERYFIKACJA'])
 })
