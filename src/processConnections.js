@@ -10,33 +10,52 @@ export function addProcessConnection(steps, sourceId, targetId, label) {
   return steps.map((step) => step.id === sourceId ? { ...step, extraConnections: [...links, { targetId, label: name }] } : step)
 }
 
+function clearMissingDecisionTargets(steps) {
+  const decisions = new Set(steps.filter((step) => step.extraConnections?.length && step.bpmnDecision).map((step) => step.id))
+  return steps.map((step) => {
+    if (!step.nextIsDecision || decisions.has(step.nextStepId)) return step
+    const updated = { ...step }
+    delete updated.nextIsDecision
+    return updated
+  })
+}
+
 export function removeProcessConnection(steps, sourceId, index) {
-  return steps.map((step) => step.id === sourceId && Array.isArray(step.extraConnections)
-    ? { ...step, extraConnections: step.extraConnections.filter((_, i) => i !== index) } : step)
+  return clearMissingDecisionTargets(steps.map((step) => step.id === sourceId && Array.isArray(step.extraConnections)
+    ? { ...step, extraConnections: step.extraConnections.filter((_, i) => i !== index) } : step))
 }
 
 export function removeStepConnections(steps, removedId) {
-  return steps.filter((step) => step.id !== removedId).map((step) => {
+  return clearMissingDecisionTargets(steps.filter((step) => step.id !== removedId).map((step) => {
     const { nextStepId, extraConnections } = step
     const remaining = Array.isArray(extraConnections)
       ? { ...step, extraConnections: extraConnections.filter((link) => link.targetId !== removedId) } : { ...step }
     if (nextStepId === removedId) delete remaining.nextStepId
     return remaining
-  })
+  }))
 }
 
-export function setNextProcessStep(steps, sourceId, targetId) {
+export function setNextProcessStep(steps, sourceId, targetId, toDecision = false) {
   if (!steps.some((step) => step.id === sourceId) ||
       (targetId !== '' && (sourceId === targetId || !steps.some((step) => step.id === targetId)))) {
     throw new Error('Wybierz dwa różne istniejące kroki albo kolejność z listy.')
   }
+  const target = steps.find((step) => step.id === targetId)
+  if (toDecision && !(target?.bpmnDecision && target.extraConnections?.length)) throw new Error('Wybierz krok z zapisaną decyzją.')
   return steps.map((step) => {
     if (step.id !== sourceId) return step
     const updated = { ...step }
+    if (toDecision) updated.nextIsDecision = true
+    else delete updated.nextIsDecision
     if (targetId) updated.nextStepId = targetId
     else delete updated.nextStepId
     return updated
   })
+}
+
+export function describeNextTarget(steps, step) {
+  const target = steps.find((item) => item.id === step.nextStepId)
+  return step.nextIsDecision && target?.bpmnDecision ? 'Decyzja: ' + target.bpmnDecision.question : target?.name || 'Nieznany krok'
 }
 
 export function getNextProcessStepId(steps, index) {

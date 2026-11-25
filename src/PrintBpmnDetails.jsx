@@ -1,3 +1,4 @@
+import { describeNextTarget } from './processConnections.js'
 import BpmnStepSummary from './BpmnStepSummary'
 import { bpmnStepFields, getBpmnDocuments } from './bpmnStepDetails'
 import { getBpmnMessages, getExternalActionPool, getExternalPools } from './bpmnMessages.js'
@@ -22,7 +23,7 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
     </>}
     {decisions.length > 0 && <><h4>Decyzje i ścieżki podstawowe</h4><ul>{decisions.map((step) => <li key={step.id}>{step.name}: {step.bpmnDecision.question} — ścieżka podstawowa: {step.bpmnDecision.mainLabel}</li>)}</ul></>}
     {overrides.length > 0 && <><h4>Przebieg podstawowy poza kolejnością listy</h4><ul>{overrides.map((step) =>
-      <li key={step.id}>{step.name} → {steps.find((item) => item.id === step.nextStepId)?.name || 'Nieznany krok'}</li>)}</ul></>}
+      <li key={step.id}>{step.name} → {describeNextTarget(steps, step)}</li>)}</ul></>}
     {extra.length > 0 && <><h4>Dodatkowe przejścia</h4><ul>{extra.map((item, index) => <li key={index}>{item.from} → {item.to}: {item.label}</li>)}</ul></>}
     {messages.length > 0 && <><h4>Baseny i wiadomości</h4><p>Basen własny: {messages[0].primary}. Baseny zewnętrzne: {pools.map(([, name]) => name).join(', ')}.</p><ul>{messages.map((message) => {
       const own = steps.find((step) => step.id === message.stepId)?.name || 'Nieznany krok'

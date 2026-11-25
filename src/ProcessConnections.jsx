@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getProcessConnections } from './processConnections.js'
+import { describeNextTarget, getProcessConnections } from './processConnections.js'
 
 export default function ProcessConnections({ steps, onAdd, onRemove, onSetNext, variant = 'AS-IS' }) {
   const [source, setSource] = useState('')
@@ -58,8 +58,14 @@ export default function ProcessConnections({ steps, onAdd, onRemove, onSetNext, 
         <option value="">Według kolejności z listy</option>
         {steps.map((step, index) => step.id !== nextSource && <option key={step.id} value={step.id}>{index + 1}. {step.name}</option>)}
       </select>
+      {steps.some((step) => step.id === nextSourceStep?.nextStepId && step.bpmnDecision && step.extraConnections?.length) && <label>
+        <input type="checkbox" checked={Boolean(nextSourceStep.nextIsDecision)} onChange={(event) => {
+          const result = onSetNext(nextSourceStep.id, nextSourceStep.nextStepId, event.target.checked)
+          setNextMessage(result?.error || 'Zaktualizowano cel przejścia.')
+        }} /> Przejdź bezpośrednio do decyzji przy wskazanym kroku
+      </label>}
       {nextMessage && <p role="status">{nextMessage}</p>}
-      {overrides.length > 0 && <ul>{overrides.map((step) => <li key={step.id}>{step.name} → {name(step.nextStepId)}</li>)}</ul>}
+      {overrides.length > 0 && <ul>{overrides.map((step) => <li key={step.id}>{step.name} → {describeNextTarget(steps, step)}</li>)}</ul>}
     </details>}
   </section>
 }

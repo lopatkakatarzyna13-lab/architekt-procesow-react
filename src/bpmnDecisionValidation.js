@@ -53,6 +53,10 @@ export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = 
   }
   if (externalSteps.some((action) => !poolKeys.has(actionPools.get(action.id)))) return 'Przypisz działania zewnętrzne do basenów i dodaj co najmniej jedną wiadomość dla każdego użytego basenu.'
   for (const step of steps) {
+    if (step.nextIsDecision !== undefined) {
+      const target = steps.find((item) => item.id === step.nextStepId)
+      if (step.nextIsDecision !== true || !target?.bpmnDecision || !target.extraConnections?.length) return 'Sprawdź cel powrotu do decyzji.'
+    }
     if (step.nextStepId !== undefined && (!ids.has(step.nextStepId) || step.nextStepId === step.id)) return `Sprawdź następny krok po „${step.name}”.`
     if (step.extraConnections !== undefined && !Array.isArray(step.extraConnections)) return 'Nieprawidłowe połączenia. Sprawdź proces przed eksportem.'
     const links = step.extraConnections || []
@@ -68,9 +72,16 @@ export function getDecisionBpmnError(steps, externalSteps = [], externalLinks = 
     }
   }
   if (steps.some((step) => step.nextStepId)) {
-    const routes = new Map(steps.map((step, index) => [step.id, [
-      getNextProcessStepId(steps, index), ...(step.extraConnections || []).map((link) => link.targetId),
-    ]]))
+    const routes = new Map()
+    const decisions = new Map(steps.filter((step) => step.extraConnections?.length).map((step) => [step.id, Symbol()]))
+    steps.forEach((step, index) => {
+      const next = step.nextIsDecision ? decisions.get(step.nextStepId) : getNextProcessStepId(steps, index)
+      const exits = [next, ...(step.extraConnections || []).map((link) => link.targetId)]
+      if (decisions.has(step.id)) {
+        routes.set(step.id, [decisions.get(step.id)])
+        routes.set(decisions.get(step.id), exits)
+      } else routes.set(step.id, exits)
+    })
     const reachable = new Set()
     const pending = [steps[0].id]
     while (pending.length) {

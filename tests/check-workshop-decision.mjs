@@ -117,7 +117,9 @@ export async function checkWorkshopDecision(page, name, transcript) {
   verifyHandoff(model.rootElement)
   verifyLanes(model.rootElement)
   assert.deepEqual(node('Decision_1').outgoing.map((flow) => [flow.name, flow.targetRef.id]), [['Tak', 'Task_4'], ['Braki', 'Task_2']])
-  assert.equal(node('Task_3').outgoing[0].targetRef.outgoing[0].targetRef.id, 'Task_1')
+  const returnTarget = node('Task_3').outgoing[0].targetRef
+  if (referral) assert.equal(returnTarget.outgoing[0].targetRef.id, 'Task_1')
+  else assert.equal(returnTarget.id, 'Decision_1')
 
   await button('Przejdź do analizy').click()
   await page.getByLabel(/Kategoria/).selectOption({ label: 'Wąskie gardło' })

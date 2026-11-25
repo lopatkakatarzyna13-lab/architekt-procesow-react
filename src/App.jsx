@@ -2716,6 +2716,7 @@ function createProcessFlow(steps, scope, variant, findings) {
       target: stepIds.has(targetId) ? `${variant}-step-${targetId}` : orderedIds[index + 1],
       ...(sourceStep?.nextStepId && { type: 'smoothstep' }),
       ...(sourceStep?.extraConnections?.length && { label: sourceStep.bpmnDecision?.mainLabel }),
+      ...(sourceStep?.nextIsDecision && { label: 'Do decyzji: ' + steps.find((step) => step.id === targetId)?.bpmnDecision?.question }),
       markerEnd: { type: MarkerType.ArrowClosed, color: '#7164bd' },
       style: { stroke: '#8f86c8', strokeWidth: 1.6 },
       selectable: false,
@@ -4465,8 +4466,8 @@ const openSavedProcess = (process) => {
     if (!result.error && source?.extraConnections?.length === 1) onBpmnDraftChange(sourceId, false)
     return result
   }
-  const saveNextStep = (sourceId, targetId) => {
-    try { return saveConnectionChange(setNextProcessStep(steps, sourceId, targetId)) }
+  const saveNextStep = (sourceId, targetId, toDecision) => {
+    try { return saveConnectionChange(setNextProcessStep(steps, sourceId, targetId, toDecision)) }
     catch (error) { return { error: error.message } }
   }
   const saveBpmnDecision = (sourceId, question, mainLabel) => {

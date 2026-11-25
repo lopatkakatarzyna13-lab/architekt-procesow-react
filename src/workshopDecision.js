@@ -47,6 +47,7 @@ export function proposeWorkshopDecision(analysis, steps, transcript) {
     mainId: stepId(positive),
     otherId: stepId(firstRepair),
     returnFrom: stepId(recheck),
+    returnToDecision: Boolean(stepId(source) && stepId(recheck) && /(?:ponownie|jeszcze raz) (?:sprawdz|weryfik)/iu.test(recheck.text)),
     returnTo: retry.test(recheck.text) ? stepId(source) : '',
     question: source && /komplet/iu.test(source.text) ? 'Czy dane są kompletne?' : 'Czy wynik kontroli jest poprawny?',
     mainLabel: 'Tak',
@@ -60,22 +61,24 @@ export function applyWorkshopDecision(steps, draft) {
   if (![sourceId, mainId, otherId, returnFrom, returnTo].every((id) => byId.has(id))) throw new Error('Wskaż wszystkie kroki, w tym cel powrotu.')
   if (new Set([sourceId, mainId, otherId]).size !== 3 || [mainId, sourceId].includes(returnFrom) || returnFrom === returnTo) throw new Error('Sprawdź przebieg obu ścieżek i kierunek powrotu.')
   if (normalized(mainLabel) === normalized(otherLabel)) throw new Error('Nazwij oba wyjścia z decyzji różnie.')
+  const toDecision = draft.returnToDecision === true
+  if (toDecision && returnTo !== sourceId) throw new Error('Wskaż krok z decyzją jako cel powrotu.')
   const source = byId.get(sourceId)
   const links = source.extraConnections ?? []
   const matchingLink = links.find((link) => link.targetId === otherId && link.label === otherLabel.trim())
-  if ((source.nextStepId && source.nextStepId !== mainId) ||
+  if (source.nextIsDecision || (source.nextStepId && source.nextStepId !== mainId) ||
       (byId.get(returnFrom).nextStepId && byId.get(returnFrom).nextStepId !== returnTo) ||
       links.some((link) => link !== matchingLink) ||
       (source.bpmnDecision && (source.bpmnDecision.question !== question.trim() || source.bpmnDecision.mainLabel !== mainLabel.trim()))) {
     throw new Error('Propozycja koliduje z zapisanym przebiegiem. Sprawdź istniejące połączenia w edytorze.')
   }
-  if (matchingLink && source.nextStepId === mainId && byId.get(returnFrom).nextStepId === returnTo && source.bpmnDecision) return steps
+  if (matchingLink && source.nextStepId === mainId && byId.get(returnFrom).nextStepId === returnTo && Boolean(byId.get(returnFrom).nextIsDecision) === toDecision && source.bpmnDecision) return steps
   let next = setNextProcessStep(steps, sourceId, mainId)
   if (!matchingLink) next = addProcessConnection(next, sourceId, otherId, otherLabel)
   next = setProcessDecision(next, sourceId, question, mainLabel)
-  next = setNextProcessStep(next, returnFrom, returnTo)
+  next = setNextProcessStep(next, returnFrom, returnTo, toDecision)
   // Validate just this graph. External pools and task metadata have their own editors.
-  const graph = next.map(({ id, name, nextStepId, extraConnections, bpmnDecision }) => ({ id, name, nextStepId, extraConnections, bpmnDecision }))
+  const graph = next.map(({ id, name, nextStepId, nextIsDecision, extraConnections, bpmnDecision }) => ({ id, name, nextStepId, nextIsDecision, extraConnections, bpmnDecision }))
   const error = getDecisionBpmnError(graph)
   if (error) throw new Error(error)
   return next

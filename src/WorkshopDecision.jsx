@@ -14,7 +14,7 @@ function DecisionReview({ proposal, steps, onApply }) {
   const [skipped, setSkipped] = useState(false)
   const [message, setMessage] = useState('')
   function edit(field, value) {
-    setDraft((current) => ({ ...current, [field]: value }))
+    setDraft((current) => ({ ...current, [field]: value, ...(['sourceId', 'returnFrom', 'returnTo'].includes(field) && { returnToDecision: false }) }))
     setMessage('')
   }
   if (skipped) return <button type="button" className="back-button" onClick={() => setSkipped(false)}>Wróć do pominiętej propozycji decyzji</button>
@@ -30,6 +30,9 @@ function DecisionReview({ proposal, steps, onApply }) {
         {steps.map((step) => <option key={step.id} value={step.id}>{step.name}</option>)}
       </select>
     </label>)}
+    {draft.returnTo && draft.returnTo === draft.sourceId && <label>
+      <input type="checkbox" checked={Boolean(draft.returnToDecision)} onChange={(event) => edit('returnToDecision', event.target.checked)} /> Po powrocie przejdź od razu do decyzji „{draft.question}”
+    </label>}
     {[['mainLabel', 'Opis ścieżki podstawowej'], ['otherLabel', 'Opis ścieżki przy brakach']].map(([field, label]) =>
       <label key={field}>{label}
         <input value={draft[field]} maxLength={120} onChange={(event) => edit(field, event.target.value)} />

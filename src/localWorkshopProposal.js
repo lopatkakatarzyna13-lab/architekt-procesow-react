@@ -78,7 +78,7 @@ function stepDetails(activity, speakerRole) {
   const clause = mainClause.split(/,\s*|\s+(?:bo|ponieważ|żeby|aby)\s+/iu)[0]
   const verb = findAction(clause)
   if (!verb) return { owner: '', system: '' }
-  const before = clause.slice(0, verb.index).trim().replace(contextPrefix, '')
+  const before = clause.slice(0, verb.index).trim().replace(contextPrefix, '').replace(/\s+ponownie$/iu, '')
   const after = clause.slice(verb.index + verb[0].length).trim().replace(/[.!]+$/, '')
   let owner = ''
   if (roleName.test(before)) owner = before

@@ -32,14 +32,15 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   const tasks = steps.map((step, index) => createBpmnTask(moddle, step, `Task_${index + 1}`))
   const indexes = new Map(steps.map((step, index) => [step.id, index]))
   const nextIndexes = steps.map((_, index) => indexes.get(getNextProcessStepId(steps, index)))
+  const decisionTargets = new Set(steps.filter((step) => step.nextIsDecision).map((step) => step.nextStepId))
   const inbound = steps.map((_, index) => index === 0 ? 1 : 0)
   steps.forEach((step, index) => {
     const nextIndex = nextIndexes[index]
-    if (nextIndex !== undefined) inbound[nextIndex] += 1
+    if (nextIndex !== undefined && !step.nextIsDecision) inbound[nextIndex] += 1
     for (const link of step.extraConnections || []) inbound[indexes.get(link.targetId)] += 1
   })
   const merges = steps.map((_, index) => inbound[index] > 1 ? moddle.create('bpmn:ExclusiveGateway', { id: `Merge_${index + 1}`, gatewayDirection: 'Converging' }) : null)
-  const splits = steps.map((step, index) => step.extraConnections?.length ? moddle.create('bpmn:ExclusiveGateway', { id: `Decision_${index + 1}`, name: step.bpmnDecision.question.trim(), gatewayDirection: 'Diverging' }) : null)
+  const splits = steps.map((step, index) => step.extraConnections?.length ? moddle.create('bpmn:ExclusiveGateway', { id: `Decision_${index + 1}`, name: step.bpmnDecision.question.trim(), gatewayDirection: decisionTargets.has(step.id) ? 'Mixed' : 'Diverging' }) : null)
   const entry = (index) => merges[index] || tasks[index]
   const links = []
   const add = (source, target, label = '', alternate = false) => links.push({ source, target, label, alternate })
@@ -47,8 +48,8 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   steps.forEach((step, index) => {
     if (merges[index]) add(merges[index], tasks[index])
     const nextIndex = nextIndexes[index]
-    const next = nextIndex === undefined ? end : entry(nextIndex)
-    const routed = nextIndex !== undefined && nextIndex !== index + 1
+    const next = step.nextIsDecision ? splits[nextIndex] : nextIndex === undefined ? end : entry(nextIndex)
+    const routed = step.nextIsDecision || (nextIndex !== undefined && nextIndex !== index + 1)
     if (!splits[index]) add(tasks[index], next, '', routed)
     else {
       add(tasks[index], splits[index])
