@@ -1,12 +1,17 @@
 import { addProcessConnection, setNextProcessStep, setProcessDecision } from './processConnections.js'
 import { getDecisionBpmnError } from './bpmnDecisionValidation.js'
 
-const missing = /brakuj|brak(?:i|ach|ów|u)?\b|niekomplet|nie zgadzaj/iu
+const missing = /brakuj|brak(?:i|ach|ów|u)?\b|niekomplet|nie zgadzaj|nie (?:są|jest) (?:kompletn|zgodn|poprawn)/iu
 const control = /(?:sprawdz|weryfikuj|porównuj).*(?:komplet|zgodn|rejestr|wersj)/iu
 const retry = /ponown\p{L}* (?:sprawdz|kontrol|weryfik)|jeszcze raz sprawdz/iu
 const back = /(?<!\p{L})(?:wraca|wracają|z powrotem)(?!\p{L})/iu
 const repair = /zwrac|odsył|uzupełni|poprawi/iu
 const success = /(?:gdy|kiedy|jeśli|jeżeli) [^,]*(?:są kompletne|jest kompletne|jest kompletny|są zgodne|jest poprawne|nie ma braków)[^,]*,/iu
+
+function completeCase(text) {
+  const condition = text.split(',', 1)[0]
+  return success.test(text) && !/(?:\bnie\s+(?:są|jest)|brakuje|niekomplet|niezgod|\balbo\b|\blub\b)/iu.test(condition)
+}
 
 const normalized = (value) => value.trim().replace(/\s+/gu, ' ').toLocaleLowerCase('pl')
 
@@ -17,12 +22,12 @@ export function proposeWorkshopDecision(analysis, steps, transcript) {
   if (rechecks.length !== 1) return null
   const recheck = rechecks[0]
   const before = items.slice(0, items.indexOf(recheck))
-  const controls = before.filter((item) => control.test(item.text) && !success.test(item.text))
+  const controls = before.filter((item) => control.test(item.text) && !/^(?:gdy|kiedy|jeśli|jeżeli) /iu.test(item.text))
   const lastControl = controls.at(-1)
   const afterControl = before.slice(lastControl ? before.indexOf(lastControl) + 1 : 0)
   const repairs = afterControl.filter((item) => repair.test(item.text) && !control.test(item.text))
-  if (!repairs.length) return null
-  const successes = items.filter((item) => success.test(item.text))
+  if (!repairs.length && !back.test(recheck.text)) return null
+  const successes = items.filter((item) => completeCase(item.text))
   const problems = [...analysis.questions, ...analysis.exceptions].filter((item) =>
     item.evidence && transcript.includes(item.evidence) && missing.test(item.evidence))
   if (!problems.length && !successes.length) return null
@@ -33,7 +38,7 @@ export function proposeWorkshopDecision(analysis, steps, transcript) {
   }
   const source = controls.length === 1 ? controls[0] : null
   const positive = successes.length === 1 ? successes[0] : null
-  const firstRepair = repairs[0]
+  const firstRepair = repairs[0] ?? recheck
   const evidence = [...new Set([source, ...problems, firstRepair, recheck, positive]
     .filter(Boolean).map((item) => item.evidence))]
   return {

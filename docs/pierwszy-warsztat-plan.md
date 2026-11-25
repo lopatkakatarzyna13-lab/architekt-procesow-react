@@ -74,6 +74,12 @@ Stan: **próba fikcyjnego warsztatu zakończona**, odporność, bezpieczeństwo 
 
 Przegląd na 17.11: [ustalenia o danych warsztatowych](przeglad-danych-warsztatowych-2026-11-17.md). Odporność pozostaje otwarta: pełny test Supabase dla `e87c6df` nie przeszedł, mimo pomyślnych testów odzyskania i awarii procesu; przyczyna 503 pozostaje nieustalona. Nie używać danych klienta ani nie wdrażać hostowanego SQL lub Edge przed spełnieniem pozostałych warunków.
 
+### Decyzja i powrót z lokalnego szkicu AS-IS (Pakiet 7)
+
+Po sprawdzeniu, zapisaniu i przeniesieniu kroków zajrzyj do sekcji „Decyzja i powrót na mapie AS-IS”. Dla rozpoznanej kontroli z jednym powrotem aplikacja pokazuje cytaty, pytanie oraz kroki obu ścieżek. Porównaj je z rozmową. Możesz zmienić opis warunku, wskazać inny krok lub pominąć propozycję. Gdy w rozmowie pada tylko „sprawa wraca”, wskaż cel po jego wyjaśnieniu. Jeśli nie ustalono przebiegu, pozostaw propozycję bez zatwierdzenia.
+
+Wybierz „Zatwierdź decyzję i powrót w AS-IS”, a następnie „Zapisz proces AS-IS”. Podgląd, plik BPMN i mapa AS-IS w PDF korzystają z zapisanych połączeń. Ponowne zastosowanie tej samej propozycji zachowuje jedną bramkę. Konflikt z ręcznie zapisanym połączeniem wymaga rozstrzygnięcia w edytorze. Rozbudowane przebiegi z kilkoma powrotami można opracować w dotychczasowym edytorze BPMN.
+
 ### Podpowiedzi do TO-BE podczas warsztatu
 
 W edytorze kroku TO-BE wybierz „Powiązane usprawnienie”. Jeśli ustalenie ma kategorię i brakuje zapisanego pomysłu, edytor pokazuje podpowiedź opartą na tej kategorii, np. potwierdzenie odbioru przy problemie z przekazaniem. Przyciskiem „Uzupełnij puste pola propozycją” można przenieść nazwę, opis i rezultat do formularza. Wpisane wcześniej wartości zachowują się. Po przejrzeniu treści można ją poprawić, dodać krok i zapisać TO-BE zwykłą ścieżką. Kategoria „Inne” pozostawia miejsce na własny pomysł.

@@ -48,6 +48,16 @@ describe('decyzja z lokalnego warsztatu', () => {
     expect(() => applyWorkshopDecision(steps, { ...proposal, returnFrom: '2' })).toThrow(/ścieżkę/)
   })
 
+  it('pyta o cel, kiedy w rozmowie pada tylko „sprawa wraca”', () => {
+    const { proposal } = fixture('HR sprawdza kompletność danych. Jeżeli czegoś brakuje, sprawa wraca. Gdy dane są kompletne, HR przekazuje dane do biura.')
+    expect(proposal).toMatchObject({ otherId: '2', returnFrom: '2', returnTo: '', mainId: '3' })
+  })
+
+  it('nie traktuje zanegowanego warunku kompletności jako zgody na kontynuację', () => {
+    const text = transcripts[0].replace('Jeżeli brakuje danych', 'Jeżeli dane nie są kompletne')
+    expect(fixture(text).proposal.mainId).toBe('4')
+  })
+
   it('nie przypisuje niezatwierdzonego lub nieprzeniesionego kroku', () => {
     const { steps, analysis } = fixture(transcripts[0])
     analysis.steps[0].reviewed = false
