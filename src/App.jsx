@@ -28,6 +28,7 @@ import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
 import { supabase } from './supabaseClient'
 import WorkshopPanel from './WorkshopPanel'
+import { applyWorkshopDocument } from './workshopDocuments.js'
 import { applyWorkshopDecision } from './workshopDecision.js'
 import { deleteWorkshopRecording } from './workshopRecordings'
 import { appendWorkshopSteps, getWorkshopStorageKeys, loadWorkshop, loadWorkshopReview } from './workshop'
@@ -1081,6 +1082,7 @@ function AsIsScreen({
   workshopRecordingRef,
   onTransferWorkshopSteps,
   onApplyWorkshopDecision,
+  onApplyWorkshopDocument,
   onUseWorkshopFinding,
   onAddConnection,
   onSetNextStep,
@@ -1147,7 +1149,7 @@ function AsIsScreen({
 
       <ScopeSummary scope={scope} />
 
-      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} recordingRef={workshopRecordingRef} autosaveDraft canTransferSteps={isStepsVariant} mapSteps={steps} onApplyDecision={onApplyWorkshopDecision} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
+      {processId && <WorkshopPanel key={processId} processId={processId} processName={scope.processName} dirtyRef={workshopDirtyRef} recordingRef={workshopRecordingRef} autosaveDraft canTransferSteps={isStepsVariant} mapSteps={steps} onApplyDecision={onApplyWorkshopDecision} onApplyDocument={onApplyWorkshopDocument} onTransferSteps={onTransferWorkshopSteps} onUseFinding={onUseWorkshopFinding} onDecisionSourceChange={setWorkshopDecisionSource} />}
 
       {isStepsVariant ? (
         <>
@@ -4431,6 +4433,14 @@ const openSavedProcess = (process) => {
       return { ok: true }
     } catch { return { error: 'Nie udało się zapisać połączenia. Lista kroków nie została zmieniona.' } }
   }
+  const applyReviewedDocument = (id, document, sourceKey) => {
+    if (decisionDraftDirty || editingStepId) return 'Dokończ edycję kroku lub formularza BPMN przed dodaniem dokumentu.'
+    try {
+      const next = applyWorkshopDocument(steps, id, document, sourceKey)
+      if (next === steps) return 'Ten dokument jest już na mapie AS-IS.'
+      return saveConnectionChange(next).error ?? 'Dodano dokument. Zapisz proces AS-IS.'
+    } catch (error) { return error.message }
+  }
   const applyReviewedDecision = (draft) => {
     if (decisionDraftDirty || editingStepId) return 'Dokończ edycję kroku lub formularza BPMN przed zastosowaniem propozycji.'
     try {
@@ -5431,6 +5441,7 @@ try {
             workshopRecordingRef={workshopRecordingRef}
             onTransferWorkshopSteps={transferWorkshopSteps}
             onApplyWorkshopDecision={applyReviewedDecision}
+            onApplyWorkshopDocument={applyReviewedDocument}
             onUseWorkshopFinding={useWorkshopFinding}
             onAddConnection={addConnection}
             onSetNextStep={saveNextStep}

@@ -5,8 +5,8 @@ import { BpmnModdle } from 'bpmn-moddle'
 import { expect } from 'playwright/test'
 
 export const decisionScenarios = [
-  ['Skierowanie próbne', 'Kadry sprawdzają kompletność zgłoszenia. Jeżeli brakuje danych, kierownik uzupełnia formularz. Zgłoszenie wraca do kadr do ponownej kontroli. Gdy dane są kompletne, kadry zatwierdzają skierowanie.'],
-  ['Zestawienie do biura', 'HR: Sprawdzam, czy dane są kompletne. Zwracam zestawienie menedżerowi z prośbą o uzupełnienie. Po otrzymaniu uzupełnienia ponownie sprawdzam kompletność. Gdy dane są kompletne, przekazuję zestawienie do biura.'],
+  ['Skierowanie próbne', 'Kadry sprawdzają kompletność zgłoszenia. Jeżeli brakuje danych, kierownik uzupełnia formularz. Zgłoszenie wraca do kadr do ponownej kontroli. Gdy dane są kompletne, kadry zatwierdzają skierowanie. Pracownik odbiera skierowanie na badania wstępne w formacie PDF przez portal.'],
+  ['Zestawienie do biura', 'HR: Sprawdzam, czy dane są kompletne. Zwracam zestawienie menedżerowi z prośbą o uzupełnienie. Po otrzymaniu uzupełnienia ponownie sprawdzam kompletność. Gdy dane są kompletne, przekazuję zestawienie nieobecności w formacie XLSX do biura e-mailem.'],
 ]
 
 export async function checkWorkshopDecision(page, name, transcript) {
@@ -20,14 +20,26 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await page.getByLabel('Tekst rozmowy', { exact: true }).fill(transcript)
   await button('Zapisz transkrypcję').click()
   await button('Przygotuj szkic AS-IS lokalnie').click()
-  const owners = name === 'Skierowanie próbne' ? ['Kadry', 'Kierownik', 'Kadry', 'Kadry'] : ['HR', 'HR', 'HR', 'HR']
-  for (let index = 1; index <= 4; index++) {
+  const referral = name === 'Skierowanie próbne'
+  const owners = referral ? ['Kadry', 'Kierownik', 'Kadry', 'Kadry', 'Pracownik'] : ['HR', 'HR', 'HR', 'HR']
+  const expectedDoc = referral
+    ? { name: 'Skierowanie na badania wstępne', direction: 'input', format: 'PDF', channel: 'portal', corrected: 'Skierowanie wstępne' }
+    : { name: 'Zestawienie nieobecności', direction: 'output', format: 'XLSX', channel: 'e-mail', corrected: 'Raport nieobecności' }
+  for (let index = 1; index <= owners.length; index++) {
     await page.getByLabel('Wykonawca — krok ' + index, { exact: true }).fill(owners[index - 1])
     await page.getByLabel('Sprawdzono treść — kroki, pozycja ' + index, { exact: true }).check()
     await page.getByLabel('Wybierz krok ' + index + ' do przeniesienia', { exact: true }).check()
   }
   await button('Zapisz propozycję').click()
   await button('Przenieś wybrane kroki do AS-IS').click()
+  const documents = page.getByRole('region', { name: 'Dokumenty z transkrypcji' })
+  await expect(documents.getByLabel('Nazwa dokumentu')).toHaveValue(expectedDoc.name)
+  await expect(documents.getByLabel('Kierunek dokumentu')).toHaveValue(expectedDoc.direction)
+  await expect(documents.getByLabel('Format', { exact: true })).toHaveValue(expectedDoc.format)
+  await expect(documents.getByLabel('Kanał przekazania')).toHaveValue(expectedDoc.channel)
+  await documents.getByLabel('Nazwa dokumentu').fill(expectedDoc.corrected)
+  await button('Zatwierdź dokument na mapie AS-IS').click()
+  await expect(documents.getByRole('status')).toContainText(expectedDoc.corrected)
   await button('Pomiń propozycję decyzji').click()
   await expect(button('Zatwierdź decyzję i powrót w AS-IS')).toHaveCount(0)
   await button('Wróć do pominiętej propozycji decyzji').click()
@@ -53,6 +65,7 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await page.reload()
   await button('Moje procesy').click()
   await page.locator('.process-card').filter({ hasText: name }).getByRole('button', { name: 'Otwórz proces' }).click()
+  await expect(documents.getByRole('status')).toContainText(expectedDoc.corrected)
   await button('Pokaż podgląd BPMN').click()
   await expect(page.locator('.bpmn-preview-canvas [data-element-id="Decision_1"]').first()).toBeVisible()
   const [download] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
@@ -62,7 +75,14 @@ export async function checkWorkshopDecision(page, name, transcript) {
   assert.deepEqual(model.warnings, [])
   const node = (id) => model.rootElement.rootElements[0].flowElements.find((item) => item.id === id)
   function verifyLanes(root) {
-    const lanes = root.rootElements.find((element) => element.$type === 'bpmn:Process').laneSets[0].lanes
+    const process = root.rootElements.find((element) => element.$type === 'bpmn:Process')
+    const task = process.flowElements.find((item) => item.id === 'Task_' + owners.length)
+    const associations = task.get(referral ? 'dataInputAssociations' : 'dataOutputAssociations')
+    assert.equal(associations.length, 1)
+    const ref = referral ? associations[0].sourceRef[0] : associations[0].targetRef
+    assert.equal(ref.name, expectedDoc.corrected)
+    assert.equal(ref.documentation[0].text, 'Format: ' + expectedDoc.format + '\nKanał przekazania: ' + expectedDoc.channel)
+    const lanes = process.laneSets[0].lanes
     assert.deepEqual(lanes.map((lane) => lane.name), [...new Set(owners)])
     owners.forEach((owner, index) => {
       assert.ok(lanes.find((lane) => lane.name === owner).flowNodeRef.some((ref) => ref.id === 'Task_' + (index + 1)))
@@ -104,7 +124,8 @@ export async function checkWorkshopDecision(page, name, transcript) {
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ format: 'A4', printBackground: true })
   const pages = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' }).split('\f')
+  assert.ok(pages.join(' ').replace(/\s+/g, ' ').includes(expectedDoc.corrected), 'Zatwierdzona nazwa dokumentu w PDF')
   const diagram = pages.map((part) => part.replace(/\s+/g, ' ')).find((part) => part.includes('Mapa BPMN AS-IS'))?.split('Szczegóły kroków BPMN')[0]
   assert.ok(diagram?.includes('Braki') && diagram.includes('Tak'), 'Mapa AS-IS w PDF zawiera oba warunki')
-  console.log('PASS: ' + name + ' — decyzja i powrót, tory z wykonawców AS-IS i TO-BE, BPMN XSD i mapy w PDF')
+  console.log('PASS: ' + name + ' — decyzja, tory, dokument ' + expectedDoc.direction + ', format i kanał w obu BPMN, zapis i PDF')
 }

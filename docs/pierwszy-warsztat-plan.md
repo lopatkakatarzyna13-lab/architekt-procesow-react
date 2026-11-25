@@ -84,6 +84,12 @@ Wybierz „Zatwierdź decyzję i powrót w AS-IS”, a następnie „Zapisz proc
 
 W sekcji „Tory ról w BPMN” na etapie AS-IS lub TO-BE sprawdź propozycję przy każdym kroku. Przycisk „Zatwierdź tory według wykonawców” uzupełnia puste tory razem. Jeśli wykonawca ma już jeden ręcznie przypisany tor, aplikacja proponuje tę samą nazwę przy jego pozostałych krokach. Krok bez wykonawcy lub z niejednoznacznym przypisaniem możesz rozstrzygnąć w jego formularzu. Po zatwierdzeniu zapisz proces i otwórz podgląd BPMN.
 
+### Dokumenty z transkrypcji (Pakiet 9)
+
+Po przeniesieniu sprawdzonych kroków do AS-IS zajrzyj do sekcji „Dokumenty z transkrypcji”. Przy jednoznacznym odbiorze lub wysłaniu dokumentu porównaj propozycję z cytatem. Możesz poprawić nazwę, kierunek, format i kanał. Wybierz „Zatwierdź dokument na mapie AS-IS” i zapisz proces. Dokument trafi do kroku jako obiekt danych BPMN. Przy kopiowaniu kroku do TO-BE zachowa zatwierdzone informacje.
+
+Lokalne reguły rozpoznają m.in. skierowania, zestawienia, formularze i wnioski. Gdy nie ma propozycji, dokument można dodać w sekcji „Dokumenty i szczegóły wykonania” w edycji kroku.
+
 ### Podpowiedzi do TO-BE podczas warsztatu
 
 W edytorze kroku TO-BE wybierz „Powiązane usprawnienie”. Jeśli ustalenie ma kategorię i brakuje zapisanego pomysłu, edytor pokazuje podpowiedź opartą na tej kategorii, np. potwierdzenie odbioru przy problemie z przekazaniem. Przyciskiem „Uzupełnij puste pola propozycją” można przenieść nazwę, opis i rezultat do formularza. Wpisane wcześniej wartości zachowują się. Po przejrzeniu treści można ją poprawić, dodać krok i zapisać TO-BE zwykłą ścieżką. Kategoria „Inne” pozostawia miejsce na własny pomysł.
