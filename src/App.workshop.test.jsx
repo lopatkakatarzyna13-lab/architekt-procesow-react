@@ -305,6 +305,7 @@ it('records explicit messages with an external participant and restores them wit
   const view = render(<App />)
   await user.click(screen.getByRole('button', { name: /Dodaj kroki samodzielnie/ }))
   await user.type(screen.getByLabelText(/Nazwa procesu/), 'Fikcyjna współpraca')
+  await user.type(screen.getByLabelText('Nazwa organizacji na mapach BPMN'), 'Firma')
   await user.type(screen.getByLabelText(/Cel procesu/), 'Przekazanie dokumentów')
   await user.type(screen.getByLabelText(/Co rozpoczyna proces/), 'Zgłoszenie')
   await user.type(screen.getByLabelText(/Co kończy proces/), 'Dokumenty gotowe')
@@ -317,8 +318,9 @@ it('records explicit messages with an external participant and restores them wit
   await user.click(screen.getByRole('button', { name: 'Dodaj działanie zewnętrzne' }))
   const externalId = JSON.parse(localStorage.getItem('architekt-procesow:as-is')).externalSteps[0].id
   const [first, second] = JSON.parse(localStorage.getItem('architekt-procesow:as-is')).steps
+  expect(screen.getByLabelText('Nazwa basenu Twojego procesu').value).toBe('Firma')
+  expect(screen.queryByText(/Masz niezapisaną wiadomość/)).toBeNull()
   await user.selectOptions(screen.getByLabelText('Krok w Twoim procesie'), first.id)
-  await user.type(screen.getByLabelText('Nazwa basenu Twojego procesu'), 'Firma')
   await user.type(screen.getByLabelText('Nazwa basenu zewnętrznego'), 'Biuro')
   await user.selectOptions(screen.getByLabelText('Kierunek wiadomości'), 'outgoing')
   await user.selectOptions(screen.getByLabelText('Działanie uczestnika zewnętrznego (opcjonalnie)'), externalId)
@@ -336,7 +338,7 @@ it('records explicit messages with an external participant and restores them wit
   fail.mockRestore()
   await user.click(screen.getByRole('button', { name: 'Dodaj wiadomość BPMN' }))
   await user.selectOptions(screen.getByLabelText('Krok w Twoim procesie'), second.id)
-  await user.type(screen.getByLabelText('Nazwa basenu Twojego procesu'), 'Firma')
+  expect(screen.getByLabelText('Nazwa basenu Twojego procesu').value).toBe('Firma')
   await user.type(screen.getByLabelText('Nazwa basenu zewnętrznego'), 'Biuro')
   await user.selectOptions(screen.getByLabelText('Kierunek wiadomości'), 'incoming')
   await user.type(screen.getByLabelText('Co jest przekazywane?'), 'Dokumenty')

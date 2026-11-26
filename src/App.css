@@ -3625,6 +3625,8 @@ footer span:first-child::before {
   .print-report .recommendation-grid p {
     font-size: 7.5pt;
   }
+
+  .app-shell { overflow: visible; }
 }
 
 .step-connections { margin: 24px 0; padding: 20px; border: 1px solid #dedbed; border-radius: 12px; background: #fff; }
@@ -3638,11 +3640,21 @@ footer span:first-child::before {
 @media (max-width: 600px) { .bpmn-preview-canvas { height: 330px; } }
 
 @media print {
+  @page bpmn-diagram {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
   .print-bpmn-details { margin: 6mm 0; }
   .print-bpmn-details h3, .print-bpmn-details h4 { break-after: avoid-page; color: #343b63; margin: 4mm 0 2mm; }
   .print-bpmn-details p, .print-bpmn-details li { font-size: 8pt; }
   .print-bpmn-details li { break-inside: avoid; margin-bottom: 1mm; }
   .print-bpmn-image { display: block; width: 100%; max-height: 220mm; object-fit: contain; margin: 3mm 0; break-inside: avoid; }
+  .print-bpmn-sheet { page: bpmn-diagram; }
+  .print-bpmn-sheet .print-bpmn-image { max-height: 125mm; }
+  .print-bpmn-branch-guide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2mm 8mm; margin: 2mm 0 0; padding-left: 4mm; }
+  .print-bpmn-branch-guide ul { margin: 1mm 0 2mm; padding-left: 5mm; }
+  .print-bpmn-details .print-bpmn-branch-guide li { font-size: 10pt; }
 }
 
 .bpmn-step-editor { margin-block: 12px; }

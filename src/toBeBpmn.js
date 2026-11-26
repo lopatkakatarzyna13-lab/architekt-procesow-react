@@ -25,7 +25,7 @@ export function applyFormDecision(steps, sourceId, mainId, returnId) {
 }
 
 export function toBeBpmnScope(scope) {
-  return { processName: `${scope.processName?.trim() || 'Proces'} — TO-BE`, processStart: '', processEnd: '' }
+  return { ...scope, processName: `${scope.processName?.trim() || 'Proces'} — TO-BE`, processStart: '', processEnd: '' }
 }
 
 export function copyAsIsBpmn(steps, externalSteps, externalLinks, copiedSteps) {

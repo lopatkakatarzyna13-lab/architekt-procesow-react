@@ -3,16 +3,13 @@ const BpmnPreview = lazy(() => import('./BpmnPreview'))
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { toBeBpmnScope } from './toBeBpmn'
 
-export default function BpmnExport({ steps, externalSteps = [], externalLinks = [], scope, saved, variant = 'as-is', readOnly = false, exportStem }) {
+export function BpmnDownload({ steps, externalSteps = [], externalLinks = [], scope, variant, exportStem, label = 'Pobierz BPMN 2.0', disabled, showError = false }) {
   const [message, setMessage] = useState('')
-  const [previewKey, setPreviewKey] = useState(null)
   const toBe = variant === 'to-be'
   const bpmnScope = toBe ? toBeBpmnScope(scope) : scope
   const error = getDecisionBpmnError(steps, externalSteps, externalLinks)
-  const snapshot = JSON.stringify([steps, externalSteps, externalLinks, bpmnScope.processName, bpmnScope.processStart, bpmnScope.processEnd])
-  const previewVisible = saved && !error && previewKey === snapshot
   const exportFile = async () => {
-    if (!saved || error) return
+    if (disabled || error) return
     try {
       const { createBrowserBpmn } = await import('./createBrowserBpmn')
       const xml = await createBrowserBpmn({ steps, externalSteps, externalLinks, scope: bpmnScope })
@@ -29,6 +26,20 @@ export default function BpmnExport({ steps, externalSteps = [], externalLinks = 
       setMessage('Plik BPMN został przygotowany do pobrania.')
     } catch { setMessage('Nie udało się przygotować pliku BPMN. Spróbuj ponownie.') }
   }
+  return <div>
+    <button type="button" className="back-button" disabled={disabled || Boolean(error)} onClick={exportFile}>{label}</button>
+    {showError && error && <p>{error}</p>}
+    {message && <p role="status">{message}</p>}
+  </div>
+}
+
+export default function BpmnExport({ steps, externalSteps = [], externalLinks = [], scope, saved, variant = 'as-is', readOnly = false }) {
+  const [previewKey, setPreviewKey] = useState(null)
+  const toBe = variant === 'to-be'
+  const bpmnScope = toBe ? toBeBpmnScope(scope) : scope
+  const error = getDecisionBpmnError(steps, externalSteps, externalLinks)
+  const snapshot = JSON.stringify([steps, externalSteps, externalLinks, bpmnScope.processName, bpmnScope.processStart, bpmnScope.processEnd, bpmnScope.organizationName])
+  const previewVisible = saved && !error && previewKey === snapshot
   return <section className="step-connections" aria-labelledby="bpmn-export-title">
     <h2 id="bpmn-export-title">{readOnly ? `BPMN 2.0 — ${toBe ? 'TO-BE' : 'AS-IS'}` : toBe ? 'Mapa BPMN 2.0 procesu TO-BE' : 'Eksport procesu BPMN 2.0'}</h2>
     <p>Mapa pokazuje zapisane zadania, dokumenty, decyzje, tory i przekazania. W podglądzie wybierz krok, aby odczytać szczegóły wykonania. Plik BPMN zawiera te szczegóły w dokumentacji elementów.</p>
@@ -38,9 +49,9 @@ export default function BpmnExport({ steps, externalSteps = [], externalLinks = 
     {error && <p>{error}</p>}
     <div className="bpmn-actions">
       <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={() => setPreviewKey(previewVisible ? null : snapshot)}>{previewVisible ? 'Ukryj podgląd BPMN' : 'Pokaż podgląd BPMN'}</button>
-      <button type="button" className="back-button" disabled={!saved || Boolean(error)} onClick={exportFile}>Pobierz BPMN 2.0</button>
+      {!readOnly && <BpmnDownload steps={steps} externalSteps={externalSteps} externalLinks={externalLinks}
+        scope={scope} variant={variant} disabled={!saved} />}
     </div>
     {previewVisible && <Suspense fallback={<p role="status">Przygotowuję podgląd BPMN…</p>}><BpmnPreview key={snapshot} steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={bpmnScope} variant={variant} /></Suspense>}
-    {message && <p role="status">{message}</p>}
   </section>
 }

@@ -13,12 +13,13 @@ const mainLabelWidth = 112
 const mainLabelPadding = 10
 const estimateLabelHeight = (label) => Math.ceil(label.length / 12) * 16 + 4
 
-export async function createDecisionBpmn({ steps, externalSteps = [], externalLinks = [], processName, startName, endName, getTaskSize = defaultBpmnTaskSize, getLabelHeight = estimateLabelHeight }) {
+export async function createDecisionBpmn({ steps, externalSteps = [], externalLinks = [], processName, startName, endName, organizationName, getTaskSize = defaultBpmnTaskSize, getLabelHeight = estimateLabelHeight }) {
   const error = getDecisionBpmnError(steps, externalSteps, externalLinks)
   if (error) throw new Error(error)
   const hasLanes = steps.some((step) => step.bpmnLane?.trim())
   const messages = getBpmnMessages(steps)
-  const hasCollaboration = messages.length > 0
+  const primaryName = messages[0]?.primary.trim() || organizationName?.trim()
+  const hasCollaboration = Boolean(primaryName)
   if (!hasCollaboration && !hasLanes && !steps.some((step) => step.extraConnections?.length || step.nextStepId)) {
     const linearError = getLinearBpmnError(steps)
     if (linearError) throw new Error(linearError)
@@ -177,7 +178,7 @@ export async function createDecisionBpmn({ steps, externalSteps = [], externalLi
   let rootElements = [process]
   let planeRoot = process
   if (hasCollaboration) {
-    const primary = moddle.create('bpmn:Participant', { id: 'Participant_Main', name: messages[0].primary.trim(), processRef: process })
+    const primary = moddle.create('bpmn:Participant', { id: 'Participant_Main', name: primaryName, processRef: process })
     const externalNames = getExternalPools(messages)
     const activitiesByPool = new Map(externalNames.map(([key]) => [key, []]))
     const externalTaskById = new Map()

@@ -1,10 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { getRaciValidationErrors } from './raci'
+import { getRaciOwnerAssignments, getRaciValidationErrors } from './raci'
 
 const steps = [{ id: 'step-1' }]
 const responsibleError = 'Krok musi mieć przynajmniej jedną rolę Responsible (R).'
 const accountableMissingError = 'Krok musi mieć dokładnie jedną rolę Accountable (A).'
 const accountableMultipleError = 'Krok powinien mieć tylko jedną rolę Accountable (A).'
+
+it('przypisuje R/A tylko do pustych wierszy z jednoznaczną rolą TO-BE', () => {
+  const steps = [
+    { id: 'empty', owner: ' kadry ' },
+    { id: 'manual', owner: 'Kadry' },
+    { id: 'missing' },
+    { id: 'unknown', owner: 'Finanse' },
+    { id: 'ambiguous', owner: 'IT' },
+  ]
+  const stakeholders = [
+    { id: 'hr', name: 'Kadry' },
+    { id: 'it-a', name: 'IT' },
+    { id: 'it-b', name: 'it' },
+  ]
+  const raci = { empty: { hr: '' }, manual: { 'it-a': 'C' } }
+
+  expect(getRaciOwnerAssignments(steps, stakeholders, raci)).toEqual({ empty: { hr: 'RA' } })
+})
 
 function validate(...assignments) {
   const raci = {

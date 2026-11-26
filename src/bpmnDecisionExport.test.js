@@ -9,6 +9,27 @@ const steps = () => [
 ]
 
 describe('explicit BPMN decisions', () => {
+  it('exports an internal process across teams inside a named participant without message flows', async () => {
+    const input = [
+      { id: 'request', name: 'Zgłoś zmianę', bpmnLane: 'Kierownik' },
+      { id: 'review', name: 'Sprawdź zmianę', bpmnLane: 'Kadry' },
+    ]
+    const xml = await createDecisionBpmn({ steps: input, organizationName: '  Firma testowa  ' })
+    const { rootElement, warnings } = await new BpmnModdle().fromXML(xml)
+    expect(warnings).toEqual([])
+    const [process, collaboration] = rootElement.rootElements
+    const [participant] = collaboration.participants
+    expect(collaboration.participants).toHaveLength(1)
+    expect(participant.name).toBe('Firma testowa')
+    expect(participant.processRef).toBe(process)
+    expect(collaboration.messageFlows ?? []).toHaveLength(0)
+    const [request, review] = process.laneSets[0].lanes.map((lane) =>
+      lane.flowNodeRef.find((node) => node.$instanceOf('bpmn:Task')))
+    expect(request.outgoing[0].targetRef).toBe(review)
+    expect(rootElement.diagrams[0].plane.bpmnElement).toBe(collaboration)
+    expect(rootElement.diagrams[0].plane.planeElement.some((shape) => shape.bpmnElement === participant)).toBe(true)
+  })
+
   it('skips corrections for a complete case and routes corrections back without a second decision', async () => {
     const input = [
       { id: 'submit', name: 'Wyślij zgłoszenie' },

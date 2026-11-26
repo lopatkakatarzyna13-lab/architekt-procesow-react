@@ -8,14 +8,26 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
   const pools = getExternalPools(messages)
   const poolNames = new Map(pools)
   const endpoint = (pool, id) => [poolNames.get(pool) ?? pool, externalSteps.find((step) => step.id === id)?.name].filter(Boolean).join(' / ')
-  const extra = steps.flatMap((step) => (step.extraConnections || []).map((link) => ({ from: step.name, to: steps.find((item) => item.id === link.targetId)?.name || 'Nieznany krok', label: link.label })))
+  const extra = steps.flatMap((step) => (step.extraConnections || []).map((link) => ({ sourceId: step.id, from: step.name, to: steps.find((item) => item.id === link.targetId)?.name || 'Nieznany krok', label: link.label })))
   const decisions = steps.filter((step) => step.extraConnections?.length && step.bpmnDecision)
   const overrides = steps.filter((step) => step.nextStepId)
   const detailed = steps.some((step) => step.bpmnTaskType || getBpmnDocuments(step).length || bpmnStepFields.some(([id]) => step[id]))
   return <div className="print-bpmn-details">
-    <div className="print-map-block">
+    <div className={svg ? 'print-map-block print-bpmn-sheet' : 'print-map-block'}>
       <h3>Mapa BPMN {variant}</h3>
       {svg ? <><p>Diagram odpowiada zapisanemu modelowi BPMN {variant}. Szczegóły połączeń podano poniżej. Diagram: bpmn.io.</p><img className={variant === 'TO-BE' ? 'print-bpmn-image print-tobe-bpmn' : 'print-bpmn-image'} src={svg} alt={`Mapa BPMN procesu ${variant}`} /></> : <p>Nie zamieszczono diagramu BPMN: {error || 'model nie jest dostępny'}.</p>}
+      {svg && decisions.length > 0 && <ul className="print-bpmn-branch-guide">
+        {decisions.map((step) => <li key={step.id}>
+          <strong>{step.bpmnDecision.question}</strong>
+          <ul>
+            <li>{step.bpmnDecision.mainLabel} → {step.nextStepId
+              ? describeNextTarget(steps, step)
+              : steps[steps.indexOf(step) + 1]?.name || 'Koniec procesu'}</li>
+            {extra.filter((transition) => transition.sourceId === step.id).map(({ to, label }, index) =>
+              <li key={index}>{label} → {to}</li>)}
+          </ul>
+        </li>)}
+      </ul>}
     </div>
     {detailed && <>
       <h4>Szczegóły kroków BPMN {variant}</h4>

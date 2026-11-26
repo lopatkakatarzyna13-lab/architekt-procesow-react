@@ -46,7 +46,10 @@ export function addBpmnDataObjects(moddle, groups, tasks, getBounds, maxTaskHeig
   tasks.forEach((task, taskIndex) => {
     const bounds = getBounds(task, taskIndex)
     const middle = bounds.x + bounds.width / 2
-    const y = bounds.y + bounds.height / 2 + maxTaskHeight / 2 + 34
+    const singleDocument = groups[taskIndex].input.length + groups[taskIndex].output.length === 1
+    const y = singleDocument
+      ? bounds.y + bounds.height + 24
+      : bounds.y + bounds.height / 2 + maxTaskHeight / 2 + 34
 
     Object.entries(groups[taskIndex]).forEach(([direction, documents]) => {
       const input = direction === 'input'
@@ -69,8 +72,8 @@ export function addBpmnDataObjects(moddle, groups, tasks, getBounds, maxTaskHeig
         task.get(input ? 'dataInputAssociations' : 'dataOutputAssociations').push(association)
         elements.push(object, reference)
 
-        const x = middle + sign * (62 + index * documentSpacing)
-        const taskX = middle + sign * bounds.width / 2 * (index + 1) / (documents.length + 1)
+        const x = singleDocument ? middle : middle + sign * (62 + index * documentSpacing)
+        const taskX = singleDocument ? middle : middle + sign * bounds.width / 2 * (index + 1) / (documents.length + 1)
         const documentPoint = { x, y }
         const taskPoint = { x: taskX, y: bounds.y + bounds.height }
         shapes.push(moddle.create('bpmndi:BPMNShape', {

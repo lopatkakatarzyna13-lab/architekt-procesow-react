@@ -22,7 +22,7 @@ import {
 import { buildProcessSnapshot } from './processSnapshot'
 import { completedProcessExportStem } from './processExportName'
 import { compareProcessSteps, getMissingToBeSteps, withDetectedStepChanges } from './processStepComparison'
-import { getRaciValidationErrors } from './raci'
+import { getRaciOwnerAssignments, getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
 import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
@@ -33,7 +33,7 @@ import { applyWorkshopDecision } from './workshopDecision.js'
 import { deleteWorkshopRecording } from './workshopRecordings'
 import { appendWorkshopSteps, getWorkshopStorageKeys, loadWorkshop, loadWorkshopReview } from './workshop'
 import ProcessConnections from './ProcessConnections.jsx'
-import BpmnExport from './BpmnExport.jsx'
+import BpmnExport, { BpmnDownload } from './BpmnExport.jsx'
 import BpmnDecisions from './BpmnDecisions'
 import BpmnLanes from './BpmnLanes'
 import { applyRoleLanes } from './roleLanes.js'
@@ -41,7 +41,7 @@ import BpmnMessages from './BpmnMessages.jsx'
 import BpmnExternalMessages from './BpmnExternalMessages'
 import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
-import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, emptyBpmnStep, getBpmnDocuments, getBpmnStepError, readBpmnStepDraft } from './bpmnStepDetails'
+import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, describeBpmnDocument, emptyBpmnStep, getBpmnDocuments, getBpmnStepError, readBpmnStepDraft } from './bpmnStepDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
 import { applyFormDecision, canProposeFormDecision, copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
 import ToBeFormDecision from './ToBeFormDecision'
@@ -82,6 +82,7 @@ const emptyScope = {
   processStart: '',
   processEnd: '',
   processOwner: '',
+  organizationName: '',
   participants: '',
   customer: '',
   outOfScope: '',
@@ -542,6 +543,7 @@ function FormField({
   helper,
   multiline = false,
   placeholder,
+  maxLength,
 }) {
   const describedBy = [helper ? `${id}-helper` : null, error ? `${id}-error` : null]
     .filter(Boolean)
@@ -553,6 +555,7 @@ function FormField({
     value,
     onChange,
     placeholder,
+    maxLength,
     'aria-invalid': Boolean(error),
     'aria-describedby': describedBy,
     className: error ? 'field-error' : undefined,
@@ -745,6 +748,15 @@ function ScopeForm({
           </div>
           <div className="form-grid">
             <FormField
+              id="organizationName"
+              label="Nazwa organizacji na mapach BPMN"
+              value={formData.organizationName}
+              onChange={onChange}
+              placeholder="Organizacja"
+              maxLength={100}
+              helper="Nazwa basenu na mapach BPMN i podpowiedź przy dodawaniu wiadomości."
+            />
+            <FormField
               id="processOwner"
               label="Właściciel procesu"
               value={formData.processOwner}
@@ -872,8 +884,15 @@ function DescribeAsIs({
   )
 }
 
-function BpmnStepEditor({ draft, onChange, prefix }) {
+function BpmnStepEditor({ draft, onChange, prefix, steps, editingId }) {
   const documents = getBpmnDocuments(draft)
+  const stepIndex = steps.findIndex(({ id }) => id === editingId)
+  const earlierSteps = stepIndex < 0 ? steps : steps.slice(0, stepIndex)
+  const inputDocuments = new Set(documents.filter(({ direction }) => direction === 'input').map(describeBpmnDocument))
+  const reusable = earlierSteps.flatMap((step) => getBpmnDocuments(step)
+    .filter((document) => document.direction === 'output' && document.name?.trim()
+      && !inputDocuments.has(describeBpmnDocument(document)))
+    .map((document) => ({ document, label: `${step.name} — ${describeBpmnDocument(document)}` })))
   const changeDocuments = (value) => onChange({ target: { name: 'bpmnDocuments', value } })
   const changeDocument = (index, field, value) => changeDocuments(
     documents.map((document, i) => i === index ? { ...document, [field]: value } : document),
@@ -920,6 +939,16 @@ function BpmnStepEditor({ draft, onChange, prefix }) {
           onClick={() => changeDocuments([...documents, { direction, name: '', format: '', channel: '' }])}
         >Dodaj dokument — {label.toLocaleLowerCase('pl')}</button>)}
       </div>
+      {reusable.length > 0 && <div className="form-field">
+        <label htmlFor={`${prefix}-reuse-document`}>Dodaj na wejście dokument z wcześniejszego kroku</label>
+        <select id={`${prefix}-reuse-document`} value="" onChange={(event) => {
+          const selected = reusable[event.target.selectedIndex - 1]
+          if (selected) changeDocuments([...documents, { ...selected.document, direction: 'input' }])
+        }}>
+          <option value="">Wybierz dokument</option>
+          {reusable.map(({ label }, index) => <option key={index} value={index}>{label}</option>)}
+        </select>
+      </div>}
       <div className="form-grid">
         {bpmnStepFields.map(([id, label]) => <FormField key={id} id={id} label={label} value={draft[id] ?? ''} onChange={onChange} />)}
       </div>
@@ -992,7 +1021,7 @@ function StepsAsIs({
             />
           </div>
         </div>
-        <BpmnStepEditor draft={stepDraft} onChange={onStepChange} prefix="as-is-bpmn" />
+        <BpmnStepEditor draft={stepDraft} onChange={onStepChange} prefix="as-is-bpmn" steps={steps} editingId={editingStepId} />
         {stepDraft.name.trim() && stepError && <p className="error-message" role="alert">{stepError}</p>}
         <div className="step-form-actions">
           {editingStepId && (
@@ -1180,7 +1209,7 @@ function AsIsScreen({
         <BpmnDecisions steps={steps} workshopDecisions={workshopDecisions} onSave={onSaveBpmnDecision} onDraftChange={onBpmnDraftChange} />
         <BpmnLanes steps={steps} externalSteps={externalSteps} onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} onChange={onExternalStepsChange} onDraftChange={onBpmnDraftChange} />
-        <BpmnMessages workshopRef={workshopMessageForm} steps={steps} externalSteps={externalSteps} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
+        <BpmnMessages workshopRef={workshopMessageForm} steps={steps} externalSteps={externalSteps} organizationName={scope.organizationName} onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={onBpmnDraftChange} />
         <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={onBpmnDraftChange} variant="AS-IS" />
         <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} />
         </>
@@ -1939,6 +1968,11 @@ function ToBeStepEditor({
     label: finding.name,
   }))
   const sourceStep = startMethod === 'steps' ? asIsSteps.find(({ id }) => id === linkedFinding?.location) : undefined
+  const reuseSource = asIsSteps.find(({ id }) => id === draft.sourceAsIsStepId) ?? sourceStep
+  const draftDocuments = getBpmnDocuments(draft)
+  const reusableDocuments = getBpmnDocuments(reuseSource ?? {}).filter((document) =>
+    document.name?.trim() && !draftDocuments.some(({ direction, name }) =>
+      direction === document.direction && name?.trim().toLocaleLowerCase('pl') === document.name.trim().toLocaleLowerCase('pl')))
   const formSuggestions = getFormImprovementSuggestions(linkedFinding, sourceStep, assumptions)
   const suggestion = getToBeStepSuggestion(linkedFinding)
   const suggestions = formSuggestions.length ? formSuggestions : (suggestion ? [suggestion] : [])
@@ -2079,7 +2113,38 @@ function ToBeStepEditor({
             </aside>
           )
         })}
-        <BpmnStepEditor draft={draft} onChange={onChange} prefix="to-be-bpmn" />
+        {reuseSource && ((!draft.owner.trim() && reuseSource.owner?.trim())
+          || (!draft.bpmnRequiredData?.trim() && reuseSource.bpmnRequiredData?.trim())
+          || reusableDocuments.length > 0) && (
+          <details className="bpmn-step-editor">
+            <summary>Ustalenia z AS-IS — {reuseSource.name}</summary>
+            <div className="bpmn-actions">
+              {!draft.owner.trim() && reuseSource.owner?.trim() && (
+                <button type="button" className="back-button" onClick={() => onUseSuggestion({ owner: reuseSource.owner })}>
+                  Użyj roli z AS-IS — {reuseSource.owner}
+                </button>
+              )}
+              {!draft.bpmnRequiredData?.trim() && reuseSource.bpmnRequiredData?.trim() && (
+                <button type="button" className="back-button" onClick={() => onUseSuggestion({ bpmnRequiredData: reuseSource.bpmnRequiredData })}>
+                  Użyj wymaganych danych z AS-IS — {reuseSource.bpmnRequiredData}
+                </button>
+              )}
+            </div>
+            {reusableDocuments.length > 0 && <>
+              <p>Dokument zachowa nazwę i format. Kanał przekazania ustawisz dla TO-BE.</p>
+              <div className="bpmn-actions">
+                {reusableDocuments.map(({ direction, name, format }, index) => (
+                  <button key={index} type="button" className="back-button" onClick={() => onUseSuggestion({
+                    bpmnDocuments: [...draftDocuments, { direction, name, format: format ?? '', channel: '' }],
+                  })}>
+                    Dodaj dokument z AS-IS — {bpmnDocumentDirections[direction]}: {name}
+                  </button>
+                ))}
+              </div>
+            </>}
+          </details>
+        )}
+        <BpmnStepEditor draft={draft} onChange={onChange} prefix="to-be-bpmn" steps={toBeSteps} editingId={editingId} />
         {draft.name.trim() && error && <p className="error-message" role="alert">{error}</p>}
         <div className="step-form-actions">
           {editingId && (
@@ -2362,7 +2427,7 @@ function ToBeScreen({
       <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
       <BpmnLanes steps={steps} externalSteps={externalSteps} variant="TO-BE" onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={markBpmnDraft} />
       {steps.length > 0 && <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
-      <BpmnMessages steps={steps} externalSteps={externalSteps} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
+      <BpmnMessages steps={steps} externalSteps={externalSteps} organizationName={scope.organizationName} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
       <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={markBpmnDraft} variant="TO-BE" />
       <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} variant="to-be" />
 
@@ -2825,7 +2890,7 @@ function ProcessFlowCanvas({ steps, scope, variant, findings }) {
   )
 }
 
-function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings, bpmnModels, exportStem }) {
+function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings, bpmnModels }) {
   const [mapVariant, setMapVariant] = useState('to-be')
   const selectedSteps = mapVariant === 'to-be' ? toBeSteps : asIsSteps
   const isTextAsIs = mapVariant === 'as-is' && startMethod !== 'steps'
@@ -2858,7 +2923,7 @@ function ProcessMapSection({ scope, startMethod, asIsSteps, toBeSteps, findings,
       </div>
 
       {!isTextAsIs && bpmnModels && (
-        <BpmnExport key={mapVariant} {...bpmnModels[mapVariant]} scope={scope} variant={mapVariant} saved readOnly exportStem={exportStem} />
+        <BpmnExport key={mapVariant} {...bpmnModels[mapVariant]} scope={scope} variant={mapVariant} saved readOnly />
       )}
       {isTextAsIs ? (
         <div className="map-empty-message">
@@ -2967,7 +3032,8 @@ function StakeholdersSection({
   )
 }
 
-function RaciSection({ steps, stakeholders, raci, errors, onChange, readOnly }) {
+function RaciSection({ steps, stakeholders, raci, errors, onChange, onAssignOwners, readOnly }) {
+  const ownerAssignments = readOnly ? {} : getRaciOwnerAssignments(steps, stakeholders, raci)
   const options = [
     ['', '—'],
     ['R', 'R'],
@@ -2991,6 +3057,13 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange, readOnly }) 
         <span className="raci-c"><strong>C</strong> udziela konsultacji</span>
         <span className="raci-i"><strong>I</strong> otrzymuje informację</span>
       </div>
+      {Object.keys(ownerAssignments).length > 0 && (
+        <div className="step-form-actions">
+          <button className="add-step-button" type="button" onClick={() => onAssignOwners(ownerAssignments)}>
+            Przypisz wykonawców jako R/A w pustych wierszach
+          </button>
+        </div>
+      )}
       {stakeholders.length === 0 ? (
         <div className="empty-steps"><strong>Dodaj interesariusza, aby uzupełnić macierz RACI.</strong></div>
       ) : (
@@ -3409,6 +3482,7 @@ function ReportScreen({
   onDeleteStakeholder,
   onCancelStakeholder,
   onRaciChange,
+  onAssignRaciOwners,
   onBack,
   onSave,
   onFinish,
@@ -3421,6 +3495,11 @@ function ReportScreen({
   const [selectedQuestions, setSelectedQuestions] = useState([])
   const [questionError, setQuestionError] = useState('')
   const questionsForPrint = workshopQuestions.filter((question) => selectedQuestions.includes(question.id))
+  const exportStem = completed ? completedProcessExportStem(scope.processName, completedVersion) : undefined
+  const bpmnModels = {
+    'as-is': { steps: asIsSteps, externalSteps, externalLinks },
+    'to-be': { steps: modeledSteps, externalSteps: toBeExternalSteps, externalLinks: toBeExternalLinks },
+  }
 
   const handleExport = () => {
     if (selectedQuestions.length > 0) {
@@ -3454,11 +3533,7 @@ function ReportScreen({
         asIsSteps={asIsSteps}
         toBeSteps={toBeSteps}
         findings={findings}
-        exportStem={completed ? completedProcessExportStem(scope.processName, completedVersion) : undefined}
-        bpmnModels={completed ? {
-          'as-is': { steps: asIsSteps, externalSteps, externalLinks },
-          'to-be': { steps: modeledSteps, externalSteps: toBeExternalSteps, externalLinks: toBeExternalLinks },
-        } : undefined}
+        bpmnModels={completed ? bpmnModels : undefined}
       />
       <StakeholdersSection
         stakeholders={stakeholders}
@@ -3472,7 +3547,7 @@ function ReportScreen({
         onCancel={onCancelStakeholder}
         readOnly={completed}
       />
-      <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} onChange={onRaciChange} readOnly={completed} />
+      <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} onChange={onRaciChange} onAssignOwners={onAssignRaciOwners} readOnly={completed} />
       <Recommendations findings={findings} toBeSteps={toBeSteps} selectedFindingIds={selectedFindingIds} />
       {(workshopQuestions.length > 0 || questionError) && (
         <section className="report-section report-workshop-questions">
@@ -3501,20 +3576,29 @@ function ReportScreen({
       {reportError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>{reportError}</strong><small>Uzupełnij wymagane dane raportu.</small></div></div>}
       {saved && <div className="save-message success-message" role="status"><span aria-hidden="true">✓</span><div><strong>Raport procesu został zapisany</strong><small>Interesariusze i macierz RACI są zapisane lokalnie.</small></div></div>}
       {saveError && <div className="save-message storage-error" role="alert"><span aria-hidden="true">!</span><div><strong>Nie udało się zapisać raportu</strong><small>Sprawdź ustawienia przeglądarki i spróbuj ponownie.</small></div></div>}
-      <p className="export-guidance">
-        W oknie drukowania wybierz drukarkę „Zapisz jako PDF”.
-      </p>
       <div className="form-actions">
         {!completed && <>
           <button className="back-button" type="button" onClick={onBack}><span aria-hidden="true">←</span>Wróć do TO-BE</button>
           <button className="save-button" type="button" onClick={onSave}>Zapisz raport<span aria-hidden="true">✓</span></button>
           {saved && <button className="back-button" type="button" onClick={onFinish}>Zakończ wersję</button>}
         </>}
-        <button className="export-button" type="button" onClick={handleExport} disabled={printPreparing}>
-          {printPreparing ? 'Przygotowuję PDF…' : 'Eksportuj do PDF'}
-          <span aria-hidden="true">↗</span>
-        </button>
       </div>
+      <section className="report-section" aria-labelledby="report-export-title">
+        <h2 id="report-export-title">Materiały do wdrożenia</h2>
+        {completed ? <p>Wersja {completedVersion} · zakończona</p> : <p>Zakończ wersję procesu, aby pobrać z tego miejsca mapy BPMN i raport oznaczone numerem wersji.</p>}
+        {completed && startMethod !== 'steps' && <p>AS-IS jest dostępny w raporcie jako opis procesu.</p>}
+        <p className="export-guidance">W oknie drukowania wybierz „Zapisz jako PDF”.</p>
+        <div className="bpmn-actions">
+          {completed && (startMethod === 'steps' ? ['as-is', 'to-be'] : ['to-be']).map((variant) => (
+            <BpmnDownload key={variant} {...bpmnModels[variant]} scope={scope} variant={variant} exportStem={exportStem}
+              label={`Pobierz ${variant.toUpperCase()} BPMN`} showError />
+          ))}
+          <button className="export-button" type="button" onClick={handleExport} disabled={printPreparing}>
+            {printPreparing ? 'Przygotowuję PDF…' : 'Eksportuj do PDF'}
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </section>
       <PrintReport
         scope={scope}
         startMethod={startMethod}
@@ -5287,6 +5371,16 @@ try {
     setReportSaveError(false)
   }
 
+  const assignRaciOwners = (assignments) => {
+    setRaci((current) => ({ ...current, ...assignments }))
+    setRaciErrors((current) => Object.fromEntries(
+      Object.entries(current).filter(([stepId]) => !Object.hasOwn(assignments, stepId)),
+    ))
+    setReportError('')
+    setReportSaved(false)
+    setReportSaveError(false)
+  }
+
   const validateReportAssignments = () => {
     if (stakeholders.length === 0) {
       setReportError('Dodaj co najmniej jednego interesariusza.')
@@ -5646,6 +5740,7 @@ try {
             onDeleteStakeholder={deleteStakeholder}
             onCancelStakeholder={cancelStakeholderEdit}
             onRaciChange={handleRaciChange}
+            onAssignRaciOwners={assignRaciOwners}
             onBack={showToBe}
             onSave={saveReport}
             onFinish={finishVersion}
