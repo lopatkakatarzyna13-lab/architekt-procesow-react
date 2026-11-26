@@ -407,7 +407,7 @@ try {
   }
 
   await page.emulateMedia({ media: 'print' })
-  const pdf = await page.pdf({ format: 'A4', printBackground: true, ...(output ? { path: output } : {}) })
+  const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true, ...(output ? { path: output } : {}) })
   const pages = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
     .split('\f').map((page) => page.replace(/\s+/g, ' '))
   const text = pages.join(' ')
