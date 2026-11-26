@@ -381,6 +381,8 @@ try {
   assert.equal(await openQuestion.isChecked(), false)
   assert.equal(await report.locator('.print-report .report-workshop-questions').count(), 0)
   await openQuestion.check()
+  await page.getByRole('button', { name: 'Zapisz raport' }).click()
+  await page.getByText('Raport procesu został zapisany').waitFor()
   await report.getByText('Brak terminu przekazania', { exact: true }).first().waitFor()
   await report.getByText('Ustalić przewidywalny termin przekazania', { exact: true }).first().waitFor()
   for (const step of proposal.steps) await report.getByText(step.text, { exact: true }).first().waitFor()
@@ -447,6 +449,7 @@ try {
   await page.getByRole('button', { name: 'Moje procesy', exact: true }).click()
   await original.getByRole('button', { name: 'Otwórz proces' }).click()
   assert.equal(await page.getByRole('button', { name: 'Zapisz raport' }).count(), 0)
+  assert.equal(await openQuestion.isChecked(), true, 'the completed report must retain its selected question')
   assert.equal(await page.getByText('Dodatkowa weryfikacja w wersji 2', { exact: true }).count(), 0)
   console.log('PASS: fictional provider → reviewed findings → selected step and return path → save and reopen → analysis → TO-BE → RACI → report and checked PDF text')
 } finally {
