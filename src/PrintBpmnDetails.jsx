@@ -14,8 +14,10 @@ export default function PrintBpmnDetails({ steps, externalSteps, externalLinks =
   const detailed = steps.some((step) => step.bpmnTaskType || getBpmnDocuments(step).length || bpmnStepFields.some(([id]) => step[id]))
   return <div className="print-bpmn-details">
     <div className={svg ? 'print-map-block print-bpmn-sheet' : 'print-map-block'}>
-      <h3>Mapa BPMN {variant}</h3>
-      {svg ? <><p>Diagram odpowiada zapisanemu modelowi BPMN {variant}. Szczegóły połączeń podano poniżej. Diagram: bpmn.io.</p><img className={variant === 'TO-BE' ? 'print-bpmn-image print-tobe-bpmn' : 'print-bpmn-image'} src={svg} alt={`Mapa BPMN procesu ${variant}`} /></> : <p>Nie zamieszczono diagramu BPMN: {error || 'model nie jest dostępny'}.</p>}
+      <div className="print-bpmn-figure">
+        <h3>Mapa BPMN {variant}</h3>
+        {svg ? <><p>Diagram odpowiada zapisanemu modelowi BPMN {variant}. Szczegóły połączeń podano poniżej. Diagram: bpmn.io.</p><img className={variant === 'TO-BE' ? 'print-bpmn-image print-tobe-bpmn' : 'print-bpmn-image'} src={svg} alt={`Mapa BPMN procesu ${variant}`} /></> : <p>Nie zamieszczono diagramu BPMN: {error || 'model nie jest dostępny'}.</p>}
+      </div>
       {svg && decisions.length > 0 && <ul className="print-bpmn-branch-guide">
         {decisions.map((step) => <li key={step.id}>
           <strong>{step.bpmnDecision.question}</strong>
