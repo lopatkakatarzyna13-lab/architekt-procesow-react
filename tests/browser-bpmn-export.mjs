@@ -39,7 +39,16 @@ try {
   const process = rootElement.rootElements[0]
   assert.equal(process.name, 'Fikcyjny proces HR')
   assert.deepEqual(process.flowElements.filter((element) => element.$type === 'bpmn:Task').map((element) => element.name), ['Weryfikacja danych', 'Wysłanie dokumentów'])
-  assert.equal(rootElement.diagrams[0].plane.planeElement.length, 7)
+  const internalCollaboration = rootElement.rootElements.find((item) => item.$type === 'bpmn:Collaboration')
+  assert.deepEqual(internalCollaboration.participants.map((participant) => participant.name), ['Organizacja'])
+  assert.equal(internalCollaboration.participants[0].processRef, process)
+  assert.equal(internalCollaboration.messageFlows?.length ?? 0, 0)
+  const { plane } = rootElement.diagrams[0]
+  assert.equal(plane.bpmnElement, internalCollaboration)
+  const drawnElements = new Set(plane.planeElement.map(({ bpmnElement }) => bpmnElement))
+  for (const item of [...process.flowElements, ...internalCollaboration.participants]) {
+    assert.ok(drawnElements.has(item), `missing BPMN diagram element: ${item.id}`)
+  }
   execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path], { stdio: 'inherit' })
   await page.getByLabel('Tor BPMN — krok 1: Weryfikacja danych').fill('HR')
   assert.equal(await button.isDisabled(), true, 'an unsaved lane draft must disable the export')
