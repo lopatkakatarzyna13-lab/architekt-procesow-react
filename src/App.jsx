@@ -275,7 +275,7 @@ function loadSavedReport() {
   try {
     const savedReport = JSON.parse(localStorage.getItem(REPORT_STORAGE_KEY))
     if (!savedReport || typeof savedReport !== 'object') {
-      return { stakeholders: [], raci: {}, initialized: false, isSaved: false }
+      return { stakeholders: [], raci: {}, questionIds: [], initialized: false, isSaved: false }
     }
     return {
       stakeholders: Array.isArray(savedReport.stakeholders)
@@ -288,11 +288,14 @@ function loadSavedReport() {
         savedReport.raci && typeof savedReport.raci === 'object'
           ? savedReport.raci
           : {},
+      questionIds: Array.isArray(savedReport.questionIds)
+        ? savedReport.questionIds.filter((id) => typeof id === 'string')
+        : [],
       initialized: Boolean(savedReport.initialized),
       isSaved: Boolean(savedReport.savedAt),
     }
   } catch {
-    return { stakeholders: [], raci: {}, initialized: false, isSaved: false }
+    return { stakeholders: [], raci: {}, questionIds: [], initialized: false, isSaved: false }
   }
 }
 
@@ -3483,6 +3486,8 @@ function ReportScreen({
   onCancelStakeholder,
   onRaciChange,
   onAssignRaciOwners,
+  reportQuestionIds,
+  onReportQuestionIdsChange,
   onBack,
   onSave,
   onFinish,
@@ -3492,9 +3497,14 @@ function ReportScreen({
   const stepComparison = startMethod === 'steps' ? compareProcessSteps(asIsSteps, modeledSteps) : null
   const toBeSteps = withDetectedStepChanges(modeledSteps, stepComparison)
   const [workshopQuestions, setWorkshopQuestions] = useState(() => loadReportQuestions(processId))
-  const [selectedQuestions, setSelectedQuestions] = useState([])
+  const [printQuestionIds, setPrintQuestionIds] = useState(null)
   const [questionError, setQuestionError] = useState('')
+  const selectedQuestions = printQuestionIds ?? reportQuestionIds
   const questionsForPrint = workshopQuestions.filter((question) => selectedQuestions.includes(question.id))
+  const changeQuestionSelection = (ids) => {
+    if (completed) setPrintQuestionIds(ids)
+    else onReportQuestionIdsChange(ids)
+  }
   const exportStem = completed ? completedProcessExportStem(scope.processName, completedVersion) : undefined
   const bpmnModels = {
     'as-is': { steps: asIsSteps, externalSteps, externalLinks },
@@ -3502,11 +3512,12 @@ function ReportScreen({
   }
 
   const handleExport = () => {
-    if (selectedQuestions.length > 0) {
+    if (questionsForPrint.length > 0) {
       const currentQuestions = loadReportQuestions(processId)
-      if (!selectedQuestions.every((id) => currentQuestions.some((question) => question.id === id))) {
+      const currentIds = new Set(currentQuestions.map(({ id }) => id))
+      if (questionsForPrint.some(({ id }) => !currentIds.has(id))) {
         setWorkshopQuestions(currentQuestions)
-        setSelectedQuestions([])
+        changeQuestionSelection(selectedQuestions.filter((id) => currentIds.has(id)))
         setQuestionError('Ustalenia warsztatowe się zmieniły. Sprawdź pytania przed eksportem.')
         return
       }
@@ -3552,7 +3563,9 @@ function ReportScreen({
       {(workshopQuestions.length > 0 || questionError) && (
         <section className="report-section report-workshop-questions">
           <ReportSectionTitle number="10" title="Otwarte pytania po warsztacie"
-            description="Zaznacz pytania, które chcesz uwzględnić w PDF." />
+            description={completed
+              ? 'Możesz zmienić wybór dla bieżącego wydruku.'
+              : 'Zaznacz pytania, które chcesz uwzględnić w PDF, i zapisz raport.'} />
           {questionError && <p role="alert">{questionError}</p>}
           <ul>
             {workshopQuestions.map((question) => (
@@ -3561,9 +3574,9 @@ function ReportScreen({
                   <input type="checkbox" checked={selectedQuestions.includes(question.id)} disabled={printPreparing}
                     onChange={(event) => {
                       const { checked } = event.target
-                      setSelectedQuestions((current) => checked
-                        ? [...current, question.id]
-                        : current.filter((id) => id !== question.id))
+                      changeQuestionSelection(checked
+                        ? [...selectedQuestions, question.id]
+                        : selectedQuestions.filter((id) => id !== question.id))
                     }} />
                   {question.text}
                 </label>
@@ -3880,6 +3893,7 @@ function App() {
   const [editingStakeholderId, setEditingStakeholderId] = useState(initialDraft?.report?.editingId ?? null)
   const [stakeholderError, setStakeholderError] = useState('')
   const [raci, setRaci] = useState(initialDraft?.report?.raci ?? savedReport.raci)
+  const [reportQuestionIds, setReportQuestionIds] = useState(initialDraft?.report?.questionIds ?? savedReport.questionIds)
   const [raciErrors, setRaciErrors] = useState({})
   const [reportError, setReportError] = useState('')
   const [reportSaved, setReportSaved] = useState(!initialDraft?.report && savedReport.isSaved)
@@ -4043,7 +4057,7 @@ function App() {
       },
     }),
     ...(!reportSaved && (screen === 'report' || stakeholderFormPending || Object.keys(raci).length > 0) && {
-      report: { stakeholders, raci, form: stakeholderDraft, editingId: editingStakeholderId },
+      report: { stakeholders, raci, questionIds: reportQuestionIds, form: stakeholderDraft, editingId: editingStakeholderId },
     }),
   })
   const persistWorkspaceDraft = useEffectEvent(() => {
@@ -4399,6 +4413,7 @@ const openSavedProcess = (process) => {
       : buildSuggestedStakeholders(nextScope.data, nextAsIs.steps, nextToBe.steps)),
   )
   setRaci(draft?.report?.raci ?? nextReport.raci)
+  setReportQuestionIds(draft?.report?.questionIds ?? nextReport.questionIds)
   setStakeholderDraft(draft?.report?.form ?? emptyStakeholder)
   setEditingStakeholderId(draft?.report?.editingId ?? null)
   setReportSaved(!draft?.report && nextReport.isSaved)
@@ -5417,6 +5432,7 @@ try {
         JSON.stringify({
           stakeholders,
           raci,
+          questionIds: reportQuestionIds,
           initialized: true,
           savedAt: new Date().toISOString(),
         }),
@@ -5741,6 +5757,12 @@ try {
             onCancelStakeholder={cancelStakeholderEdit}
             onRaciChange={handleRaciChange}
             onAssignRaciOwners={assignRaciOwners}
+            reportQuestionIds={reportQuestionIds}
+            onReportQuestionIdsChange={(ids) => {
+              setReportQuestionIds(ids)
+              setReportSaved(false)
+              setReportSaveError(false)
+            }}
             onBack={showToBe}
             onSave={saveReport}
             onFinish={finishVersion}

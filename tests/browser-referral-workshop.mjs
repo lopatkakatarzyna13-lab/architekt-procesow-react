@@ -349,8 +349,10 @@ try {
   for (const [index, step] of toBe.entries()) {
     await label(`${step}: ${branched && index === 0 ? manager : assignee}`).selectOption('RA')
   }
-  await button('Zapisz raport').click()
   await check(question)
+  await button('Zapisz raport').click()
+  await page.reload()
+  assert.equal(await label(question).isChecked(), true)
   await page.evaluate(() => {
     window.__referralPrintCalled = false
     window.print = () => { window.__referralPrintCalled = true }
