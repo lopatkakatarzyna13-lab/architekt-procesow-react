@@ -408,8 +408,9 @@ try {
 
   await page.emulateMedia({ media: 'print' })
   const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true, ...(output ? { path: output } : {}) })
-  const pages = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
-    .split('\f').map((page) => page.replace(/\s+/g, ' '))
+  const extractedText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
+  if (output) await writeFile(`${output}.txt`, extractedText)
+  const pages = extractedText.split('\f').map((page) => page.replace(/\s+/g, ' '))
   const text = pages.join(' ')
   const recommendations = text.split('09 Rekomendacje').at(-1).split('10 Otwarte pytania po warsztacie')[0]
   assert.ok(recommendations.includes('Kroki oznaczone jako możliwe do automatyzacji'))

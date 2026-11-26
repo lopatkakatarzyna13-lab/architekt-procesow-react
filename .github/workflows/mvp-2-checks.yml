@@ -107,6 +107,7 @@ jobs:
       - name: Combine selected AS-IS steps and improvements in local TO-BE
         run: node tests/browser-tobe-improvements.mjs
       - name: Save fictional report for visual review
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: fictional-workshop-report
@@ -114,7 +115,9 @@ jobs:
             ${{ runner.temp }}/fictional-report.pdf
             ${{ runner.temp }}/bpmn-preview.png
             ${{ runner.temp }}/referral-workshop-report.pdf
+            ${{ runner.temp }}/referral-workshop-report.pdf.txt
             ${{ runner.temp }}/referral-workshop-pools-report.pdf
+            ${{ runner.temp }}/referral-workshop-pools-report.pdf.txt
             ${{ runner.temp }}/accounting-handoff-report.pdf
             ${{ runner.temp }}/employee-correction-report.pdf
           retention-days: 1
