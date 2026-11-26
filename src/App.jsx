@@ -1721,7 +1721,13 @@ function ToBeContext({ scope, startMethod, findings }) {
   )
 }
 
-function ToBeAssumptions({ assumptions, error, onChange }) {
+function getImprovementIdeas(findings) {
+  return [...new Set(findings.map(({ improvement }) => improvement?.trim()).filter(Boolean))]
+}
+
+function ToBeAssumptions({ assumptions, findings, error, onFieldChange }) {
+  const onChange = ({ target }) => onFieldChange(target.name, target.value)
+  const ideas = getImprovementIdeas(findings)
   return (
     <section className="to-be-section" aria-labelledby="assumptions-title">
       <div className="form-section-title">
@@ -1732,16 +1738,34 @@ function ToBeAssumptions({ assumptions, error, onChange }) {
         </div>
       </div>
       <div className="form-grid">
-        <FormField
-          id="toBeChangeGoal"
-          label="Cel projektowanej zmiany"
-          value={assumptions.changeGoal}
-          onChange={onChange}
-          error={error}
-          required
-          placeholder="Co przede wszystkim chcesz zmienić?"
-          multiline
-        />
+        <div>
+          <FormField
+            id="toBeChangeGoal"
+            label="Cel projektowanej zmiany"
+            value={assumptions.changeGoal}
+            onChange={onChange}
+            error={error}
+            required
+            placeholder="Co przede wszystkim chcesz zmienić?"
+            multiline
+          />
+          {!assumptions.changeGoal.trim() && ideas.length > 0 && (
+            <div className="to-be-step-suggestion">
+              <strong>Pomysły usprawnień z analizy</strong>
+              {ideas.map((idea) => (
+                <div key={idea} role="group" aria-label={idea}>
+                  <p>{idea}</p>
+                  <button type="button" className="back-button" onClick={() => {
+                    onFieldChange('toBeChangeGoal', idea)
+                    document.getElementById('toBeChangeGoal')?.focus()
+                  }}>
+                    Użyj jako celu TO-BE
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <FormField
           id="toBeExpectedResult"
           label="Oczekiwany rezultat"
@@ -2285,8 +2309,9 @@ function ToBeScreen({
       <ToBeContext scope={scope} startMethod={startMethod} findings={findings} />
       <ToBeAssumptions
         assumptions={assumptions}
+        findings={findings.filter(({ id }) => selectedFindingIds.includes(id))}
         error={assumptionError}
-        onChange={onAssumptionChange}
+        onFieldChange={onAssumptionChange}
       />
       <IncludedFindings
         findings={findings}
@@ -3304,7 +3329,7 @@ function Recommendations({ findings, toBeSteps, selectedFindingIds }) {
   const stepsByFinding = getToBeStepsByFinding(toBeSteps)
   const selectedIds = new Set(selectedFindingIds)
   const missingSteps = findings.filter(({ id }) => selectedIds.has(id) && !stepsByFinding.has(id))
-  const improvementIdeas = [...new Set(findings.map(({ improvement }) => improvement?.trim()).filter(Boolean))]
+  const improvementIdeas = getImprovementIdeas(findings)
   const groups = [
     ['Kroki oznaczone jako możliwe do automatyzacji', toBeSteps.filter((step) => step.automatable === 'Tak').map((step) => step.name), 'Brak oznaczonych kroków TO-BE.'],
     ...(improvementIdeas.length ? [['Pomysły usprawnień z analizy', improvementIdeas]] : []),
@@ -4859,15 +4884,15 @@ try {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleToBeAssumptionChange = (event) => {
+  const handleToBeAssumptionChange = (name, value) => {
     const fieldMap = {
       toBeChangeGoal: 'changeGoal',
       toBeExpectedResult: 'expectedResult',
       toBeConstraints: 'constraints',
       toBeSuccessMeasures: 'successMeasures',
     }
-    const field = fieldMap[event.target.name]
-    setToBeAssumptions((current) => ({ ...current, [field]: event.target.value }))
+    const field = fieldMap[name]
+    setToBeAssumptions((current) => ({ ...current, [field]: value }))
     if (field === 'changeGoal') {
       setToBeAssumptionError('')
     }
