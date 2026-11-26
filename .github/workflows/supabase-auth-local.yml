@@ -69,6 +69,9 @@ jobs:
             return "$result"
           }
           trap cleanup EXIT
+          db_container="supabase_db_architekt-supabase"
+          docker inspect --format 'DB_IMAGE_ID {{.Image}}' "$db_container" || echo 'DB_IMAGE_ID unavailable'
+          docker exec "$db_container" postgres --version || echo 'DB_VERSION unavailable'
           supabase status -o env > "$RUNNER_TEMP/supabase-local.env"
           set -a
           source "$RUNNER_TEMP/supabase-local.env"
