@@ -49,17 +49,20 @@ jobs:
           p.write_text(s.replace('jwt_expiry = 3600', 'jwt_expiry = 60', 1))
           PY
           supabase start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          test_start=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
           cleanup() {
             result=$?
             if [ "$result" -ne 0 ]; then
               db_id=$(docker ps -aq --filter 'name=supabase_db_architekt-supabase' | head -n 1)
               if [ -n "$db_id" ]; then
                 docker inspect --format 'DB_STATE status={{.State.Status}} oom={{.State.OOMKilled}} restarts={{.RestartCount}} exit={{.State.ExitCode}}' "$db_id" || true
-                db_logs="$RUNNER_TEMP/architekt-db-diagnostics.log"
-                docker logs "$db_id" > "$db_logs" 2>&1 || true
-                echo "DB_LOG_OOM_COUNT $(grep -Eic 'out of memory|out-of-memory|oom.kill' "$db_logs" || true)"
-                echo "DB_LOG_RESTART_COUNT $(grep -Eic 'database system was interrupted|database system was not properly shut down|database system is starting up|database system is in recovery mode|terminated by signal' "$db_logs" || true)"
-                rm -f "$db_logs"
+                docker logs --timestamps --since "$test_start" "$db_id" 2>&1 |
+                  python3 "$GITHUB_WORKSPACE/experiments/supabase-auth/db-failure-summary.py" ||
+                  echo 'DB_LOG_READ_FAILED'
+                docker exec "$db_id" sh -c 'df -Pk "${PGDATA:-/var/lib/postgresql/data}" /dev/shm' |
+                  awk 'NR == 2 {print "DB_DATA_FREE_KIB", $4} NR == 3 {print "DB_SHM_FREE_KIB", $4}' || true
+                docker exec "$db_id" cat /sys/fs/cgroup/memory.events 2>/dev/null |
+                  awk '($1 == "oom" || $1 == "oom_kill") && $2 ~ /^[0-9]+$/ {print "DB_CGROUP", $1, $2}' || true
               fi
             fi
             supabase stop --no-backup >/dev/null 2>&1 || true
