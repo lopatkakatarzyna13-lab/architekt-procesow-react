@@ -46,8 +46,8 @@ try {
     await choose('Typ zadania BPMN', type)
     await button('Zapisz zmiany').click()
   }
-  const downloadBpmn = async (expectedFilename) => {
-    const [download] = await Promise.all([page.waitForEvent('download'), button('Pobierz BPMN 2.0').click()])
+  const downloadBpmn = async (expectedFilename, control = button('Pobierz BPMN 2.0')) => {
+    const [download] = await Promise.all([page.waitForEvent('download'), control.click()])
     if (expectedFilename) assert.equal(download.suggestedFilename(), expectedFilename)
     const path = await download.path()
     execFileSync('java', ['tests/ValidateBpmnXsd.java', 'node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', path], { stdio: 'inherit' })
@@ -178,12 +178,14 @@ try {
   const completed = page.locator('.process-card').filter({ hasText: 'Wersja 1 · Zakończona' })
   await completed.getByRole('button', { name: 'Otwórz proces', exact: true }).click()
   assert.equal(await button('Zapisz raport').count(), 0)
+  const materials = page.getByRole('region', { name: 'Materiały do wdrożenia' })
   for (const [variant, expected] of [['TO-BE', savedToBe], ['AS-IS', savedAsIs]]) {
     await button(`Mapa ${variant}`).click()
     await button('Pokaż podgląd BPMN').click()
     await page.getByRole('img', { name: `Podgląd zapisanego diagramu BPMN ${variant}` })
       .locator('[data-element-id="Participant_External_1"]').waitFor()
-    assert.equal(await downloadBpmn(`korekta-danych-pracownika-v1-${variant.toLowerCase()}.bpmn`), expected)
+    const download = materials.getByRole('button', { name: `Pobierz ${variant} BPMN`, exact: true })
+    assert.equal(await downloadBpmn(`korekta-danych-pracownika-v1-${variant.toLowerCase()}.bpmn`, download), expected)
   }
   await page.evaluate(() => {
     window.print = () => {

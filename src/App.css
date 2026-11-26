@@ -3669,7 +3669,7 @@ footer span:first-child::before {
 @media print {
   .print-bpmn-step-list .bpmn-step-summary div {
     display: grid;
-    grid-template-columns: 38mm 1fr;
+    grid-template-columns: 50mm 1fr;
     column-gap: 3mm;
     break-inside: avoid;
   }
