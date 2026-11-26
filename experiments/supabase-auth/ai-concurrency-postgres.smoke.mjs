@@ -1,17 +1,13 @@
 // Disposable local database only. No network provider or customer data.
 import assert from 'node:assert/strict'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-const db = process.env.DB_URL
-if (!db || !['localhost', '127.0.0.1', '[::1]'].includes(new URL(db).hostname)) throw Error('LOCAL_DATABASE_REQUIRED')
-const exec = promisify(execFile)
-const psql = (...args) => exec('psql', [db, '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', ...args])
-const query = (sql) => psql('-c', sql)
-const acquire = async () => JSON.parse((await query('SELECT public.architekt_ai_acquire()')).stdout.trim())
+import { checkAndClean, finishBatch, localPsql } from './local-psql-check.mjs'
+const psql = localPsql(process.env.DB_URL, 'ai-concurrency')
+const query = (sql, phase = 'check') => psql(phase, '-c', sql)
+const acquire = async (phase = 'acquire') => JSON.parse((await query('SELECT public.architekt_ai_acquire()', phase)).stdout.trim())
 const release = async (id) => (await query(`SELECT public.architekt_ai_release('${id}'::uuid)`)).stdout.trim()
-try {
-  await psql('-f', 'experiments/supabase-auth/ai-concurrency-review.sql')
-  const results = await Promise.all(Array.from({ length: 24 }, acquire))
+await checkAndClean(async () => {
+  await psql('setup', '-f', 'experiments/supabase-auth/ai-concurrency-review.sql')
+  const results = await finishBatch(Array.from({ length: 24 }, () => acquire('reservations')))
   const held = results.filter((x) => x.status === 'ACQUIRED')
   assert.equal(held.length, 1)
   assert.equal(results.filter((x) => x.status === 'BUSY').length, 23)
@@ -35,11 +31,9 @@ try {
   }
   assert.equal((await acquire()).status, 'LIMIT_REACHED')
   for (const role of ['anon', 'authenticated']) {
-    await assert.rejects(query(`SET ROLE ${role}; SELECT public.architekt_ai_acquire()`))
-    await assert.rejects(query(`SET ROLE ${role}; SELECT public.architekt_ai_release('${replacement.lease_id}'::uuid)`))
-    await assert.rejects(query(`SET ROLE ${role}; SELECT * FROM public.architekt_ai_admission`))
+    await assert.rejects(query(`SET ROLE ${role}; SELECT public.architekt_ai_acquire()`, 'role-check'), { sqlState: '42501' })
+    await assert.rejects(query(`SET ROLE ${role}; SELECT public.architekt_ai_release('${replacement.lease_id}'::uuid)`, 'role-check'), { sqlState: '42501' })
+    await assert.rejects(query(`SET ROLE ${role}; SELECT * FROM public.architekt_ai_admission`, 'role-check'), { sqlState: '42501' })
   }
-} finally {
-  await query('DROP FUNCTION IF EXISTS public.architekt_ai_acquire(); DROP FUNCTION IF EXISTS public.architekt_ai_release(uuid); DROP TABLE IF EXISTS public.architekt_ai_admission')
-}
+}, () => query('DROP FUNCTION IF EXISTS public.architekt_ai_acquire(); DROP FUNCTION IF EXISTS public.architekt_ai_release(uuid); DROP TABLE IF EXISTS public.architekt_ai_admission', 'cleanup'))
 console.log('PASS: atomic single-flight, stale-token safety, daily quota, role restrictions and fixture cleanup')
