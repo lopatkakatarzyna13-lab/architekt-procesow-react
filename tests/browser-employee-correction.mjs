@@ -155,8 +155,8 @@ try {
   await page.locator('.bpmn-preview-canvas [data-element-id="Participant_External_1"]').waitFor()
   await button('Przejdź do raportu').click()
   for (const [index, step] of steps.entries()) await label(`${step}: ${owner(index)}`).selectOption('RA')
-  await button('Zapisz raport').click()
   for (const question of openQuestions) await page.getByRole('checkbox', { name: question, exact: true }).check()
+  await button('Zapisz raport').click()
   await page.evaluate(() => { window.print = () => { window.correctionPrinted = true } })
   await button('Eksportuj do PDF').click()
   await page.waitForFunction(() => window.correctionPrinted)
@@ -178,6 +178,9 @@ try {
   const completed = page.locator('.process-card').filter({ hasText: 'Wersja 1 · Zakończona' })
   await completed.getByRole('button', { name: 'Otwórz proces', exact: true }).click()
   assert.equal(await button('Zapisz raport').count(), 0)
+  for (const question of openQuestions) {
+    assert.equal(await page.getByRole('checkbox', { name: question, exact: true }).isChecked(), true)
+  }
   const materials = page.getByRole('region', { name: 'Materiały do wdrożenia' })
   for (const [variant, expected] of [['TO-BE', savedToBe], ['AS-IS', savedAsIs]]) {
     await button(`Mapa ${variant}`).click()
