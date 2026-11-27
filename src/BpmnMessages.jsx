@@ -1,7 +1,7 @@
 import { useImperativeHandle, useRef, useState } from 'react'
 import { getBpmnMessages, getExternalPools } from './bpmnMessages.js'
 
-export default function BpmnMessages({ steps, externalSteps = [], organizationName, onAdd, onRemove, onDraftChange, workshopRef, variant = 'AS-IS' }) {
+export default function BpmnMessages({ steps, externalSteps = [], asIsSteps = [], organizationName, onAdd, onRemove, onDraftChange, workshopRef, variant = 'AS-IS' }) {
   const [stepId, setStepId] = useState('')
   const [primaryDraft, setPrimaryDraft] = useState(null)
   const [external, setExternal] = useState('')
@@ -12,24 +12,41 @@ export default function BpmnMessages({ steps, externalSteps = [], organizationNa
   const list = getBpmnMessages(steps)
   const primaryDefault = list[0]?.primary || organizationName?.trim() || 'Organizacja'
   const primary = primaryDraft ?? primaryDefault
+  const stepInput = useRef(null)
   const externalInput = useRef(null)
   const pools = getExternalPools(list)
-  const dirty = Boolean(stepId || primaryDraft !== null || external || direction || label)
+  const asIsMessages = getBpmnMessages(asIsSteps).filter(({ primary, external, direction, label }) =>
+    [primary, external, label].every((value) => typeof value === 'string' && value.trim())
+    && ['outgoing', 'incoming'].includes(direction))
+  const dirty = Boolean(stepId || primaryDraft !== null || external || direction || externalStepId || label)
+  const prepareDraft = (id, handoff, primaryName = primaryDefault) => {
+    setStepId(id)
+    setPrimaryDraft(primaryName === primaryDefault ? null : primaryName)
+    setExternal(pools.find(([key]) => key === handoff.external.trim().toLocaleLowerCase('pl'))?.[1] || handoff.external)
+    setDirection(handoff.direction)
+    setLabel(handoff.label)
+    setExternalStepId('')
+    onDraftChange('message-form', true)
+  }
   useImperativeHandle(workshopRef, () => ({
     prepare(id, handoff) {
       if (dirty) return 'Najpierw dodaj lub wyczyść przygotowywaną wiadomość BPMN.'
-      setStepId(id)
-      setExternal(pools.find(([key]) => key === handoff.external.toLocaleLowerCase('pl'))?.[1] || handoff.external)
-      setDirection(handoff.direction)
-      setLabel(handoff.label)
-      setExternalStepId('')
+      prepareDraft(id, handoff)
       setMessage('Sprawdź uczestników i kierunek przekazania. Wybierz „Dodaj wiadomość BPMN”, aby nanieść je na mapę.')
-      onDraftChange('message-form', true)
       externalInput.current?.focus()
       return ''
     },
   }))
-  const update = ({ primaryDraft, ...values }) => onDraftChange('message-form', primaryDraft !== null || Object.values(values).some(Boolean))
+  const prepareFromAsIs = (handoff) => {
+    const matchingSteps = steps.filter((step) => step.sourceAsIsStepId === handoff.stepId)
+    const targetId = matchingSteps.length === 1 ? matchingSteps[0].id : ''
+    prepareDraft(targetId, handoff, list[0]?.primary || organizationName?.trim() || handoff.primary)
+    setMessage('Sprawdź krok i dane wiadomości. Jeśli przekazanie dotyczy działania w zewnętrznym basenie, wskaż je na mapie TO-BE.')
+    const field = targetId ? externalInput : stepInput
+    field.current?.focus()
+  }
+  const update = ({ primaryDraft, externalStepId: actionId = externalStepId, ...values }) =>
+    onDraftChange('message-form', primaryDraft !== null || Boolean(actionId) || Object.values(values).some(Boolean))
   const reset = () => { setStepId(''); setPrimaryDraft(null); setExternal(''); setDirection(''); setLabel(''); setExternalStepId(''); onDraftChange('message-form', false) }
   const submit = (event) => {
     event.preventDefault()
@@ -42,9 +59,17 @@ export default function BpmnMessages({ steps, externalSteps = [], organizationNa
   return <section className="step-connections" aria-labelledby="bpmn-messages-title">
     <h2 id="bpmn-messages-title">Baseny i przekazanie wiadomości</h2>
     <p>Określ nazwę basenu swojego procesu, zewnętrznego uczestnika i krok wysyłający lub odbierający wiadomość. Dla każdego uczestnika użyj osobnej nazwy basenu. Możesz wskazać działanie w wybranym basenie. Nazwa własnego basenu musi być taka sama we wszystkich wiadomościach.</p>
+    {asIsMessages.length > 0 && <details>
+      <summary>Użyj wiadomości z AS-IS</summary>
+      <ul>{asIsMessages.map((item) => <li key={`${item.stepId}-${item.index}`}>
+        <button type="button" className="back-button" disabled={dirty} onClick={() => prepareFromAsIs(item)}>
+          {item.label} — {item.direction === 'outgoing' ? 'do' : 'od'} {item.external} — {asIsSteps.find((step) => step.id === item.stepId)?.name}
+        </button>
+      </li>)}</ul>
+    </details>}
     <form onSubmit={submit}>
       <label htmlFor="message-step">Krok w Twoim procesie</label>
-      <select id="message-step" value={stepId} required onChange={(event) => { const v = event.target.value; setStepId(v); update({ stepId: v, primaryDraft, external, direction, label }) }}>
+      <select id="message-step" ref={stepInput} value={stepId} required onChange={(event) => { const v = event.target.value; setStepId(v); update({ stepId: v, primaryDraft, external, direction, label }) }}>
         <option value="">Wybierz krok</option>{steps.map((step, index) => <option key={step.id} value={step.id}>{index + 1}. {step.name}</option>)}
       </select>
       <label htmlFor="message-primary">Nazwa basenu Twojego procesu</label>
@@ -61,7 +86,11 @@ export default function BpmnMessages({ steps, externalSteps = [], organizationNa
         <option value="">Wybierz kierunek</option><option value="outgoing">Mój proces wysyła do zewnętrznego uczestnika</option><option value="incoming">Mój proces otrzymuje od zewnętrznego uczestnika</option>
       </select>
       {externalSteps.length > 0 && <><label htmlFor="message-external-step">Działanie uczestnika zewnętrznego (opcjonalnie)</label>
-      <select id="message-external-step" value={externalStepId} onChange={(event) => setExternalStepId(event.target.value)}><option value="">Cały basen zewnętrzny</option>{externalSteps.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></>}
+      <select id="message-external-step" value={externalStepId} onChange={(event) => {
+        const value = event.target.value
+        setExternalStepId(value)
+        update({ stepId, primaryDraft, external, direction, label, externalStepId: value })
+      }}><option value="">Cały basen zewnętrzny</option>{externalSteps.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></>}
       <label htmlFor="message-label">Co jest przekazywane?</label>
       <input id="message-label" value={label} maxLength={100} required placeholder="np. Dane nowego pracownika" onChange={(event) => { const v = event.target.value; setLabel(v); update({ stepId, primaryDraft, external, direction, label: v }) }} />
       <div><button type="submit" className="back-button">Dodaj wiadomość BPMN</button>{' '}{dirty && <button type="button" className="back-button" onClick={() => { reset(); setMessage('Wyczyszczono formularz.') }}>Wyczyść formularz wiadomości</button>}</div>

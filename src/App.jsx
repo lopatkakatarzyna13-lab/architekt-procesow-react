@@ -22,7 +22,7 @@ import {
 import { buildProcessSnapshot } from './processSnapshot'
 import { completedProcessExportStem } from './processExportName'
 import { compareProcessSteps, getMissingToBeSteps, withDetectedStepChanges } from './processStepComparison'
-import { getRaciOwnerAssignments, getRaciValidationErrors } from './raci'
+import { getChangedRaciOwners, getMissingRaciOwners, getRaciOwnerAssignments, getRaciOwnersByStep, getRaciValidationErrors } from './raci'
 import { upsertSavedProcess } from './savedProcesses'
 import { deleteSavedProcess } from './deleteSavedProcess'
 import { DEFAULT_WORK_MODE, normalizeWorkMode } from './workMode'
@@ -43,8 +43,9 @@ import BpmnExternalSteps from './BpmnExternalSteps'
 import PrintBpmnDetails from './PrintBpmnDetails'
 import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, describeBpmnDocument, emptyBpmnStep, getBpmnDocuments, getBpmnStepError, readBpmnStepDraft } from './bpmnStepDetails'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
-import { applyFormDecision, canProposeFormDecision, copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
+import { applyAsIsDecision, applyFormDecision, canProposeFormDecision, copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
 import ToBeFormDecision from './ToBeFormDecision'
+import ToBeSourceDecision from './ToBeSourceDecision'
 import { applyHumanReview, findingCategories, getFormImprovementSuggestions, getHumanReviewAction, getToBeStepSuggestion } from './toBeSuggestions'
 import HumanReviewAction from './HumanReviewAction'
 import { addBpmnMessage, removeBpmnMessage } from './bpmnMessages.js'
@@ -163,6 +164,10 @@ const emptyStakeholder = {
   interest: 'Średnie',
   expectations: '',
   engagement: '',
+}
+
+function createStakeholderId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function hasPendingForm(draft, defaults, editingId) {
@@ -288,6 +293,9 @@ function loadSavedReport() {
         savedReport.raci && typeof savedReport.raci === 'object'
           ? savedReport.raci
           : {},
+      ownersByStep: savedReport.ownersByStep && typeof savedReport.ownersByStep === 'object'
+        ? Object.fromEntries(Object.entries(savedReport.ownersByStep).filter(([, owner]) => typeof owner === 'string'))
+        : undefined,
       questionIds: Array.isArray(savedReport.questionIds)
         ? savedReport.questionIds.filter((id) => typeof id === 'string')
         : [],
@@ -2310,6 +2318,8 @@ function ToBeScreen({
   scope,
   startMethod,
   asIsSteps,
+  asIsExternalSteps,
+  asIsSaved,
   findings,
   assumptions,
   assumptionError,
@@ -2337,6 +2347,7 @@ function ToBeScreen({
   onCopySteps,
   onCopySelectedSteps,
   onApplyFormDecision,
+  onApplyAsIsDecision,
   onApplyHumanReview,
   onAddConnection,
   onSetNextStep,
@@ -2356,9 +2367,10 @@ function ToBeScreen({
 }) {
   const [bpmnDrafts, setBpmnDrafts] = useState({})
   const bpmnDraftDirty = Object.values(bpmnDrafts).some(Boolean)
+  const otherBpmnDraftDirty = Object.entries(bpmnDrafts).some(([id, dirty]) => id !== 'as-is-decision' && dirty)
   const markBpmnDraft = (id, dirty) => setBpmnDrafts((current) => ({ ...current, [id]: dirty }))
   const displaySteps = startMethod === 'steps'
-    ? withDetectedStepChanges(steps, compareProcessSteps(asIsSteps, steps))
+    ? withDetectedStepChanges(steps, compareProcessSteps(asIsSteps, steps, { asIsExternalSteps, toBeExternalSteps: externalSteps }))
     : steps
   return (
     <section className="workspace to-be-workspace" aria-labelledby="to-be-title">
@@ -2426,11 +2438,14 @@ function ToBeScreen({
       {steps.map((step, index) => canProposeFormDecision(step) &&
         <ToBeFormDecision key={step.id} steps={steps} index={index} busy={bpmnDraftDirty || Boolean(editingStepId)}
           onApply={onApplyFormDecision} />)}
+      {asIsSaved && <ToBeSourceDecision steps={steps} asIsSteps={asIsSteps}
+        busy={otherBpmnDraftDirty || Boolean(editingStepId)}
+        onApply={onApplyAsIsDecision} onDraftChange={(dirty) => markBpmnDraft('as-is-decision', dirty)} />}
       {steps.length > 0 && <ProcessConnections steps={steps} variant="TO-BE" onAdd={onAddConnection} onSetNext={onSetNextStep} onRemove={(...args) => bpmnDraftDirty ? { error: 'Najpierw zapisz lub wyczyść niezakończony formularz BPMN.' } : onRemoveConnection(...args)} />}
       <BpmnDecisions steps={steps} variant="TO-BE" onSave={onSaveBpmnDecision} onDraftChange={markBpmnDraft} />
-      <BpmnLanes steps={steps} externalSteps={externalSteps} variant="TO-BE" onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={markBpmnDraft} />
+      <BpmnLanes steps={steps} externalSteps={externalSteps} asIsSteps={asIsSaved ? asIsSteps : undefined} variant="TO-BE" onSave={onSaveBpmnLane} onApplyRoles={onApplyRoleLanes} busy={bpmnDraftDirty || Boolean(editingStepId)} onDraftChange={markBpmnDraft} />
       {steps.length > 0 && <BpmnExternalSteps externalLinks={externalLinks} steps={steps} externalSteps={externalSteps} variant="TO-BE" onChange={onExternalStepsChange} onDraftChange={markBpmnDraft} />}
-      <BpmnMessages steps={steps} externalSteps={externalSteps} organizationName={scope.organizationName} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
+      <BpmnMessages steps={steps} externalSteps={externalSteps} asIsSteps={asIsSaved ? asIsSteps : undefined} organizationName={scope.organizationName} variant="TO-BE" onAdd={onAddBpmnMessage} onRemove={onRemoveBpmnMessage} onDraftChange={markBpmnDraft} />
       <BpmnExternalMessages externalSteps={externalSteps} steps={steps} links={externalLinks} onChange={onExternalLinksChange} onDraftChange={markBpmnDraft} variant="TO-BE" />
       <BpmnExport steps={steps} externalSteps={externalSteps} externalLinks={externalLinks} scope={scope} saved={saved && !bpmnDraftDirty} variant="to-be" />
 
@@ -2691,14 +2706,16 @@ function ProcessComparison({ startMethod, asIsSteps, toBeSteps, stepComparison, 
         ))}
       </div>
       {stepComparison && <>
-        <p>Porównanie nazw, odpowiedzialności i systemów opiera się na powiązaniach zachowanych przy kopiowaniu kroków.</p>
+        <p>Zmiany w krokach, decyzjach i przekazaniach są porównywane na podstawie powiązań zachowanych przy kopiowaniu kroków.</p>
         <div className="recommendation-grid">
           <article>
             <h3>Zmiany w powiązanych krokach</h3>
             {stepComparison.changed.length ? <ul>{stepComparison.changed.map(({ id, name, differences }) => (
               <li key={id}><strong>{name}</strong>
                 <ul>{differences.map(({ field, label, before, after }) => (
-                  <li key={field}>{label}: {before || 'nie określono'} → {after || 'nie określono'}</li>
+                  <li key={field}>{label}: {field === 'bpmnMessages' || field.startsWith('bpmnDecision')
+                    ? <>AS-IS {before || 'brak'} · TO-BE {after || 'brak'}</>
+                    : <>{before || 'nie określono'} → {after || 'nie określono'}</>}</li>
                 ))}</ul>
               </li>
             ))}</ul> : <p>Brak zmian w porównywanych polach.</p>}
@@ -3035,8 +3052,9 @@ function StakeholdersSection({
   )
 }
 
-function RaciSection({ steps, stakeholders, raci, errors, onChange, onAssignOwners, readOnly }) {
+function RaciSection({ steps, stakeholders, raci, errors, ownerChanges, onChange, onAssignOwners, readOnly }) {
   const ownerAssignments = readOnly ? {} : getRaciOwnerAssignments(steps, stakeholders, raci)
+  const missingOwners = readOnly ? [] : getMissingRaciOwners(steps, stakeholders, raci)
   const options = [
     ['', '—'],
     ['R', 'R'],
@@ -3053,6 +3071,9 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange, onAssignOwne
         title="Macierz RACI dla procesu TO-BE"
         description="Przypisz odpowiedzialność dla każdego kroku procesu docelowego."
       />
+      {Object.keys(ownerChanges).length > 0 && <p role="status">
+        W TO-BE zmieniła się odpowiedzialna rola. Sprawdź oznaczone wiersze i zapisz raport przed eksportem PDF lub zakończeniem wersji.
+      </p>}
       <div className="raci-legend">
         <span className="raci-r"><strong>R</strong> wykonuje zadanie</span>
         <span className="raci-a"><strong>A</strong> ostatecznie odpowiada za rezultat</span>
@@ -3060,11 +3081,12 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange, onAssignOwne
         <span className="raci-c"><strong>C</strong> udziela konsultacji</span>
         <span className="raci-i"><strong>I</strong> otrzymuje informację</span>
       </div>
-      {Object.keys(ownerAssignments).length > 0 && (
+      {(Object.keys(ownerAssignments).length > 0 || missingOwners.length > 0) && (
         <div className="step-form-actions">
-          <button className="add-step-button" type="button" onClick={() => onAssignOwners(ownerAssignments)}>
-            Przypisz wykonawców jako R/A w pustych wierszach
+          <button className="add-step-button" type="button" onClick={onAssignOwners}>
+            Uzupełnij R/A z kroków TO-BE
           </button>
+          {missingOwners.length > 0 && <p>Do macierzy zostaną dodane role: {missingOwners.join(', ')}.</p>}
         </div>
       )}
       {stakeholders.length === 0 ? (
@@ -3082,7 +3104,12 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange, onAssignOwne
               {steps.map((step, index) => (
                 <Fragment key={step.id}>
                   <tr id={`raci-step-${step.id}`} tabIndex={-1}>
-                    <th><span>{index + 1}</span>{step.name}</th>
+                    <th>
+                      <span>{index + 1}</span>{step.name}
+                      {ownerChanges[step.id] && <p id={`raci-owner-change-${step.id}`}>
+                        Rola w TO-BE: {ownerChanges[step.id].previous || 'brak roli'} → {ownerChanges[step.id].current || 'brak roli'}
+                      </p>}
+                    </th>
                     {stakeholders.map((item) => {
                       const value = raci[step.id]?.[item.id] ?? ''
                       return (
@@ -3093,7 +3120,10 @@ function RaciSection({ steps, stakeholders, raci, errors, onChange, onAssignOwne
                             disabled={readOnly}
                             onChange={(event) => onChange(step.id, item.id, event.target.value)}
                             aria-label={`${step.name}: ${item.name}`}
-                            aria-describedby={errors[step.id]?.length ? `raci-errors-${step.id}` : undefined}
+                            aria-describedby={[
+                              errors[step.id]?.length && `raci-errors-${step.id}`,
+                              ownerChanges[step.id] && `raci-owner-change-${step.id}`,
+                            ].filter(Boolean).join(' ') || undefined}
                           >
                             {options.map(([optionValue, label]) => <option value={optionValue} key={optionValue || 'none'}>{label}</option>)}
                           </select>
@@ -3476,6 +3506,7 @@ function ReportScreen({
   editingStakeholderId,
   raci,
   raciErrors,
+  raciOwnerChanges,
   reportError,
   saved,
   saveError,
@@ -3494,7 +3525,9 @@ function ReportScreen({
   onExport,
   printGeneratedAt,
 }) {
-  const stepComparison = startMethod === 'steps' ? compareProcessSteps(asIsSteps, modeledSteps) : null
+  const stepComparison = startMethod === 'steps'
+    ? compareProcessSteps(asIsSteps, modeledSteps, { asIsExternalSteps: externalSteps, toBeExternalSteps })
+    : null
   const toBeSteps = withDetectedStepChanges(modeledSteps, stepComparison)
   const [workshopQuestions, setWorkshopQuestions] = useState(() => loadReportQuestions(processId))
   const [printQuestionIds, setPrintQuestionIds] = useState(null)
@@ -3558,7 +3591,7 @@ function ReportScreen({
         onCancel={onCancelStakeholder}
         readOnly={completed}
       />
-      <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} onChange={onRaciChange} onAssignOwners={onAssignRaciOwners} readOnly={completed} />
+      <RaciSection steps={toBeSteps} stakeholders={stakeholders} raci={raci} errors={raciErrors} ownerChanges={raciOwnerChanges} onChange={onRaciChange} onAssignOwners={onAssignRaciOwners} readOnly={completed} />
       <Recommendations findings={findings} toBeSteps={toBeSteps} selectedFindingIds={selectedFindingIds} />
       {(workshopQuestions.length > 0 || questionError) && (
         <section className="report-section report-workshop-questions">
@@ -3893,6 +3926,9 @@ function App() {
   const [editingStakeholderId, setEditingStakeholderId] = useState(initialDraft?.report?.editingId ?? null)
   const [stakeholderError, setStakeholderError] = useState('')
   const [raci, setRaci] = useState(initialDraft?.report?.raci ?? savedReport.raci)
+  const [confirmedRaciOwners, setConfirmedRaciOwners] = useState(
+    () => savedReport.ownersByStep ?? (savedReport.isSaved ? getRaciOwnersByStep(savedToBe.steps) : {}),
+  )
   const [reportQuestionIds, setReportQuestionIds] = useState(initialDraft?.report?.questionIds ?? savedReport.questionIds)
   const [raciErrors, setRaciErrors] = useState({})
   const [reportError, setReportError] = useState('')
@@ -3909,6 +3945,8 @@ function App() {
   const activeProcess = savedProcesses.find((process) => isValidProcessId(process?.id)
     && process.id.toLowerCase() === processIdentityState.id?.toLowerCase())
   const completed = activeProcess?.status === 'completed'
+  const raciOwnerChanges = completed ? {} : getChangedRaciOwners(toBeSteps, confirmedRaciOwners)
+  const raciOwnerReviewPending = Object.keys(raciOwnerChanges).length > 0
 
   const readCurrentLibrary = () => {
     const current = loadSavedProcesses()
@@ -3988,7 +4026,7 @@ function App() {
   }
 
   const finishVersion = () => {
-    if (completed || !processIdentityState.id || !reportSaved) return
+    if (completed || !processIdentityState.id || !reportSaved || raciOwnerReviewPending) return
     if (!asIsSaved || !analysisSaved || !toBeSaved || stakeholderFormPending || !validateReportAssignments()) {
       setReportError('Przed zakończeniem wersji zapisz wszystkie etapy i uzupełnij macierz RACI.')
       return
@@ -4413,6 +4451,7 @@ const openSavedProcess = (process) => {
       : buildSuggestedStakeholders(nextScope.data, nextAsIs.steps, nextToBe.steps)),
   )
   setRaci(draft?.report?.raci ?? nextReport.raci)
+  setConfirmedRaciOwners(nextReport.ownersByStep ?? (nextReport.isSaved ? getRaciOwnersByStep(nextToBe.steps) : {}))
   setReportQuestionIds(draft?.report?.questionIds ?? nextReport.questionIds)
   setStakeholderDraft(draft?.report?.form ?? emptyStakeholder)
   setEditingStakeholderId(draft?.report?.editingId ?? null)
@@ -5225,6 +5264,14 @@ try {
     }
 
     try {
+      const previousReport = loadSavedReport()
+      if (raciOwnerReviewPending && previousReport.isSaved && !previousReport.ownersByStep) {
+        // Preserve the old roles before replacing the TO-BE section of a legacy report.
+        writeProcessSection(REPORT_STORAGE_KEY, JSON.stringify({
+          ...JSON.parse(localStorage.getItem(REPORT_STORAGE_KEY)),
+          ownersByStep: confirmedRaciOwners,
+        }))
+      }
       writeProcessSection(
         TO_BE_STORAGE_KEY,
         JSON.stringify({
@@ -5326,9 +5373,7 @@ try {
         ),
       )
     } else {
-      const id =
-        globalThis.crypto?.randomUUID?.() ??
-        `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      const id = createStakeholderId()
       setStakeholders((current) => [
         ...current,
         { ...stakeholderDraft, name: cleanName, id },
@@ -5386,8 +5431,19 @@ try {
     setReportSaveError(false)
   }
 
-  const assignRaciOwners = (assignments) => {
-    setRaci((current) => ({ ...current, ...assignments }))
+  const assignRaciOwners = () => {
+    const missingOwners = getMissingRaciOwners(toBeSteps, stakeholders, raci)
+    const newStakeholders = missingOwners.map((name) => ({ ...emptyStakeholder, name, id: createStakeholderId() }))
+    const nextStakeholders = [...stakeholders, ...newStakeholders]
+    const assignments = getRaciOwnerAssignments(toBeSteps, nextStakeholders, raci)
+    if (newStakeholders.length) setStakeholders(nextStakeholders)
+    setRaci((current) => {
+      const next = { ...current }
+      for (const [stepId, assignment] of Object.entries(assignments)) {
+        next[stepId] = { ...current[stepId], ...assignment }
+      }
+      return next
+    })
     setRaciErrors((current) => Object.fromEntries(
       Object.entries(current).filter(([stepId]) => !Object.hasOwn(assignments, stepId)),
     ))
@@ -5427,17 +5483,21 @@ try {
     if (!validateReportAssignments()) return
 
     try {
+      const ownersByStep = getRaciOwnersByStep(toBeSteps)
       writeProcessSection(
         REPORT_STORAGE_KEY,
         JSON.stringify({
           stakeholders,
           raci,
+          ownersByStep,
           questionIds: reportQuestionIds,
           initialized: true,
           savedAt: new Date().toISOString(),
         }),
       )
-      setReportSaved(checkpointCurrentProcess('report'))
+      const saved = checkpointCurrentProcess('report')
+      if (saved) setConfirmedRaciOwners(ownersByStep)
+      setReportSaved(saved)
     } catch {
       setReportSaveError(true)
     }
@@ -5445,6 +5505,10 @@ try {
 
   const exportReport = async () => {
     if (printPreparingRef.current) return
+    if (raciOwnerReviewPending) {
+      setReportError('Sprawdź oznaczone wiersze RACI i zapisz raport przed eksportem PDF.')
+      return
+    }
     if (stakeholderFormPending) {
       setReportError('Dokończ formularz interesariusza przed eksportem PDF.')
       return
@@ -5668,6 +5732,8 @@ try {
             scope={formData}
             startMethod={startMethod}
             asIsSteps={steps}
+            asIsExternalSteps={externalSteps}
+            asIsSaved={asIsSaved}
             findings={findings}
             assumptions={toBeAssumptions}
             assumptionError={toBeAssumptionError}
@@ -5695,6 +5761,7 @@ try {
             onCopySteps={copyAsIsSteps}
             onCopySelectedSteps={copySelectedAsIsSteps}
             onApplyFormDecision={(...args) => changeToBeConnections(applyFormDecision, ...args)}
+            onApplyAsIsDecision={(...args) => changeToBeConnections(applyAsIsDecision, steps, ...args)}
             onApplyHumanReview={(sourceId, action, owner) => changeToBeConnections(applyHumanReview, sourceId, action, owner,
               { ...emptyToBeStep, id: createToBeStepId() })}
             onAddConnection={(...args) => changeToBeConnections(addProcessConnection, ...args)}
@@ -5709,7 +5776,7 @@ try {
               return {}
             }}
             onSaveBpmnLane={(...args) => changeToBeConnections(setProcessLane, ...args)}
-            onApplyRoleLanes={() => changeToBeConnections(applyRoleLanes, toBeExternalSteps)}
+            onApplyRoleLanes={() => changeToBeConnections(applyRoleLanes, toBeExternalSteps, asIsSaved ? steps : undefined)}
             onExternalStepsChange={(next) => {
               setToBeExternalSteps(next)
               setToBeSaved(false)
@@ -5747,8 +5814,9 @@ try {
             editingStakeholderId={editingStakeholderId}
             raci={raci}
             raciErrors={raciErrors}
+            raciOwnerChanges={raciOwnerChanges}
             reportError={reportError}
-            saved={reportSaved}
+            saved={reportSaved && !raciOwnerReviewPending}
             saveError={reportSaveError}
             onStakeholderChange={handleStakeholderChange}
             onAddStakeholder={addOrUpdateStakeholder}

@@ -1,4 +1,6 @@
 import { bpmnDocumentDirections, bpmnStepFields, bpmnTaskTypes, describeBpmnDocument, getBpmnDocuments } from './bpmnStepDetails.js'
+import { getBpmnMessages } from './bpmnMessages.js'
+import { getNextProcessStepId } from './processConnections.js'
 
 const comparableFields = [
   ['name', 'Nazwa'],
@@ -16,7 +18,7 @@ function fieldValue(step, field) {
   return typeof step[field] === 'string' ? step[field].trim() : ''
 }
 
-function sourceStepId(step) {
+export function sourceStepId(step) {
   return step.sourceAsIsStepId || /^as-is-copy-(.+)-\d+$/.exec(step.id)?.[1]
 }
 
@@ -44,13 +46,70 @@ export function getMissingToBeSteps(asIsSteps, toBeSteps) {
   })
 }
 
-export function compareProcessSteps(asIsSteps, toBeSteps) {
+function compareMapValues(before, after) {
+  const key = (entries) => JSON.stringify(entries.map(([id]) => id).sort())
+  return key(before) === key(after) ? null : {
+    before: before.map(([, text]) => text).join(' · '),
+    after: after.map(([, text]) => text).join(' · '),
+  }
+}
+
+function mapFields(step, index, steps, target, actions) {
+  const route = (id, label, toDecision = false) => {
+    const [key, name] = target(id)
+    return [JSON.stringify([key, label, toDecision]), `${label} → ${toDecision ? 'decyzja po kroku ' : ''}${name}`]
+  }
+  const branches = Array.isArray(step.extraConnections) ? step.extraConnections : []
+  const decision = branches.length ? step.bpmnDecision : undefined
+  const question = decision?.question?.trim()
+  const main = decision?.mainLabel?.trim()
+  const messages = getBpmnMessages([step]).filter(({ primary, external, direction, label }) =>
+    [primary, external, label].every((value) => typeof value === 'string' && value.trim())
+    && ['outgoing', 'incoming'].includes(direction)).map(({ primary, external, direction, label, externalStepId }) => {
+    const action = externalStepId ? actions.get(externalStepId) ?? externalStepId : ''
+    const endpoint = action ? `${external} / ${action}` : external
+    const endpoints = direction === 'outgoing' ? `${primary} → ${endpoint}` : `${endpoint} → ${primary}`
+    return [JSON.stringify([primary, external, direction, label, action]), `${endpoints} — ${label}`]
+  })
+  return {
+    bpmnDecisionQuestion: question ? [[question, question]] : [],
+    bpmnDecisionMain: main ? [route(getNextProcessStepId(steps, index), main, Boolean(step.nextIsDecision))] : [],
+    bpmnDecisionBranches: branches.filter((branch) => branch?.label?.trim())
+      .map(({ targetId, label }) => route(targetId, label.trim())),
+    bpmnMessages: messages,
+  }
+}
+
+const mapFieldLabels = [
+  ['bpmnDecisionQuestion', 'Pytanie decyzji BPMN'],
+  ['bpmnDecisionMain', 'Ścieżka podstawowa decyzji'],
+  ['bpmnDecisionBranches', 'Dodatkowe ścieżki decyzji'],
+  ['bpmnMessages', 'Wiadomości BPMN'],
+]
+
+export function compareProcessSteps(asIsSteps, toBeSteps, { asIsExternalSteps = [], toBeExternalSteps = [] } = {}) {
   const sourceById = new Map(asIsSteps.map((step) => [step.id, step]))
+  const sourceIndexes = new Map(asIsSteps.map(({ id }, index) => [id, index]))
+  const targetById = new Map(toBeSteps.map((step) => [step.id, step]))
+  const sourceCounts = new Map()
+  for (const step of toBeSteps) {
+    const id = sourceStepId(step)
+    sourceCounts.set(id, (sourceCounts.get(id) ?? 0) + 1)
+  }
+  const describeTarget = (id, byId, toBe = false) => {
+    if (id === undefined) return ['end', 'Koniec procesu']
+    const step = byId.get(id)
+    const source = toBe && step ? sourceStepId(step) : id
+    const linked = sourceById.has(source) && (!toBe || sourceCounts.get(source) === 1)
+    return [linked ? `as-is:${source}` : `unlinked:${id}`, step?.name ?? 'Nieznany krok']
+  }
+  const sourceActions = new Map(asIsExternalSteps.map(({ id, name }) => [id, name]))
+  const targetActions = new Map(toBeExternalSteps.map(({ id, name }) => [id, name]))
   const matchedIds = new Set()
   const changed = []
   const unmatchedToBe = []
 
-  for (const step of toBeSteps) {
+  for (const [index, step] of toBeSteps.entries()) {
     const sourceId = sourceStepId(step)
     const source = sourceById.get(sourceId)
     if (!source) {
@@ -64,6 +123,12 @@ export function compareProcessSteps(asIsSteps, toBeSteps) {
       const after = fieldValue(step, field)
       return before === after ? [] : [{ field, label, before, after }]
     })
+    const beforeMap = mapFields(source, sourceIndexes.get(source.id), asIsSteps, (id) => describeTarget(id, sourceById), sourceActions)
+    const afterMap = mapFields(step, index, toBeSteps, (id) => describeTarget(id, targetById, true), targetActions)
+    for (const [field, label] of mapFieldLabels) {
+      const change = compareMapValues(beforeMap[field], afterMap[field])
+      if (change) differences.push({ field, label, ...change })
+    }
     if (differences.length) changed.push({ id: step.id, name: step.name, differences })
   }
 

@@ -1,6 +1,33 @@
 import { expect, it } from 'vitest'
 import { getDecisionBpmnError } from './bpmnDecisionValidation'
-import { applyFormDecision, copyAsIsBpmn, toBeBpmnScope } from './toBeBpmn'
+import { applyAsIsDecision, applyFormDecision, copyAsIsBpmn, getReusableAsIsDecisions, toBeBpmnScope } from './toBeBpmn'
+
+it('reuses one decision with its mapped exits, keeping original labels and other connections intact', () => {
+  const asIs = [
+    { id: 'start', name: 'Zgłoszenie' },
+    { id: 'check', name: 'Sprawdź zgłoszenie', bpmnDecision: { question: 'Czy kompletne?', mainLabel: 'Tak' },
+      extraConnections: [{ targetId: 'start', label: 'Nie — uzupełnij' }] },
+    { id: 'send', name: 'Wyślij e-mailem' },
+  ]
+  const steps = [
+    { id: 'form', name: 'Wypełnij formularz', sourceAsIsStepId: 'start' },
+    { id: 'review', name: 'Sprawdź warunki', sourceAsIsStepId: 'check' },
+    { id: 'portal', name: 'Udostępnij w portalu', sourceAsIsStepId: 'send' },
+  ]
+  const edits = { question: 'Czy opis jest wystarczający?', mainLabel: 'Tak', branchLabels: ['Nie — doprecyzuj'] }
+  const result = applyAsIsDecision(steps, asIs, 'check', edits)
+  expect(result[1]).toMatchObject({
+    nextStepId: 'portal',
+    extraConnections: [{ targetId: 'form', label: 'Nie — doprecyzuj' }],
+    bpmnDecision: { question: edits.question, mainLabel: 'Tak' },
+  })
+  expect(asIs[1].extraConnections[0].label).toBe('Nie — uzupełnij')
+  expect(result[0]).toBe(steps[0])
+  expect(getReusableAsIsDecisions(result, asIs)).toEqual([])
+  expect(getReusableAsIsDecisions(steps.slice(1), asIs)).toEqual([])
+  expect(getReusableAsIsDecisions([...steps, { ...steps[0], id: 'second-form' }], asIs)).toEqual([])
+  expect(() => applyAsIsDecision(steps, asIs, 'check', { ...edits, branchLabels: ['Tak'] })).toThrow(/muszą się różnić/)
+})
 
 it('applies both exits to an existing validation step without modifying the source or duplicating a decision', () => {
   const steps = [

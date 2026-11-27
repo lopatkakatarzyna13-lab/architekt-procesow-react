@@ -376,7 +376,7 @@ try {
   await page.getByText('Raport procesu został zapisany').waitFor()
   const report = page.locator('.report-workspace')
   const changedCounts = report.locator('.comparison-grid > div').filter({ hasText: 'Zmienione kroki' }).locator('strong')
-  assert.deepEqual(await changedCounts.allTextContents(), ['1', '1'], 'screen and print must count the changed owner')
+  assert.deepEqual(await changedCounts.allTextContents(), ['2', '2'], 'screen and print must count changes in both steps')
   const openQuestion = report.getByRole('checkbox', { name: proposal.questions[1].text, exact: true })
   assert.equal(await openQuestion.isChecked(), false)
   assert.equal(await report.locator('.print-report .report-workshop-questions').count(), 0)
@@ -420,8 +420,8 @@ try {
   const rawPdfText = execFileSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' })
   const pdfText = rawPdfText.replace(/\s+/g, ' ')
   const pdfLayout = execFileSync('pdftotext', ['-layout', '-', '-'], { input: pdf, encoding: 'utf8' })
-  assert.match(pdfLayout, /^[ \t]*1[ \t]+1[ \t]+0[ \t]*\r?\n[ \t]*Zmienione kroki[ \t]+Bez zmian/m,
-    'PDF must show one changed step, one unchanged step and no automation candidates')
+  assert.match(pdfLayout, /^[ \t]*2[ \t]+0[ \t]+0[ \t]*\r?\n[ \t]*Zmienione kroki[ \t]+Bez zmian/m,
+    'PDF must show two changed steps, no unchanged steps and no automation candidates')
   assert.ok(!pdfText.includes('Piątek, godzina 13:00'), 'local workshop answers should stay out of the PDF')
   assert.ok(pdfText.includes(proposal.questions[1].text), 'PDF must include the explicitly selected question')
   assert.ok(pdfText.includes('Koordynatorka fikcyjnego wdrożenia'), 'PDF must include the selected assignee')

@@ -191,7 +191,7 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   expect(screen.queryByRole('button', { name: 'Zakończ wersję' })).toBeNull()
   await user.click(screen.getByRole('button', { name: 'Zapisz raport' }))
   for (const counter of within(report).getAllByText('Zmienione kroki', { exact: true })) {
-    expect(counter.previousElementSibling.textContent).toBe('1')
+    expect(counter.previousElementSibling.textContent).toBe('2')
   }
   const copiedStep = within(report).getAllByText(steps[0], { exact: true })
     .map((item) => item.closest('.report-steps li')).filter((item) => item?.querySelector('.step-type'))
@@ -200,6 +200,7 @@ it('takes a fictional workshop from proposal through reopen, report and printing
   expect(within(report).getAllByText('Brak terminu przekazania').length).toBeGreaterThan(0)
   expect(within(printView).getByText('Ustalić wspólny termin przekazania')).toBeTruthy()
   expect(within(report).getAllByText('Odpowiedzialność: nie określono → Zespół kontroli').length).toBeGreaterThan(0)
+  expect(within(printView).getByText('Pytanie decyzji BPMN: AS-IS Czy dane są kompletne? · TO-BE Czy dane TO-BE są kompletne?')).toBeTruthy()
   const addedSteps = within(report).getAllByRole('heading', { name: 'Kroki TO-BE bez powiązania z AS-IS' })
   expect(within(addedSteps[0].closest('article')).getByText('Ustalić wspólny termin')).toBeTruthy()
   const gapHeadings = within(report).getAllByRole('heading', { name: 'Wybrane ustalenia bez powiązanego kroku TO-BE' })

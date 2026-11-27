@@ -15,17 +15,19 @@ function LaneForm({ step, index, onSave, onDraftChange, variant, proposal }) {
   }}>
     <label htmlFor={`bpmn-lane-${step.id}`}>Tor BPMN — krok {index + 1}: {step.name}</label>
     <input id={`bpmn-lane-${step.id}`} value={value} maxLength={80} placeholder="np. HR" onChange={(event) => { const next = event.target.value; setDraft(next === saved ? null : next); onDraftChange(key, next !== saved) }} />
-    {proposal && <p>{proposal.reason ?? `Proponowany tor: ${proposal.lane}`}</p>}
+    {proposal && <p>{proposal.reason ?? (proposal.fromAsIs
+      ? `Proponowany tor z AS-IS: ${proposal.lane}`
+      : `Proponowany tor: ${proposal.lane}`)}</p>}
     <button type="submit" className="back-button">Zapisz tor — krok {index + 1}: {step.name}</button>
     {value !== saved && <p>Masz niezapisany tor. Zapisz tor przed zapisaniem procesu.</p>}
     {message && <p role="status">{message}</p>}
   </form>
 }
 
-export default function BpmnLanes({ steps, externalSteps, onSave, onApplyRoles, busy, onDraftChange, variant = 'AS-IS' }) {
+export default function BpmnLanes({ steps, externalSteps, asIsSteps, onSave, onApplyRoles, busy, onDraftChange, variant = 'AS-IS' }) {
   const [message, setMessage] = useState('')
   if (!steps.length) return null
-  const proposals = proposeRoleLanes(steps, externalSteps)
+  const proposals = proposeRoleLanes(steps, externalSteps, asIsSteps)
   const needsReview = [...proposals.values()].some((item) => item.reason)
   return <section className="step-connections" aria-labelledby="bpmn-lanes-title">
     <h2 id="bpmn-lanes-title">Tory ról w BPMN</h2>

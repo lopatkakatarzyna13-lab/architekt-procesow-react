@@ -1,5 +1,6 @@
 import { getDecisionBpmnError, getDecisionGraphError } from './bpmnDecisionValidation.js'
-import { addProcessConnection, setNextProcessStep, setProcessDecision } from './processConnections.js'
+import { addProcessConnection, getNextProcessStepId, setNextProcessStep, setProcessDecision } from './processConnections.js'
+import { sourceStepId } from './processStepComparison.js'
 import { isFormValidationStep } from './toBeSuggestions.js'
 
 export const formDecision = {
@@ -19,6 +20,42 @@ export function applyFormDecision(steps, sourceId, mainId, returnId) {
   let next = setNextProcessStep(steps, sourceId, mainId)
   next = addProcessConnection(next, sourceId, returnId, formDecision.returnLabel)
   next = setProcessDecision(next, sourceId, formDecision.question, formDecision.mainLabel)
+  const error = getDecisionGraphError(next)
+  if (error) throw new Error(error)
+  return next
+}
+
+export function getReusableAsIsDecisions(steps, asIsSteps) {
+  const targetBySource = new Map()
+  for (const step of steps) {
+    const id = sourceStepId(step)
+    if (id) targetBySource.set(id, targetBySource.has(id) ? null : step)
+  }
+
+  return asIsSteps.flatMap((source, index) => {
+    const decision = source.bpmnDecision
+    const step = targetBySource.get(source.id)
+    if (!decision || !source.extraConnections?.length || !step || step.bpmnDecision || step.extraConnections?.length || step.nextStepId) return []
+    const sourceNextId = getNextProcessStepId(asIsSteps, index)
+    const main = targetBySource.get(sourceNextId)
+    if (sourceNextId ? !main : step !== steps.at(-1)) return []
+    if (source.nextIsDecision && !(main?.bpmnDecision && main.extraConnections?.length)) return []
+    const branches = source.extraConnections.map(({ targetId, label }) => ({ target: targetBySource.get(targetId), label }))
+    if (branches.some(({ target }) => !target)) return []
+    return [{ source, step, main, branches }]
+  })
+}
+
+export function applyAsIsDecision(steps, asIsSteps, sourceId, { question, mainLabel, branchLabels }) {
+  const proposal = getReusableAsIsDecisions(steps, asIsSteps).find(({ source }) => source.id === sourceId)
+  if (!proposal || branchLabels.length !== proposal.branches.length) throw new Error('Sprawdź powiązane kroki i istniejące decyzje TO-BE.')
+
+  const { source, step, main, branches } = proposal
+  let next = main ? setNextProcessStep(steps, step.id, main.id, Boolean(source.nextIsDecision)) : steps
+  for (const [index, branch] of branches.entries()) {
+    next = addProcessConnection(next, step.id, branch.target.id, branchLabels[index])
+  }
+  next = setProcessDecision(next, step.id, question, mainLabel)
   const error = getDecisionGraphError(next)
   if (error) throw new Error(error)
   return next

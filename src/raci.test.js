@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { getRaciOwnerAssignments, getRaciValidationErrors } from './raci'
+import { getChangedRaciOwners, getMissingRaciOwners, getRaciOwnerAssignments, getRaciOwnersByStep, getRaciValidationErrors } from './raci'
 
 const steps = [{ id: 'step-1' }]
 const responsibleError = 'Krok musi mieć przynajmniej jedną rolę Responsible (R).'
 const accountableMissingError = 'Krok musi mieć dokładnie jedną rolę Accountable (A).'
 const accountableMultipleError = 'Krok powinien mieć tylko jedną rolę Accountable (A).'
 
-it('przypisuje R/A tylko do pustych wierszy z jednoznaczną rolą TO-BE', () => {
+it('uzupełnia R/A w pustym wierszu lub obok C/I, chroniąc istniejące przypisania', () => {
   const steps = [
     { id: 'empty', owner: ' kadry ' },
     { id: 'manual', owner: 'Kadry' },
+    { id: 'consulted-owner', owner: 'Kadry' },
+    { id: 'responsible', owner: 'Kadry' },
+    { id: 'accountable', owner: 'Kadry' },
     { id: 'missing' },
     { id: 'unknown', owner: 'Finanse' },
     { id: 'ambiguous', owner: 'IT' },
@@ -19,9 +22,48 @@ it('przypisuje R/A tylko do pustych wierszy z jednoznaczną rolą TO-BE', () => 
     { id: 'it-a', name: 'IT' },
     { id: 'it-b', name: 'it' },
   ]
-  const raci = { empty: { hr: '' }, manual: { 'it-a': 'C' } }
+  const raci = {
+    empty: { hr: '' },
+    manual: { 'it-a': 'C', 'it-b': 'I' },
+    'consulted-owner': { hr: 'C' },
+    responsible: { 'it-a': 'R' },
+    accountable: { 'it-b': 'A' },
+  }
 
-  expect(getRaciOwnerAssignments(steps, stakeholders, raci)).toEqual({ empty: { hr: 'RA' } })
+  expect(getRaciOwnerAssignments(steps, stakeholders, raci)).toEqual({ empty: { hr: 'RA' }, manual: { hr: 'RA' } })
+})
+
+it('zbiera brakujące role bez powtórzeń tylko z kroków kwalifikujących się do uzupełnienia', () => {
+  const steps = [
+    { id: 'known', owner: ' kadry ' },
+    { id: 'new', owner: ' Automatyzacja HR ' },
+    { id: 'again', owner: 'automatyzacja hr' },
+    { id: 'handled', owner: 'Finanse' },
+    { id: 'unspecified' },
+  ]
+  const stakeholders = [{ id: 'hr', name: 'Kadry' }]
+  const raci = { new: { hr: 'I' }, handled: { hr: 'RA' } }
+  expect(getMissingRaciOwners(steps, stakeholders, raci)).toEqual(['Automatyzacja HR'])
+})
+
+it('wskazuje zmiany ról dla tych samych kroków względem zapisanego raportu', () => {
+  const previous = getRaciOwnersByStep([
+    { id: 'same', owner: 'Kadry' },
+    { id: 'changed', owner: 'HR' },
+    { id: 'removed' },
+    { id: 'assigned' },
+  ])
+  const updated = [
+    { id: 'same', owner: ' kadry ', name: 'Zmieniona nazwa kroku' },
+    { id: 'changed' },
+    { id: 'assigned', owner: 'IT' },
+    { id: 'new', owner: 'IT' },
+  ]
+  expect(getChangedRaciOwners(updated, previous)).toEqual({
+    changed: { previous: 'HR', current: '' },
+    assigned: { previous: '', current: 'IT' },
+  })
+  expect(getChangedRaciOwners(updated, getRaciOwnersByStep(updated))).toEqual({})
 })
 
 function validate(...assignments) {

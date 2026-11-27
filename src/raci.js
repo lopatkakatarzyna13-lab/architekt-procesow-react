@@ -1,13 +1,42 @@
+const normalize = (name) => name?.trim().toLocaleLowerCase('pl')
+const canFillOwner = (row) => Object.values(row ?? {}).every((value) => !value || value === 'C' || value === 'I')
+const ownerName = (step) => typeof step.owner === 'string' ? step.owner.trim() : ''
+
+export function getRaciOwnersByStep(steps) {
+  return Object.fromEntries(steps.map((step) => [step.id, ownerName(step)]))
+}
+
+export function getChangedRaciOwners(steps, previousOwners) {
+  return Object.fromEntries(steps.flatMap((step) => {
+    if (!Object.hasOwn(previousOwners, step.id)) return []
+    const previous = previousOwners[step.id]
+    const current = ownerName(step)
+    return normalize(previous) === normalize(current) ? [] : [[step.id, { previous, current }]]
+  }))
+}
+
+export function getMissingRaciOwners(steps, stakeholders, raci) {
+  const known = new Set(stakeholders.map(({ name }) => normalize(name)))
+  const missing = []
+  for (const step of steps) {
+    const owner = normalize(step.owner)
+    if (!owner || known.has(owner) || !canFillOwner(raci[step.id])) continue
+    known.add(owner)
+    missing.push(step.owner.trim())
+  }
+  return missing
+}
+
 export function getRaciOwnerAssignments(steps, stakeholders, raci) {
-  const normalize = (name) => name?.trim().toLocaleLowerCase('pl')
   const assignments = {}
 
   for (const step of steps) {
     const owner = normalize(step.owner)
-    if (!owner || Object.values(raci[step.id] ?? {}).some(Boolean)) continue
+    const row = raci[step.id]
+    if (!owner || !canFillOwner(row)) continue
 
     const matches = stakeholders.filter((item) => normalize(item.name) === owner)
-    if (matches.length === 1) assignments[step.id] = { [matches[0].id]: 'RA' }
+    if (matches.length === 1 && !row?.[matches[0].id]) assignments[step.id] = { [matches[0].id]: 'RA' }
   }
 
   return assignments
