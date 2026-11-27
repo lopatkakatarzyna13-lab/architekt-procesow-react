@@ -10,6 +10,10 @@ jobs:
   local-auth:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres_image: ${{ fromJSON((github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[compare-postgres]')) && '["default", "17.12.0.005"]' || '["default"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,6 +36,8 @@ jobs:
           version: 2.98.0
       - name: Start isolated local Supabase and test Auth
         shell: bash
+        env:
+          POSTGRES_TEST_IMAGE: ${{ matrix.postgres_image }}
         run: |
           set -euo pipefail
           test_dir="$RUNNER_TEMP/architekt-supabase"
@@ -40,13 +46,19 @@ jobs:
           supabase init
           mkdir -p supabase/functions
           cp -R "$GITHUB_WORKSPACE/experiments/supabase-auth/workshop-fixture" supabase/functions/
-          python3 - <<'PY'
+          python3 - "$POSTGRES_TEST_IMAGE" <<'PY'
+          import sys
           from pathlib import Path
+
           p = Path('supabase/config.toml')
           s = p.read_text()
           if 'jwt_expiry = 3600' not in s:
               raise SystemExit('Unexpected local Auth config; refusing to start')
           p.write_text(s.replace('jwt_expiry = 3600', 'jwt_expiry = 60', 1))
+          if sys.argv[1] != 'default':
+              pin = Path('supabase/.temp/postgres-version')
+              pin.parent.mkdir(exist_ok=True)
+              pin.write_text(sys.argv[1], encoding='ascii')
           PY
           supabase start > "$RUNNER_TEMP/supabase-start.log" 2>&1
           test_start=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
@@ -70,8 +82,21 @@ jobs:
           }
           trap cleanup EXIT
           db_container="supabase_db_architekt-supabase"
-          docker inspect --format 'DB_IMAGE_ID {{.Image}}' "$db_container" || echo 'DB_IMAGE_ID unavailable'
-          docker exec "$db_container" postgres --version || echo 'DB_VERSION unavailable'
+          db_image=$(docker inspect --format '{{.Config.Image}}' "$db_container")
+          db_version=$(docker exec "$db_container" postgres --version)
+          db_image_id=$(docker inspect --format '{{.Image}}' "$db_container")
+          printf 'DB_IMAGE %s\nDB_IMAGE_ID %s\nDB_VERSION %s\n' "$db_image" "$db_image_id" "$db_version"
+          python3 - "$POSTGRES_TEST_IMAGE" "$db_image" "$db_version" <<'PY'
+          import re
+          import sys
+
+          target, image, version = sys.argv[1:]
+          if target != 'default' and (
+              not image.endswith(f'/postgres:{target}') or
+              not re.fullmatch(r'postgres \(PostgreSQL\) 17\.12(?:\s.*)?', version)
+          ):
+              raise SystemExit('The comparison database did not report the requested image and PostgreSQL 17.12.')
+          PY
           supabase status -o env > "$RUNNER_TEMP/supabase-local.env"
           set -a
           source "$RUNNER_TEMP/supabase-local.env"
